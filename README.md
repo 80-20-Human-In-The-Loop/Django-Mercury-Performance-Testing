@@ -271,7 +271,7 @@ This means if you create and distribute a modified version, you must:
 - Preserve all copyright and license notices
 - Document your changes
 
-This aligns perfectly with EduLite's mission of democratizing education technology and the 80-20 Human in the Loop philosophy of keeping knowledge open and accessible.
+This aligns perfectly with the 80-20 Human in the Loop philosophy of keeping knowledge open and accessible.
 
 For the full license text, see [LICENSE](LICENSE) or visit [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
