@@ -114,7 +114,10 @@ TestOrchestrator_start_test(TestOrchestrator *self, PyObject *args)
             return NULL;
         }
         
-        new_test->name = strdup(test_name);
+        new_test->name = malloc(strlen(test_name) + 1);
+        if (new_test->name) {
+            strcpy(new_test->name, test_name);
+        }
         gettimeofday(&new_test->start_time, NULL);
         new_test->duration_ms = 0.0;
         new_test->status = 1;  /* running */

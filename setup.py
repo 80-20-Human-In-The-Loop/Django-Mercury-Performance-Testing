@@ -72,7 +72,7 @@ class OptionalBuildExt(build_ext):
         except Exception as e:
             # Log the error but don't fail the entire build
             print(f"WARNING: Could not compile {ext.name}: {e}")
-            raise
+            # Don't re-raise - just skip this extension
 
 def get_c_extensions():
     """
@@ -96,7 +96,7 @@ def get_c_extensions():
         '/usr/local/include',
     ]
     
-    # Platform-specific compilation flags
+    # Platform-specific compilation flags  
     if sys.platform == 'win32':
         # Windows with MSVC
         compile_args = ['/O2', '/W3']
@@ -105,21 +105,19 @@ def get_c_extensions():
     elif sys.platform == 'darwin':
         # macOS
         compile_args = [
-            '-O3', '-Wall', '-fPIC',
-            '-mmacosx-version-min=10.9',
+            '-O2', '-fPIC',
             '-std=c99',
         ]
-        link_args = ['-Wl,-rpath,@loader_path']
+        link_args = []
         libraries = ['m']  # Math library
     else:
         # Linux and other Unix-like systems
         compile_args = [
-            '-O3', '-Wall', '-fPIC',
+            '-O2', '-fPIC',
             '-std=c99',
-            '-D_GNU_SOURCE',
         ]
         link_args = []
-        libraries = ['m', 'pthread']  # Math and pthread libraries
+        libraries = ['m']  # Math library only
     
     # Check if we're building in cibuildwheel
     if os.environ.get('CIBUILDWHEEL', '0') == '1':
