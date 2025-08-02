@@ -110,12 +110,6 @@ As a project focused on teaching performance optimization:
 
 This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1, with additions specific to our educational mission and the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) philosophy.
 
-## Contact
-
-For questions about this Code of Conduct, please contact:
-- General inquiries: mercury@djangoperformance.dev
-- Code of Conduct matters: conduct@djangoperformance.dev
-
 ## Commitment
 
 By participating in this project, you agree to abide by this Code of Conduct and help create a welcoming environment where everyone can learn, contribute, and thrive.
