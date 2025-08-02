@@ -6,7 +6,7 @@
 [![Built for: EduLite](https://img.shields.io/badge/Built%20for-EduLite-orange)](https://github.com/ibrahim-sisar/EduLite)
 [![Values: Open](https://img.shields.io/badge/Values-Open%20%7C%20Free%20%7C%20Fair-purple)](https://github.com/80-20-Human-In-The-Loop)
 
-**Part of the [80-20 Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem**
+**Part of the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem**
 
 > A performance testing framework for Django that helps you understand and fix performance issues, not just detect them.
 
@@ -112,9 +112,9 @@ This is actual output from testing EduLite:
 ╰─────────────────────────────────────────────────────────────╯
 ```
 
-## 🎓 The 80-20 Philosophy in Action
+## 🎓 The  Philosophy in Action
 
-Mercury embodies the [80-20 Human in the Loop](https://github.com/80-20-Human-In-The-Loop/Community) philosophy:
+Mercury embodies the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop/Community) philosophy:
 
 **80% Automation:**
 - Automatic performance monitoring
@@ -230,7 +230,7 @@ After Mercury:
 
 ## 🤝 Contributing
 
-Mercury is part of both [EduLite](https://github.com/ibrahim-sisar/EduLite) and the [80-20 Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem. We believe in:
+Mercury is part of both [EduLite](https://github.com/ibrahim-sisar/EduLite) and the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem. We believe in:
 
 - **Education First**: Tools should teach, not just detect
 - **Human Understanding**: Keep humans in control of their code
@@ -271,14 +271,14 @@ This means if you create and distribute a modified version, you must:
 - Preserve all copyright and license notices
 - Document your changes
 
-This aligns perfectly with the 80-20 Human in the Loop philosophy of keeping knowledge open and accessible.
+This aligns perfectly with the Human in the Loop philosophy of keeping knowledge open and accessible.
 
 For the full license text, see [LICENSE](LICENSE) or visit [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
 ## 🙏 Acknowledgments
 
 - [EduLite Team](https://github.com/ibrahim-sisar/EduLite) - For the real-world use case
-- [80-20 Human in the Loop](https://github.com/80-20-Human-In-The-Loop) - For the philosophy
+- [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) - For the philosophy
 - Django/DRF Community - For the foundation
 
 ---
