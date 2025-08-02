@@ -132,7 +132,7 @@ def get_c_extensions():
         Extension(
             name='django_mercury._c_metrics',
             sources=[
-                'django_mercury/c_core/metrics_engine.c',
+                'django_mercury/c_core/metrics_wrapper.c',  # Use Python wrapper
             ] + common_sources,
             include_dirs=include_dirs,
             libraries=libraries,
@@ -143,7 +143,7 @@ def get_c_extensions():
         Extension(
             name='django_mercury._c_analyzer',
             sources=[
-                'django_mercury/c_core/query_analyzer.c',
+                'django_mercury/c_core/analyzer_wrapper.c',  # Use Python wrapper
             ] + common_sources,
             include_dirs=include_dirs,
             libraries=libraries,
@@ -154,7 +154,7 @@ def get_c_extensions():
         Extension(
             name='django_mercury._c_orchestrator',
             sources=[
-                'django_mercury/c_core/test_orchestrator.c',
+                'django_mercury/c_core/orchestrator_wrapper.c',  # Use Python wrapper
             ] + common_sources,
             include_dirs=include_dirs,
             libraries=libraries,

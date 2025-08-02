@@ -398,6 +398,7 @@ class TestSummaryEdgeCases(unittest.TestCase):
             mock_score = Mock()
             type(mock_score).total_score = PropertyMock(return_value=30 - i*5)
             type(mock_score).grade = PropertyMock(return_value='F')
+            type(mock_score).n_plus_one_penalty = PropertyMock(return_value=20)  # Add n_plus_one_penalty
             type(mock_exec).performance_score = PropertyMock(return_value=mock_score)
             
             mock_issues = Mock()
