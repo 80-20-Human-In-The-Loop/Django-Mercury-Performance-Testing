@@ -1,7 +1,8 @@
 # Django Mercury 🚀
 
-[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
-[![Django 5.1](https://img.shields.io/badge/django-5.1-green.svg)](https://docs.djangoproject.com/en/5.1/)
+[![PyPI version](https://badge.fury.io/py/django-mercury-performance.svg)](https://badge.fury.io/py/django-mercury-performance)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Django 3.2-5.1](https://img.shields.io/badge/django-3.2--5.1-green.svg)](https://docs.djangoproject.com/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-red.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Built for: EduLite](https://img.shields.io/badge/Built%20for-EduLite-orange)](https://github.com/ibrahim-sisar/EduLite)
 [![Values: Open](https://img.shields.io/badge/Values-Open%20%7C%20Free%20%7C%20Fair-purple)](https://github.com/80-20-Human-In-The-Loop)
@@ -10,15 +11,32 @@
 
 > A performance testing framework for Django that helps you understand and fix performance issues, not just detect them.
 
+## 🚀 Quick Install
+
+```bash
+pip install django-mercury-performance
+```
+
+Then in your test files:
+```python
+from django_mercury import DjangoMercuryAPITestCase
+
+class MyPerformanceTest(DjangoMercuryAPITestCase):
+    def test_api_performance(self):
+        response = self.client.get('/api/endpoint/')
+        # Performance is automatically monitored and reported!
+```
+
 ## 🌟 Origin Story
 
 Mercury was born from a real need at [EduLite](https://github.com/ibrahim-sisar/EduLite) - an open-source education platform designed for students in areas with poor internet connectivity. When we discovered our UserSearchView was making **825 queries for paginated results**, we knew we needed better tools.
 
 Instead of just fixing the issue, we built Mercury - a framework that not only catches performance problems but teaches developers how to fix them. This aligns with the **Fair**, **Free**, and **Open** values of [EduLite](https://github.com/ibrahim-sisar/EduLite) - as we wanted people of all skill levels to be able to contribute and learn!
 
-## 🎯 Current Status: Initial Release
+## 🎯 Current Status: v0.0.1 Released on PyPI! 🎉
 
 **What's Working NOW:**
+- ✅ **Available on PyPI** - Install with `pip install django-mercury-performance`
 - ✅ N+1 query detection with severity analysis
 - ✅ Performance grading (F to A+) 
 - ✅ Two test case classes: `DjangoMercuryAPITestCase` and `DjangoPerformanceAPITestCase`
@@ -37,24 +55,30 @@ Severity: CRITICAL (825 queries)
 - 🔜 MCP (Model Context Protocol) integration for AI-assisted optimization
 - 🔜 Historical performance tracking
 - 🔜 Standard TestCase for non-API views
-- 🔜 PyPI package release
 - 🔜 Performance regression detection
+- 🔜 Better test compatibility (updating tests for new package structure)
 
-## 📦 Installation (Current)
+## 📦 Installation
 
-Mercury is currently part of the EduLite project. To use it in your Django project:
+### Install from PyPI (Recommended)
 
 ```bash
-# Clone and build
-git clone https://github.com/ibrahim-sisar/EduLite.git
-cd EduLite/backend/performance_testing/c_core
-make clean && make
+pip install django-mercury-performance
+```
 
-# Add to your Python path in test files
-import sys
-from pathlib import Path
-performance_testing_path = Path(__file__).parent.parent / "performance_testing"
-sys.path.insert(0, str(performance_testing_path))
+### Install from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/Django-Mercury/Performance-Testing.git
+cd Django-Mercury-Performance-Testing
+
+# Install in development mode
+pip install -e .
+
+# If you want to modify the C extensions
+cd django_mercury/c_core
+make clean && make
 ```
 
 ## 🚀 Quick Start
@@ -64,7 +88,7 @@ sys.path.insert(0, str(performance_testing_path))
 #### 1. DjangoMercuryAPITestCase - Automatic Monitoring
 
 ```python
-from python_bindings.django_integration_mercury import DjangoMercuryAPITestCase
+from django_mercury import DjangoMercuryAPITestCase
 
 class UserSearchPerformanceTest(DjangoMercuryAPITestCase):
     """Mercury automatically monitors every test method."""
@@ -79,8 +103,8 @@ class UserSearchPerformanceTest(DjangoMercuryAPITestCase):
 #### 2. DjangoPerformanceAPITestCase - Modular Control
 
 ```python
-from python_bindings.django_integration import DjangoPerformanceAPITestCase
-from python_bindings.monitor import monitor_django_view
+from django_mercury import DjangoPerformanceAPITestCase
+from django_mercury import monitor_django_view
 
 class AdvancedPerformanceTest(DjangoPerformanceAPITestCase):
     """For when you need specific assertions and control."""
@@ -213,20 +237,24 @@ After Mercury:
 
 ## 🚧 Roadmap
 
-### Phase 1: Current Release ✅
-- Basic performance monitoring
-- N+1 detection
-- Educational guidance
+### Phase 1: Initial PyPI Release ✅ (v0.0.1 - December 2024)
+- ✅ Basic performance monitoring
+- ✅ N+1 detection
+- ✅ Educational guidance
+- ✅ Published to PyPI as `django-mercury-performance`
 
-### Phase 2: MCP Integration (Q1 2025)
-- AI-assisted optimization suggestions
-- Automated fix generation with human review
-- Learning mode for junior developers
+### Phase 2: Stabilization & Enhancement (v0.1.0 - Q1 2025)
+- 🔜 Fix test compatibility with new package structure
+- 🔜 Add standard TestCase for non-API views
+- 🔜 Historical performance tracking
+- 🔜 Performance regression detection
+- 🔜 Improved documentation and examples
 
-### Phase 3: Standalone Package (Q2 2025)
-- PyPI release as `django-mercury`
-- Comprehensive documentation
-- Plugin system for custom analyzers
+### Phase 3: MCP Integration (v0.2.0 - Q2 2025)
+- 🔜 AI-assisted optimization suggestions
+- 🔜 Automated fix generation with human review
+- 🔜 Learning mode for junior developers
+- 🔜 Plugin system for custom analyzers
 
 ## 🤝 Contributing
 

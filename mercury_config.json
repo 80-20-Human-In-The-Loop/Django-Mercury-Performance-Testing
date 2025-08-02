@@ -1,0 +1,55 @@
+{
+  "enabled": false,
+  "auto_scoring": true,
+  "auto_threshold_adjustment": true,
+  "verbose_reporting": false,
+  "thresholds": {
+    "list_view": {
+      "response_time_ms": 150.0,
+      "memory_overhead_mb": 25.0,
+      "query_count_max": 5,
+      "cache_hit_ratio_min": 0.0
+    },
+    "detail_view": {
+      "response_time_ms": 80.0,
+      "memory_overhead_mb": 15.0,
+      "query_count_max": 3,
+      "cache_hit_ratio_min": 0.0
+    },
+    "create_view": {
+      "response_time_ms": 120.0,
+      "memory_overhead_mb": 20.0,
+      "query_count_max": 6,
+      "cache_hit_ratio_min": 0.0
+    },
+    "update_view": {
+      "response_time_ms": 100.0,
+      "memory_overhead_mb": 18.0,
+      "query_count_max": 5,
+      "cache_hit_ratio_min": 0.0
+    },
+    "search_view": {
+      "response_time_ms": 250.0,
+      "memory_overhead_mb": 30.0,
+      "query_count_max": 8,
+      "cache_hit_ratio_min": 0.0
+    },
+    "authentication": {
+      "response_time_ms": 50.0,
+      "memory_overhead_mb": 10.0,
+      "query_count_max": 2,
+      "cache_hit_ratio_min": 0.0
+    }
+  },
+  "scoring_weights": {
+    "response_time": 25.0,
+    "query_efficiency": 30.0,
+    "memory_efficiency": 15.0,
+    "cache_performance": 10.0,
+    "n_plus_one_penalty": 40.0
+  },
+  "n_plus_one_sensitivity": "normal",
+  "generate_executive_summaries": true,
+  "include_business_impact": true,
+  "show_optimization_potential": true
+}

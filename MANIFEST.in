@@ -1,0 +1,36 @@
+# Include package data
+include README.md
+include LICENSE
+include CHANGELOG.md
+include requirements.txt
+
+# Include C source files
+recursive-include django_mercury/c_core *.c *.h *.so Makefile BUILD.md
+
+# Include Python files
+recursive-include django_mercury *.py
+
+# Include documentation
+recursive-include django_mercury/documentation *.md
+
+# Include examples
+recursive-include django_mercury/examples *.py
+
+# Exclude test files from package
+recursive-exclude tests *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+
+# Exclude compiled C files (except .so)
+recursive-exclude django_mercury/c_core *.o *.d
+recursive-exclude django_mercury/c_core/tests *
+recursive-exclude django_mercury/c_core/logs *
+recursive-exclude django_mercury/c_core/coverage *
+
+# Exclude development files
+exclude .gitignore
+exclude .env
+exclude pypi-deploy.sh
+exclude test_runner.py
+exclude debug_test_runner.py
+exclude quick_test.py
