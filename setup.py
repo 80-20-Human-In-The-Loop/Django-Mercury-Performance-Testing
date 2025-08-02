@@ -39,11 +39,19 @@ class OptionalBuildExt(build_ext):
             print("DJANGO_MERCURY_PURE_PYTHON set - skipping C extension build")
             return
         
-        # Try to build C extensions
-        try:
-            super().build_extensions()
-        except Exception as e:
-            print(f"WARNING: Failed to build C extensions: {e}")
+        # Try to build each extension individually
+        for ext in self.extensions:
+            try:
+                super().build_extension(ext)
+            except Exception as e:
+                print(f"WARNING: Failed to build {ext.name}: {e}")
+                print(f"Skipping {ext.name} - will use pure Python fallback")
+                # Continue with other extensions
+                continue
+        
+        # If no extensions built successfully, show help message
+        if not any(os.path.exists(self.get_ext_fullpath(ext.name)) for ext in self.extensions):
+            print("WARNING: No C extensions could be built.")
             print("Django Mercury will use pure Python implementations.")
             print("Performance will be reduced. For optimal performance, install build tools:")
             
@@ -56,6 +64,15 @@ class OptionalBuildExt(build_ext):
             elif sys.platform == 'win32':
                 print("  Windows: Install Visual Studio Build Tools")
                 print("  https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio")
+    
+    def build_extension(self, ext):
+        """Build a single extension."""
+        try:
+            super().build_extension(ext)
+        except Exception as e:
+            # Log the error but don't fail the entire build
+            print(f"WARNING: Could not compile {ext.name}: {e}")
+            raise
 
 def get_c_extensions():
     """

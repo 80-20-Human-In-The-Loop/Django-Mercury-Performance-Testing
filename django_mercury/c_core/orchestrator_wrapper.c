@@ -5,6 +5,8 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <string.h>
+#include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 

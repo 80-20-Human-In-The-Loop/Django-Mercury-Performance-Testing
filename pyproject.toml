@@ -263,7 +263,7 @@ manylinux-x86_64-image = "manylinux2014"
 manylinux-aarch64-image = "manylinux2014"
 
 # Install system dependencies for C compilation
-before-all = "yum install -y gcc make"
+before-all = "yum install -y gcc make python3-devel || true"
 
 # macOS-specific configuration  
 [tool.cibuildwheel.macos]
