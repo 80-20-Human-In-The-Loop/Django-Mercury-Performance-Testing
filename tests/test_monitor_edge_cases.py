@@ -84,11 +84,11 @@ class TestMonitorEdgeCases(unittest.TestCase):
         
         # Test with None context
         monitor.enable_educational_guidance(None)
-        self.assertTrue(monitor._educational_guidance)
+        self.assertTrue(monitor._show_educational_guidance)
         
         # Test with empty dict context
         monitor.enable_educational_guidance({})
-        self.assertTrue(monitor._educational_guidance)
+        self.assertTrue(monitor._show_educational_guidance)
         
         # Test with partial context
         monitor.enable_educational_guidance({"view_type": "list"})
@@ -187,7 +187,7 @@ class TestMonitorEdgeCases(unittest.TestCase):
         
         monitor = EnhancedPerformanceMonitor("test_op")
         monitor.expect_response_under(10)  # Set very low threshold
-        monitor.enable_auto_assert()
+        # enable_auto_assert() doesn't exist, auto-assert is controlled differently
         
         # Should raise AssertionError due to auto-assert
         with self.assertRaises(AssertionError) as context:
