@@ -41,14 +41,14 @@ jobs:
       - name: Build source distribution
         run: python -m build --sdist
       
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: sdist
           path: dist/*.tar.gz
 
   # Build wheels for each platform
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build wheels on ${{ matrix.os }}-${{ matrix.archs }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -57,26 +57,32 @@ jobs:
           # Linux x86_64
           - os: ubuntu-latest
             archs: x86_64
+            build-name: linux-x86_64
             
           # Linux ARM64 (if needed, slower due to emulation)
           # - os: ubuntu-latest
           #   archs: aarch64
+          #   build-name: linux-aarch64
           
           # macOS Intel
-          - os: macos-latest
+          - os: macos-13  # Use macos-13 for Intel
             archs: x86_64
+            build-name: macos-x86_64
           
           # macOS Apple Silicon
-          - os: macos-latest
+          - os: macos-14  # Use macos-14 for Apple Silicon
             archs: arm64
+            build-name: macos-arm64
           
           # macOS Universal (both architectures)
           - os: macos-latest
             archs: universal2
+            build-name: macos-universal2
           
           # Windows 64-bit
           - os: windows-latest
             archs: AMD64
+            build-name: windows-amd64
     
     steps:
       - uses: actions/checkout@v4
@@ -91,13 +97,13 @@ jobs:
           platforms: arm64
       
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.16.2
+        uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_ARCHS: ${{ matrix.archs }}
       
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.archs }}
+          name: wheels-${{ matrix.build-name }}
           path: ./wheelhouse/*.whl
 
   # Test the built wheels
@@ -118,7 +124,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: dist/
       
@@ -191,7 +197,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: dist/
       
@@ -223,7 +229,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_test_pypi == 'true'
     
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: dist/
       
@@ -249,7 +255,7 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: dist/
       

@@ -40,12 +40,8 @@ def _try_import_c_extensions():
 def _show_performance_warning():
     """Show warning about using pure Python implementation."""
     warning_msg = (
-        "\n" + "="*60 + "\n"
-        "Django Mercury Performance Warning\n"
-        "="*60 + "\n"
-        "C extensions are not available. Using pure Python implementation.\n"
+        "Django Mercury: C extensions not available. Using pure Python implementation.\n"
         "Performance monitoring will work but with higher overhead.\n"
-        "\n"
         "For optimal performance:\n"
     )
     
@@ -123,23 +119,27 @@ class ImplementationLoader:
     def _load_c_extensions(self):
         """Load C extension implementations."""
         try:
-            # Import C extensions
-            import django_mercury._c_performance as c_perf
-            import django_mercury._c_metrics as c_metrics
-            import django_mercury._c_analyzer as c_analyzer
-            import django_mercury._c_orchestrator as c_orch
+            # Test that C extensions can be imported
+            import django_mercury._c_performance
+            import django_mercury._c_metrics
+            import django_mercury._c_analyzer
+            import django_mercury._c_orchestrator
             
-            # Map to Python-compatible classes
-            # Note: These would need wrapper classes in real implementation
-            # For now, we'll fall back to Python if C import fails
-            self._performance_monitor_class = c_perf.PerformanceMonitor
-            self._metrics_engine_class = c_metrics.MetricsEngine
-            self._query_analyzer_class = c_analyzer.QueryAnalyzer
-            self._test_orchestrator_class = c_orch.TestOrchestrator
+            # Use wrapper classes that provide Python interface
+            from .c_wrappers import (
+                CPerformanceMonitor,
+                CMetricsEngine,
+                CQueryAnalyzer,
+                CTestOrchestrator,
+            )
             
-        except (ImportError, AttributeError):
-            # C extensions imported but classes not found
-            # Fall back to Python
+            self._performance_monitor_class = CPerformanceMonitor
+            self._metrics_engine_class = CMetricsEngine
+            self._query_analyzer_class = CQueryAnalyzer
+            self._test_orchestrator_class = CTestOrchestrator
+            
+        except ImportError as e:
+            # C extensions not available, fall back to Python
             self._load_pure_python()
     
     def _load_pure_python(self):
