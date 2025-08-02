@@ -121,7 +121,7 @@ def get_c_extensions():
         Extension(
             name='django_mercury._c_performance',
             sources=[
-                'django_mercury/c_core/performance_monitor.c',
+                'django_mercury/c_core/python_wrapper.c',  # Use Python wrapper
             ] + common_sources,
             include_dirs=include_dirs,
             libraries=libraries,
