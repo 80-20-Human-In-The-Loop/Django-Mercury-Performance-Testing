@@ -3,6 +3,8 @@ include README.md
 include LICENSE
 include CHANGELOG.md
 include requirements.txt
+include setup.py
+include pyproject.toml
 
 # Include C source files
 recursive-include django_mercury/c_core *.c *.h *.so Makefile BUILD.md

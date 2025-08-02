@@ -207,7 +207,15 @@ class PythonMetricsEngine:
     def calculate_statistics(self) -> Dict[str, Any]:
         """Calculate statistical summaries of collected metrics."""
         if not self.metrics_history:
-            return {}
+            return {
+                'count': 0,
+                'mean': 0.0,
+                'min': 0.0,
+                'max': 0.0,
+                'std_dev': 0.0,
+                'total_queries': 0,
+                'implementation': 'pure_python',
+            }
         
         # Extract response times
         response_times = [
@@ -222,22 +230,28 @@ class PythonMetricsEngine:
         ]
         
         # Calculate statistics
-        def calculate_stats(values):
-            if not values:
-                return {'min': 0, 'max': 0, 'avg': 0, 'median': 0}
+        count = len(response_times)
+        if count == 0:
+            mean = 0.0
+            min_val = 0.0
+            max_val = 0.0
+            std_dev = 0.0
+        else:
+            mean = sum(response_times) / count
+            min_val = min(response_times)
+            max_val = max(response_times)
             
-            sorted_values = sorted(values)
-            return {
-                'min': min(values),
-                'max': max(values),
-                'avg': sum(values) / len(values),
-                'median': sorted_values[len(sorted_values) // 2],
-            }
+            # Calculate standard deviation
+            variance = sum((x - mean) ** 2 for x in response_times) / count
+            std_dev = variance ** 0.5
         
         return {
-            'response_time_stats': calculate_stats(response_times),
-            'query_count_stats': calculate_stats(query_counts),
-            'total_requests': len(self.metrics_history),
+            'count': count,
+            'mean': mean,
+            'min': min_val,
+            'max': max_val,
+            'std_dev': std_dev,
+            'total_queries': sum(query_counts),
             'implementation': 'pure_python',
         }
     

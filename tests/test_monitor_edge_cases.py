@@ -13,8 +13,7 @@ from django_mercury.python_bindings.monitor import (
     EnhancedPerformanceMetrics_Python,
     monitor_django_view,
     monitor_django_model,
-    monitor_serializer,
-    monitor_query
+    monitor_serializer
 )
 
 
@@ -160,8 +159,8 @@ class TestMonitorEdgeCases(unittest.TestCase):
             self.assertEqual(monitor.operation_name, "test_serializer")
             self.assertEqual(monitor.operation_type, "serializer")
         
-        # Test monitor_query
-        with monitor_query("test_query") as monitor:
+        # Test monitor_django_view with query operation type
+        with monitor_django_view("test_query", operation_type="query") as monitor:
             self.assertEqual(monitor.operation_name, "test_query")
             self.assertEqual(monitor.operation_type, "query")
     
