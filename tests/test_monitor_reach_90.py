@@ -162,8 +162,9 @@ class TestMonitorInternalMethods(unittest.TestCase):
         # Test operation_type property
         self.assertEqual(monitor.operation_type, "general")
         
-        # Test metrics property when None
-        self.assertIsNone(monitor.metrics)
+        # Test metrics property raises when not monitored
+        with self.assertRaises(RuntimeError):
+            _ = monitor.metrics
         
         # Test threshold methods exist and work
         monitor.expect_response_under(100)

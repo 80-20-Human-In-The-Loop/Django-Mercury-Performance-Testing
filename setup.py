@@ -37,20 +37,30 @@ class OptionalBuildExt(build_ext):
         # Check if we're being forced to use pure Python
         if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
             print("DJANGO_MERCURY_PURE_PYTHON set - skipping C extension build")
+            # Clear extensions list so nothing tries to copy them
+            self.extensions = []
             return
+        
+        # Keep track of successfully built extensions
+        built_extensions = []
+        failed_extensions = []
         
         # Try to build each extension individually
         for ext in self.extensions:
             try:
                 super().build_extension(ext)
+                built_extensions.append(ext)
             except Exception as e:
                 print(f"WARNING: Failed to build {ext.name}: {e}")
                 print(f"Skipping {ext.name} - will use pure Python fallback")
-                # Continue with other extensions
+                failed_extensions.append(ext)
                 continue
         
+        # Remove failed extensions from the list so they don't cause copy errors
+        self.extensions = built_extensions
+        
         # If no extensions built successfully, show help message
-        if not any(os.path.exists(self.get_ext_fullpath(ext.name)) for ext in self.extensions):
+        if not built_extensions:
             print("WARNING: No C extensions could be built.")
             print("Django Mercury will use pure Python implementations.")
             print("Performance will be reduced. For optimal performance, install build tools:")

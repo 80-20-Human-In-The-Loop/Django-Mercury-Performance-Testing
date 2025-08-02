@@ -13,6 +13,14 @@
  * Version: 2.0.0
  */
 
+/* Define feature test macros BEFORE any includes */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "common.h"
 #include <assert.h>
 #include <stdarg.h>

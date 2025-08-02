@@ -19,6 +19,14 @@
 #ifndef MERCURY_COMMON_H
 #define MERCURY_COMMON_H
 
+/* Define feature test macros BEFORE any includes */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -26,14 +34,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-
-// Define feature test macros before any includes
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
 
 // Platform detection
 #ifdef __linux__
