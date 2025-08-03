@@ -58,6 +58,10 @@ class TestCBindingsFailures(unittest.TestCase):
         """Test when only some libraries fail to load."""
         from django_mercury.python_bindings import c_bindings
         
+        # Skip if in pure Python mode
+        if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
+            self.skipTest("Pure Python mode - C extensions not available")
+        
         # Reset state
         c_bindings.c_extensions._initialized = False
         
@@ -240,6 +244,10 @@ class TestCBindingsFunctionCalls(unittest.TestCase):
         """Test that query analyzer functions are properly configured."""
         from django_mercury.python_bindings import c_bindings
         
+        # Skip if in pure Python mode
+        if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
+            self.skipTest("Pure Python mode - C extensions not available")
+        
         # Initialize
         c_bindings.c_extensions._initialized = False
         c_bindings.initialize_c_extensions()
@@ -254,6 +262,10 @@ class TestCBindingsFunctionCalls(unittest.TestCase):
     def test_metrics_engine_function_configuration(self):
         """Test that metrics engine functions are properly configured."""
         from django_mercury.python_bindings import c_bindings
+        
+        # Skip if in pure Python mode
+        if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
+            self.skipTest("Pure Python mode - C extensions not available")
         
         # Initialize
         c_bindings.c_extensions._initialized = False

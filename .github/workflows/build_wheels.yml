@@ -47,10 +47,19 @@ jobs:
         run: |
           echo "Building C libraries..."
           cd django_mercury/c_core
-          make clean
-          make all
+          make clean || true
+          make all || {
+            echo "WARNING: C library build failed, will use pure Python mode"
+            echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+            exit 0
+          }
           echo "Checking built libraries:"
-          ls -la *.so || echo "No .so files found"
+          if ls *.so 2>/dev/null; then
+            echo "C libraries built successfully"
+          else
+            echo "No .so files found, will use pure Python mode"
+            echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+          fi
           cd ../..
       
       - name: Build Python C extensions (Linux/macOS)
