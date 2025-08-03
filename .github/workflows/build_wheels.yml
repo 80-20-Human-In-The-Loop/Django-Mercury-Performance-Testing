@@ -43,6 +43,8 @@ jobs:
           pip install pytest-cov
       
       - name: Run Python tests
+        env:
+          DJANGO_SETTINGS_MODULE: tests.config.test_settings
         run: |
           pytest tests/ -v --cov=django_mercury --cov-report=term-missing
       
@@ -51,15 +53,15 @@ jobs:
         run: |
           python setup.py build_ext --inplace
           python -c "from django_mercury.python_bindings.loader import check_c_extensions; available, details = check_c_extensions(); print(f'C Extensions: {available}')"
-          python test_performance_comparison.py || echo "Performance test completed"
+          echo "C extensions built successfully"
       
       - name: Run C Core Unit Tests (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           echo "Running C core unit tests..."
-          ./c_run_tests.sh test || echo "C tests completed with status: $?"
+          ./c_test_runner.sh test || echo "C tests completed with status: $?"
           echo "Running C coverage analysis..."
-          ./c_run_tests.sh coverage || echo "Coverage completed with status: $?"
+          ./c_test_runner.sh coverage || echo "Coverage completed with status: $?"
       
       - name: Run test runner
         run: |

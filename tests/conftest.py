@@ -12,6 +12,15 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Configure Django settings before any Django imports
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.config.test_settings')
+
+import django
+from django.conf import settings
+
+if not settings.configured:
+    django.setup()
+
 
 def pytest_configure(config):
     """Configure pytest environment."""
@@ -20,7 +29,7 @@ def pytest_configure(config):
     logging.getLogger('django_mercury.python_bindings.c_bindings').setLevel(logging.WARNING)
     
     # Also suppress validation messages unless they're errors
-    logging.getLogger('performance_testing.validation').setLevel(logging.ERROR)
+    logging.getLogger('django_mercury.python_bindings.validation').setLevel(logging.ERROR)
     
     # Set environment variable to reduce verbosity
     os.environ['MERCURY_TEST_MODE'] = '1'
@@ -30,7 +39,7 @@ def pytest_unconfigure(config):
     """Clean up after pytest."""
     # Reset logging levels
     logging.getLogger('django_mercury.python_bindings.c_bindings').setLevel(logging.INFO)
-    logging.getLogger('performance_testing.validation').setLevel(logging.INFO)
+    logging.getLogger('django_mercury.python_bindings.validation').setLevel(logging.INFO)
     
     # Clean up environment
     os.environ.pop('MERCURY_TEST_MODE', None)
