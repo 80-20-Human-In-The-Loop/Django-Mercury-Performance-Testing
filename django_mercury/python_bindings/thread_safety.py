@@ -6,7 +6,7 @@ the framework works correctly in multi-threaded environments.
 
 import threading
 from contextlib import contextmanager
-from typing import TypeVar, Generic, Optional, Callable, Any
+from typing import TypeVar, Generic, Optional, Callable, Any, List, Tuple
 from functools import wraps
 
 from .logging_config import get_logger
@@ -78,17 +78,17 @@ class ThreadSafeDict(Generic[T]):
         with self._lock:
             self._dict.clear()
     
-    def items(self) -> list[tuple[str, T]]:
+    def items(self) -> List[Tuple[str, T]]:
         """Get a copy of all items in the dictionary."""
         with self._lock:
             return list(self._dict.items())
     
-    def keys(self) -> list[str]:
+    def keys(self) -> List[str]:
         """Get a copy of all keys in the dictionary."""
         with self._lock:
             return list(self._dict.keys())
     
-    def values(self) -> list[T]:
+    def values(self) -> List[T]:
         """Get a copy of all values in the dictionary."""
         with self._lock:
             return list(self._dict.values())

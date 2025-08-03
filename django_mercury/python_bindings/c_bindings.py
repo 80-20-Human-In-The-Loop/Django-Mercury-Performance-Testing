@@ -43,7 +43,7 @@ import logging
 import platform
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List, Tuple
 from dataclasses import dataclass
 from contextlib import contextmanager
 
@@ -112,7 +112,7 @@ class ExtensionStats:
 
 # === UTILITY FUNCTIONS ===
 
-def get_library_paths() -> list[Path]:
+def get_library_paths() -> List[Path]:
     """Get ordered list of paths to search for C libraries."""
     paths = []
     
@@ -172,7 +172,7 @@ def find_library(library_name: str) -> Optional[Path]:
     logger.debug(f"Library not found: {library_name}")
     return None
 
-def measure_time(func: Callable) -> tuple[Any, float]:
+def measure_time(func: Callable) -> Tuple[Any, float]:
     """Measure execution time of a function in milliseconds."""
     import time
     start_time = time.perf_counter()
