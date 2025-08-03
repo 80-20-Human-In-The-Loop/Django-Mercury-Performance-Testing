@@ -1,6 +1,9 @@
 """
 Pytest configuration file for test suite.
 Controls test environment setup and logging configuration.
+
+NOTE: Main testing is done via test_runner.py. This conftest.py is for
+individual pytest debugging when needed.
 """
 
 import logging
@@ -11,15 +14,6 @@ from pathlib import Path
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
-
-# Configure Django settings before any Django imports
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.config.test_settings')
-
-import django
-from django.conf import settings
-
-if not settings.configured:
-    django.setup()
 
 
 def pytest_configure(config):

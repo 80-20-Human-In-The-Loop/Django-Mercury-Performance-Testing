@@ -13,8 +13,8 @@ jsonschema>=4.0.0  # For configuration validation
 
 # Development Dependencies
 pytest>=7.0.0
-pytest-django>=4.5.0
 pytest-cov>=3.0.0
+coverage>=6.0.0  # For test_runner.py coverage support
 black>=22.0.0  # Code formatting
 isort>=5.10.0  # Import sorting
 mypy>=0.950  # Type checking

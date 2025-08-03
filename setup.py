@@ -244,12 +244,12 @@ setup(
     extras_require={
         'dev': [
             'pytest>=7.0.0',
-            'pytest-django>=4.5.0',
             'pytest-cov>=3.0.0',
             'black>=22.0.0',
             'isort>=5.10.0',
             'mypy>=0.950',
             'flake8>=4.0.0',
+            'coverage>=6.0.0',
         ],
         'rich': [
             'rich>=12.0.0',

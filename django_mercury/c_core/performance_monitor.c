@@ -12,24 +12,14 @@
  * - Django-specific query and cache tracking
  */
 
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 199309L
-#endif
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <sys/times.h>
-#include <sys/resource.h>
-#include <pthread.h>
+#include "common.h"
 
 /**
  * @brief Performance metrics structure for enhanced monitoring
  * 
  * Contains comprehensive performance data including timing, memory usage,
  * database queries, and cache statistics for Django operations.
+ * Uses per-session counters for proper concurrent session isolation.
  */
 typedef struct {
     uint64_t start_time_ns;          /**< Start time in nanoseconds */
@@ -37,12 +27,13 @@ typedef struct {
     size_t memory_start_bytes;       /**< Initial memory usage in bytes */
     size_t memory_peak_bytes;        /**< Peak memory usage in bytes */
     size_t memory_end_bytes;         /**< Final memory usage in bytes */
-    uint32_t query_count_start;      /**< Database queries at start */
-    uint32_t query_count_end;        /**< Database queries at end */
-    uint32_t cache_hits;             /**< Cache hits during operation */
-    uint32_t cache_misses;           /**< Cache misses during operation */
+    uint32_t session_query_count;    /**< Per-session database query count */
+    uint32_t session_cache_hits;     /**< Per-session cache hits */
+    uint32_t session_cache_misses;   /**< Per-session cache misses */
     char operation_name[256];        /**< Name of the operation */
     char operation_type[64];         /**< Type: view, model, serializer, query */
+    pthread_mutex_t session_mutex;   /**< Mutex for thread-safe session updates */
+    int64_t session_id;              /**< Unique session identifier */
 } EnhancedPerformanceMetrics_t;
 
 // Global storage for active monitors
@@ -107,25 +98,100 @@ void reset_global_counters(void) {
     global_cache_misses = 0;
 }
 
+// Thread-local storage for current session ID
+static __thread int64_t current_session_id = 0;
+
 /**
- * @brief Increment global query counter (called from Django hooks)
+ * @brief Set the current session ID for this thread
+ * @param session_id The session ID to set as current for this thread
+ */
+void set_current_session_id(int64_t session_id) {
+    current_session_id = session_id;
+}
+
+/**
+ * @brief Get the current session ID for this thread
+ * @return Current session ID, 0 if none set
+ */
+int64_t get_current_session_id(void) {
+    return current_session_id;
+}
+
+/**
+ * @brief Find active session by session ID
+ * @param session_id The session ID to find
+ * @return Pointer to session metrics, NULL if not found
+ */
+static EnhancedPerformanceMetrics_t* find_session_by_id(int64_t session_id) {
+    if (session_id <= 0) return NULL;
+    
+    pthread_mutex_lock(&slot_mutex);
+    
+    int slot = session_id - 1;  // Convert back to 0-based slot
+    EnhancedPerformanceMetrics_t* session = NULL;
+    
+    if (slot >= 0 && slot < 2048 && active_monitor_slots[slot] == 1 && active_monitors[slot] != NULL) {
+        session = active_monitors[slot];
+    }
+    
+    pthread_mutex_unlock(&slot_mutex);
+    return session;
+}
+
+/**
+ * @brief Find active session for current thread using thread-local session ID
+ * @return Pointer to active session metrics, NULL if none found
+ */
+static EnhancedPerformanceMetrics_t* find_current_session(void) {
+    return find_session_by_id(current_session_id);
+}
+
+/**
+ * @brief Increment query counter for current active session (called from Django hooks)
  */
 void increment_query_count(void) {
+    // Update global counter for backward compatibility
     global_query_count++;
+    
+    // Update current session counter for accurate per-session tracking
+    EnhancedPerformanceMetrics_t* session = find_current_session();
+    if (session != NULL) {
+        pthread_mutex_lock(&session->session_mutex);
+        session->session_query_count++;
+        pthread_mutex_unlock(&session->session_mutex);
+    }
 }
 
 /**
- * @brief Increment global cache hits counter (called from Django hooks)
+ * @brief Increment cache hits counter for current active session (called from Django hooks)
  */
 void increment_cache_hits(void) {
+    // Update global counter for backward compatibility
     global_cache_hits++;
+    
+    // Update current session counter for accurate per-session tracking
+    EnhancedPerformanceMetrics_t* session = find_current_session();
+    if (session != NULL) {
+        pthread_mutex_lock(&session->session_mutex);
+        session->session_cache_hits++;
+        pthread_mutex_unlock(&session->session_mutex);
+    }
 }
 
 /**
- * @brief Increment global cache misses counter (called from Django hooks)
+ * @brief Increment cache misses counter for current active session (called from Django hooks)
  */
 void increment_cache_misses(void) {
+    // Update global counter for backward compatibility  
     global_cache_misses++;
+    
+    // Update current session counter for accurate per-session tracking
+    EnhancedPerformanceMetrics_t* session = find_current_session();
+    if (session != NULL) {
+        pthread_mutex_lock(&session->session_mutex);
+        session->session_cache_misses++;
+        pthread_mutex_unlock(&session->session_mutex);
+    }
 }
 
 // --- Performance Monitoring Lifecycle ---
@@ -141,7 +207,10 @@ void increment_cache_misses(void) {
  * @return Handle for the monitoring session, -1 on error
  */
 int64_t start_performance_monitoring_enhanced(const char* operation_name, const char* operation_type) {
-    if (!operation_name) return -1;
+    if (!operation_name || !operation_type) {
+        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation name and type cannot be NULL");
+        return -1;
+    }
     
     // Thread-safe slot allocation
     pthread_mutex_lock(&slot_mutex);
@@ -180,8 +249,21 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
     strncpy(metrics->operation_name, operation_name, sizeof(metrics->operation_name) - 1);
     metrics->operation_name[sizeof(metrics->operation_name) - 1] = '\0';
     
-    strncpy(metrics->operation_type, operation_type ? operation_type : "general", sizeof(metrics->operation_type) - 1);
+    strncpy(metrics->operation_type, operation_type, sizeof(metrics->operation_type) - 1);
     metrics->operation_type[sizeof(metrics->operation_type) - 1] = '\0';
+    
+    // Initialize session-specific data
+    metrics->session_id = slot + 1;  // Use slot+1 as session ID
+    
+    // Initialize per-session mutex
+    if (pthread_mutex_init(&metrics->session_mutex, NULL) != 0) {
+        // Clean up on mutex initialization failure
+        pthread_mutex_lock(&slot_mutex);
+        active_monitor_slots[slot] = 0;
+        pthread_mutex_unlock(&slot_mutex);
+        free(metrics);
+        return -1;
+    }
     
     // Capture baseline metrics
     metrics->start_time_ns = get_current_time_ns();
@@ -190,13 +272,16 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
     metrics->memory_peak_bytes = metrics->memory_start_bytes;
     metrics->memory_end_bytes = 0;
     
-    // Capture Django-specific baseline counters
-    metrics->query_count_start = global_query_count;
-    metrics->query_count_end = 0;
-    metrics->cache_hits = global_cache_hits;
-    metrics->cache_misses = global_cache_misses;
+    // Initialize per-session counters (start at 0 for isolated tracking)
+    metrics->session_query_count = 0;
+    metrics->session_cache_hits = 0;
+    metrics->session_cache_misses = 0;
     
-    return slot + 1;  // Return 1-based handle
+    // Set this session as the current session for this thread
+    int64_t session_id = slot + 1;
+    set_current_session_id(session_id);
+    
+    return session_id;  // Return 1-based handle
 }
 
 /**
@@ -238,13 +323,8 @@ EnhancedPerformanceMetrics_t* stop_performance_monitoring_enhanced(int64_t handl
         metrics->memory_peak_bytes = metrics->memory_end_bytes;
     }
     
-    // Calculate Django-specific deltas
-    metrics->query_count_end = global_query_count;
-    uint32_t final_cache_hits = global_cache_hits;
-    uint32_t final_cache_misses = global_cache_misses;
-    
-    metrics->cache_hits = final_cache_hits - metrics->cache_hits;
-    metrics->cache_misses = final_cache_misses - metrics->cache_misses;
+    // Session counters are already accurate (no delta calculation needed)
+    // The session-specific counters already contain the correct isolated values
     
     // Thread-safe slot clearing
     pthread_mutex_lock(&slot_mutex);
@@ -261,6 +341,8 @@ EnhancedPerformanceMetrics_t* stop_performance_monitoring_enhanced(int64_t handl
  */
 void free_metrics(EnhancedPerformanceMetrics_t* metrics) {
     if (metrics) {
+        // Clean up the session mutex before freeing
+        pthread_mutex_destroy(&metrics->session_mutex);
         free(metrics);
     }
 }
@@ -307,7 +389,8 @@ double get_memory_delta_mb(EnhancedPerformanceMetrics_t* metrics) {
  */
 uint32_t get_query_count(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
-    return metrics->query_count_end - metrics->query_count_start;
+    // Return the session-specific query count (no delta calculation needed)
+    return metrics->session_query_count;
 }
 
 /**
@@ -317,7 +400,8 @@ uint32_t get_query_count(EnhancedPerformanceMetrics_t* metrics) {
  */
 uint32_t get_cache_hit_count(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
-    return metrics->cache_hits;
+    // Return the session-specific cache hits
+    return metrics->session_cache_hits;
 }
 
 /**
@@ -327,7 +411,8 @@ uint32_t get_cache_hit_count(EnhancedPerformanceMetrics_t* metrics) {
  */
 uint32_t get_cache_miss_count(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
-    return metrics->cache_misses;
+    // Return the session-specific cache misses
+    return metrics->session_cache_misses;
 }
 
 /**
@@ -338,10 +423,10 @@ uint32_t get_cache_miss_count(EnhancedPerformanceMetrics_t* metrics) {
 double get_cache_hit_ratio(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return -1.0;
     
-    uint32_t total_cache_ops = metrics->cache_hits + metrics->cache_misses;
+    uint32_t total_cache_ops = metrics->session_cache_hits + metrics->session_cache_misses;
     if (total_cache_ops == 0) return 0.0;
     
-    return (double)metrics->cache_hits / (double)total_cache_ops;
+    return (double)metrics->session_cache_hits / (double)total_cache_ops;
 }
 
 // --- Performance Analysis Functions ---
@@ -385,8 +470,8 @@ int detect_n_plus_one_severe(EnhancedPerformanceMetrics_t* metrics) {
     // Debug logging for false positives
     if (query_count == 0) {
         fprintf(stderr, "DEBUG: detect_n_plus_one_severe called with 0 queries\n");
-        fprintf(stderr, "  query_count_start=%u, query_count_end=%u\n", 
-                metrics->query_count_start, metrics->query_count_end);
+        fprintf(stderr, "  session_query_count=%u\n", 
+                metrics->session_query_count);
         return 0;  // No N+1 possible with 0 queries
     }
     
@@ -581,7 +666,7 @@ int has_poor_cache_performance(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
     
     double hit_ratio = get_cache_hit_ratio(metrics);
-    uint32_t total_ops = metrics->cache_hits + metrics->cache_misses;
+    uint32_t total_ops = metrics->session_cache_hits + metrics->session_cache_misses;
     
     // Poor cache performance if hit ratio < 70% and significant cache usage
     return (hit_ratio >= 0 && hit_ratio < 0.7 && total_ops > 5);

@@ -127,7 +127,7 @@ endif
 
 # === BUILD TARGETS ===
 
-.PHONY: all clean test install benchmark profile help info debug release simple_test
+.PHONY: all clean test install benchmark profile help info debug release simple_test debug-test debug-coverage debug-single
 
 # Default target
 all: info $(TARGETS)
@@ -175,7 +175,7 @@ $(TEST_ORCHESTRATOR_OBJ): $(TEST_ORCHESTRATOR_SRC) common.h
 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
 
 # Build performance monitor library (legacy libperformance.so)
-libperformance.so: $(PERFORMANCE_MONITOR_OBJ)
+libperformance.so: $(PERFORMANCE_MONITOR_OBJ) $(COMMON_OBJ)
 	@echo "🔗 Linking performance monitor library..."
 	$(CC) -shared $(CFLAGS) $(PYTHON_INCLUDES) -o $@ $^ $(LDFLAGS)
 
@@ -289,12 +289,12 @@ simple_test: $(TARGETS)
 	@$(CC) $(CFLAGS) -o simple_test_query_analyzer tests/simple_test_query_analyzer.c query_analyzer.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) -o simple_test_metrics_engine tests/simple_test_metrics_engine.c metrics_engine.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) -o simple_test_test_orchestrator tests/simple_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) -o simple_test_performance_monitor tests/simple_test_performance_monitor.c performance_monitor.c -lm -pthread
+	@$(CC) $(CFLAGS) -o simple_test_performance_monitor tests/simple_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🧪 Building comprehensive and edge tests..."
 	@$(CC) $(CFLAGS) -o comprehensive_test_test_orchestrator tests/comprehensive_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) -o edge_test_test_orchestrator tests/edge_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) -o comprehensive_test_performance_monitor tests/comprehensive_test_performance_monitor.c performance_monitor.c -lm -pthread
-	@$(CC) $(CFLAGS) -o edge_test_performance_monitor tests/edge_test_performance_monitor.c performance_monitor.c -lm -pthread
+	@$(CC) $(CFLAGS) -o comprehensive_test_performance_monitor tests/comprehensive_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
+	@$(CC) $(CFLAGS) -o edge_test_performance_monitor tests/edge_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🚀 Running simple tests..."
 	@echo "=== Common Tests ==="
 	@./simple_test_common
@@ -336,28 +336,28 @@ coverage: clean-coverage
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_metrics_engine tests/simple_test_metrics_engine.c metrics_engine.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -D_GNU_SOURCE -o $(COVERAGE_DIR)/test_metrics_engine_comprehensive tests/comprehensive_test_metrics_engine.c metrics_engine.c common.c -lm -pthread -lunwind
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator tests/simple_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor tests/simple_test_performance_monitor.c performance_monitor.c -lm -pthread
+	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor tests/simple_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🔨 Building new comprehensive and edge tests..."
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator_comprehensive tests/comprehensive_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator_edge tests/edge_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor_comprehensive tests/comprehensive_test_performance_monitor.c performance_monitor.c -lm -pthread
-	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor_edge tests/edge_test_performance_monitor.c performance_monitor.c -lm -pthread
+	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor_comprehensive tests/comprehensive_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
+	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor_edge tests/edge_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🚀 Running tests for coverage..."
-	@-(cd $(COVERAGE_DIR) && ./test_common > test_common.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_advanced > test_advanced.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_edge_common > test_edge_common.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_coverage_boost > test_coverage_boost.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_query_analyzer > test_query_analyzer.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_query_analyzer_comprehensive > test_query_analyzer_comprehensive.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_metrics_engine > test_metrics_engine.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_metrics_engine_comprehensive > test_metrics_engine_comprehensive.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_test_orchestrator > test_test_orchestrator.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_performance_monitor > test_performance_monitor.log 2>&1)
+	@cd $(COVERAGE_DIR) && ./test_common > test_common.log 2>&1 || (echo "❌ test_common failed with exit code $$?"; cat test_common.log; false)
+	@cd $(COVERAGE_DIR) && ./test_advanced > test_advanced.log 2>&1 || (echo "❌ test_advanced failed with exit code $$?"; cat test_advanced.log; false)
+	@cd $(COVERAGE_DIR) && ./test_edge_common > test_edge_common.log 2>&1 || (echo "❌ test_edge_common failed with exit code $$?"; cat test_edge_common.log; false)
+	@cd $(COVERAGE_DIR) && ./test_coverage_boost > test_coverage_boost.log 2>&1 || (echo "❌ test_coverage_boost failed with exit code $$?"; cat test_coverage_boost.log; false)
+	@cd $(COVERAGE_DIR) && ./test_query_analyzer > test_query_analyzer.log 2>&1 || (echo "❌ test_query_analyzer failed with exit code $$?"; cat test_query_analyzer.log; false)
+	@cd $(COVERAGE_DIR) && ./test_query_analyzer_comprehensive > test_query_analyzer_comprehensive.log 2>&1 || (echo "❌ test_query_analyzer_comprehensive failed with exit code $$?"; cat test_query_analyzer_comprehensive.log; false)
+	@cd $(COVERAGE_DIR) && ./test_metrics_engine > test_metrics_engine.log 2>&1 || (echo "❌ test_metrics_engine failed with exit code $$?"; cat test_metrics_engine.log; false)
+	@cd $(COVERAGE_DIR) && ./test_metrics_engine_comprehensive > test_metrics_engine_comprehensive.log 2>&1 || (echo "❌ test_metrics_engine_comprehensive failed with exit code $$?"; cat test_metrics_engine_comprehensive.log; false)
+	@cd $(COVERAGE_DIR) && ./test_test_orchestrator > test_test_orchestrator.log 2>&1 || (echo "❌ test_test_orchestrator failed with exit code $$?"; cat test_test_orchestrator.log; false)
+	@cd $(COVERAGE_DIR) && ./test_performance_monitor > test_performance_monitor.log 2>&1 || (echo "❌ test_performance_monitor failed with exit code $$?"; cat test_performance_monitor.log; false)
 	@echo "🚀 Running new comprehensive and edge tests for coverage..."
-	@-(cd $(COVERAGE_DIR) && ./test_test_orchestrator_comprehensive > test_test_orchestrator_comprehensive.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_test_orchestrator_edge > test_test_orchestrator_edge.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_performance_monitor_comprehensive > test_performance_monitor_comprehensive.log 2>&1)
-	@-(cd $(COVERAGE_DIR) && ./test_performance_monitor_edge > test_performance_monitor_edge.log 2>&1)
+	@cd $(COVERAGE_DIR) && ./test_test_orchestrator_comprehensive > test_test_orchestrator_comprehensive.log 2>&1 || (echo "❌ test_test_orchestrator_comprehensive failed with exit code $$?"; cat test_test_orchestrator_comprehensive.log; false)
+	@cd $(COVERAGE_DIR) && ./test_test_orchestrator_edge > test_test_orchestrator_edge.log 2>&1 || (echo "❌ test_test_orchestrator_edge failed with exit code $$?"; cat test_test_orchestrator_edge.log; false)
+	@cd $(COVERAGE_DIR) && ./test_performance_monitor_comprehensive > test_performance_monitor_comprehensive.log 2>&1 || (echo "❌ test_performance_monitor_comprehensive failed with exit code $$?"; cat test_performance_monitor_comprehensive.log; false)
+	@cd $(COVERAGE_DIR) && ./test_performance_monitor_edge > test_performance_monitor_edge.log 2>&1 || (echo "❌ test_performance_monitor_edge failed with exit code $$?"; cat test_performance_monitor_edge.log; false)
 	@echo "📈 Generating coverage reports..."
 	@cp common.c common.h query_analyzer.c metrics_engine.c test_orchestrator.c performance_monitor.c $(COVERAGE_DIR)/
 	@(cd $(COVERAGE_DIR) && gcov -b test_*-*.gcda 2>/dev/null | ../../tests/filter_gcov.sh | python3 ../../tests/colorize_gcov.py | tee coverage_summary.txt || true)
@@ -470,6 +470,25 @@ help:
 	@echo "  make install      # Install to Python bindings"
 
 # === DEPENDENCY TRACKING ===
+
+# === DEBUG TARGETS ===
+
+debug-test: clean
+	@echo "🐛 Building and running tests with AddressSanitizer..."
+	$(MAKE) test DEBUG=1
+
+debug-coverage: clean
+	@echo "🐛 Building and running coverage with AddressSanitizer..."
+	$(MAKE) coverage DEBUG=1
+
+debug-single:
+	@echo "🐛 Running single test with AddressSanitizer: $(TEST)"
+	@if [ -z "$(TEST)" ]; then echo "Usage: make debug-single TEST=test_name"; exit 1; fi
+	@echo "Building $(TEST) with debug flags..."
+	@$(CC) $(CFLAGS) -g -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -O0 \
+		-o tests/coverage/debug_$(TEST) tests/$(TEST).c $(TEST).c common.c -lm -pthread
+	@echo "Running $(TEST) with AddressSanitizer..."
+	@cd tests/coverage && ./debug_$(TEST)
 
 # Auto-generate dependencies
 %.d: %.c

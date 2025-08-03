@@ -28,12 +28,13 @@ typedef struct {
     size_t memory_start_bytes;
     size_t memory_peak_bytes;
     size_t memory_end_bytes;
-    uint32_t query_count_start;
-    uint32_t query_count_end;
-    uint32_t cache_hits;
-    uint32_t cache_misses;
+    uint32_t session_query_count;
+    uint32_t session_cache_hits;
+    uint32_t session_cache_misses;
     char operation_name[256];
     char operation_type[64];
+    pthread_mutex_t session_mutex;
+    int64_t session_id;
 } EnhancedPerformanceMetrics_t;
 
 // External function declarations from performance_monitor.c

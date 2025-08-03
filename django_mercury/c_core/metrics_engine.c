@@ -363,6 +363,7 @@ static void check_thresholds_simd_impl(const PerformanceMonitor* monitors, size_
 #endif
 
 // Scalar threshold checking (fallback)
+#ifndef USE_SIMD
 static void check_thresholds_scalar(const PerformanceMonitor* monitors, size_t count,
                                    uint64_t* violations) {
     for (size_t i = 0; i < count; i++) {
@@ -396,6 +397,7 @@ static void check_thresholds_scalar(const PerformanceMonitor* monitors, size_t c
         }
     }
 }
+#endif
 
 // === ENGINE INITIALIZATION ===
 

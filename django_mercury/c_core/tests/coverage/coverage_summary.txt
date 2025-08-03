@@ -1,0 +1,30 @@
+[1mFile 'common.c'[0m
+Lines executed:[92m81.98%[0m of 444
+Branches executed:[91m42.86%[0m of 56
+Taken at least once:[91m42.86%[0m of 56
+No calls
+
+[1mFile 'metrics_engine.c'[0m
+Lines executed:[93m65.84%[0m of 243
+No branches
+No calls
+Creating 'metrics_engine.c.gcov'
+
+[1mFile 'performance_monitor.c'[0m
+Lines executed:[92m88.69%[0m of 221
+No branches
+Calls executed:[92m100.00%[0m of 6
+Creating 'performance_monitor.c.gcov'
+
+[1mFile 'query_analyzer.c'[0m
+Lines executed:[93m75.00%[0m of 324
+Branches executed:[93m75.00%[0m of 8
+Taken at least once:[91m37.50%[0m of 8
+Calls executed:[93m75.00%[0m of 4
+
+[1mFile 'test_orchestrator.c'[0m
+Lines executed:[93m73.17%[0m of 246
+No branches
+No calls
+Creating 'test_orchestrator.c.gcov'
+

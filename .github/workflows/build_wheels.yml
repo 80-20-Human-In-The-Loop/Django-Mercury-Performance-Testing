@@ -43,10 +43,8 @@ jobs:
           pip install pytest-cov
       
       - name: Run Python tests
-        env:
-          DJANGO_SETTINGS_MODULE: tests.config.test_settings
         run: |
-          pytest tests/ -v --cov=django_mercury --cov-report=term-missing
+          python test_runner.py --coverage --verbose
       
       - name: Test C extensions (Linux/macOS)
         if: runner.os != 'Windows'
@@ -63,9 +61,10 @@ jobs:
           echo "Running C coverage analysis..."
           ./c_test_runner.sh coverage || echo "Coverage completed with status: $?"
       
-      - name: Run test runner
-        run: |
-          python test_runner.py || echo "Test runner completed"
+      # NOTE: test_runner.py already executed above in "Run Python tests" step
+      # - name: Run test runner
+      #   run: |
+      #     python test_runner.py || echo "Test runner completed"
       
       - name: Check code quality
         if: matrix.python-version == '3.10' && matrix.os == 'ubuntu-latest'

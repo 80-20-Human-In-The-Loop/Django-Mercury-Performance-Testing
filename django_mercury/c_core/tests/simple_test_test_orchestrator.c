@@ -30,7 +30,8 @@ extern int update_n_plus_one_analysis(void* context_ptr, int has_n_plus_one, int
                                      const char* query_signature);
 extern int finalize_test_context(void* context_ptr);
 extern void get_orchestrator_statistics(uint64_t* total_tests, uint64_t* total_violations,
-                                       double* avg_response_time, double* avg_memory_usage);
+                                       uint64_t* total_n_plus_one, size_t* active_contexts,
+                                       uint64_t* history_entries);
 extern int load_binary_configuration(const char* config_path);
 extern int save_binary_configuration(const char* config_path);
 extern int query_history_entries(const char* test_class_filter, const char* test_method_filter,
@@ -94,21 +95,19 @@ int test_orchestrator_statistics(void) {
     
     uint64_t total_tests = 0;
     uint64_t total_violations = 0;
-    double avg_response_time = 0.0;
-    double avg_memory_usage = 0.0;
+    uint64_t total_n_plus_one = 0;
+    size_t active_contexts = 0;
+    uint64_t history_entries = 0;
     
     // Get initial statistics
     get_orchestrator_statistics(&total_tests, &total_violations, 
-                               &avg_response_time, &avg_memory_usage);
+                               &total_n_plus_one, &active_contexts, &history_entries);
     
-    printf("Statistics - Tests: %llu, Violations: %llu, Avg Response: %.2fms, Avg Memory: %.2fMB\n",
+    printf("Statistics - Tests: %llu, Violations: %llu, N+1: %llu, Active: %zu, History: %llu\n",
            (unsigned long long)total_tests, (unsigned long long)total_violations,
-           avg_response_time, avg_memory_usage);
+           (unsigned long long)total_n_plus_one, active_contexts, (unsigned long long)history_entries);
     
-    ASSERT(total_tests >= 0, "Total tests should be non-negative");
-    ASSERT(total_violations >= 0, "Total violations should be non-negative");
-    ASSERT(avg_response_time >= 0.0, "Average response time should be non-negative");
-    ASSERT(avg_memory_usage >= 0.0, "Average memory usage should be non-negative");
+    // Statistics retrieved successfully (function completed without error)
     
     return 1;
 }
@@ -213,14 +212,14 @@ int test_complex_workflow(void) {
     ASSERT(result3 == 0, "Should finalize third context");
     
     // Check updated statistics
-    uint64_t total_tests, total_violations;
-    double avg_response_time, avg_memory_usage;
+    uint64_t total_tests, total_violations, total_n_plus_one, history_entries;
+    size_t active_contexts;
     get_orchestrator_statistics(&total_tests, &total_violations, 
-                               &avg_response_time, &avg_memory_usage);
+                               &total_n_plus_one, &active_contexts, &history_entries);
     
-    printf("After workflow - Tests: %llu, Violations: %llu, Avg Response: %.2fms, Avg Memory: %.2fMB\n",
+    printf("After workflow - Tests: %llu, Violations: %llu, N+1: %llu, Active: %zu, History: %llu\n",
            (unsigned long long)total_tests, (unsigned long long)total_violations,
-           avg_response_time, avg_memory_usage);
+           (unsigned long long)total_n_plus_one, active_contexts, (unsigned long long)history_entries);
     
     return 1;
 }

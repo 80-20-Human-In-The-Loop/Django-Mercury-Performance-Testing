@@ -1,0 +1,2844 @@
+        -:    0:Source:query_analyzer.c
+        -:    0:Source is newer than graph
+        -:    1:/**
+        -:    2: * @file query_analyzer.c
+        -:    3: * @brief High-Performance SQL Query Analysis Engine
+        -:    4: * 
+        -:    5: * This library implements a high-performance SQL query analysis engine for the
+        -:    6: * Mercury Performance Testing Framework. It replaces the Python-based query
+        -:    7: * analysis in django_hooks.py with optimized C implementations.
+        -:    8: *
+        -:    9: * Key Features:
+        -:   10: * - Boyer-Moore pattern matching for N+1 query detection
+        -:   11: * - Hash-based query similarity analysis using FNV-1a
+        -:   12: * - Lightweight SQL tokenization with finite state machine
+        -:   13: * - Memory-efficient ring buffer for query history
+        -:   14: * - Real-time N+1 severity calculation and optimization suggestions
+        -:   15: *
+        -:   16: * Performance Target: 75% reduction in SQL analysis overhead
+        -:   17: * Memory Usage: Fixed 1MB allocation for query history buffer
+        -:   18: */
+        -:   19:
+        -:   20:#include "common.h"
+        -:   21:#include <math.h>
+        -:   22:#include <ctype.h>
+        -:   23:
+        -:   24:// === CONSTANTS ===
+        -:   25:
+        -:   26:#define MAX_QUERY_HISTORY 1000
+        -:   27:#define MAX_PATTERN_CACHE 50
+        -:   28:#define SIMILARITY_THRESHOLD 0.8
+        -:   29:#define N_PLUS_ONE_THRESHOLD 12  // Mercury's realistic threshold
+        -:   30:
+        -:   31:/**
+        -:   32: * @enum SqlQueryType
+        -:   33: * @brief SQL query type classification
+        -:   34: */
+        -:   35:typedef enum {
+        -:   36:    SQL_UNKNOWN = 0,  /**< Unknown or unparsed query type */
+        -:   37:    SQL_SELECT = 1,   /**< SELECT query */
+        -:   38:    SQL_INSERT = 2,   /**< INSERT query */
+        -:   39:    SQL_UPDATE = 3,   /**< UPDATE query */
+        -:   40:    SQL_DELETE = 4,   /**< DELETE query */
+        -:   41:    SQL_CREATE = 5,   /**< CREATE TABLE/INDEX/VIEW */
+        -:   42:    SQL_DROP = 6,     /**< DROP TABLE/INDEX/VIEW */
+        -:   43:    SQL_ALTER = 7     /**< ALTER TABLE */
+        -:   44:} SqlQueryType;
+        -:   45:
+        -:   46:/**
+        -:   47: * @enum NPlusOneSeverity
+        -:   48: * @brief N+1 query pattern severity levels
+        -:   49: */
+        -:   50:typedef enum {
+        -:   51:    N_PLUS_ONE_NONE = 0,     /**< No N+1 pattern detected */
+        -:   52:    N_PLUS_ONE_MILD = 1,     /**< 5-11 queries (acceptable) */
+        -:   53:    N_PLUS_ONE_MODERATE = 2, /**< 12-24 queries (needs attention) */
+        -:   54:    N_PLUS_ONE_HIGH = 3,     /**< 25-49 queries (problematic) */
+        -:   55:    N_PLUS_ONE_SEVERE = 4,   /**< 50-99 queries (severe) */
+        -:   56:    N_PLUS_ONE_CRITICAL = 5  /**< 100+ queries (critical) */
+        -:   57:} NPlusOneSeverity;
+        -:   58:
+        -:   59:// === DATA STRUCTURES ===
+        -:   60:
+        -:   61:// Pre-compiled SQL patterns for fast detection
+        -:   62:typedef struct {
+        -:   63:    MercuryBoyerMoore* pattern_matcher;
+        -:   64:    char pattern_text[256];
+        -:   65:    SqlQueryType query_type;
+        -:   66:    int priority;  // Higher priority patterns checked first
+        -:   67:} SqlPattern;
+        -:   68:
+        -:   69:// Query similarity cluster for N+1 detection
+        -:   70:typedef struct {
+        -:   71:    uint64_t pattern_hash;
+        -:   72:    int query_count;
+        -:   73:    double total_time;
+        -:   74:    double avg_time;
+        -:   75:    char representative_query[512];
+        -:   76:    MercuryTimestamp first_seen;
+        -:   77:    MercuryTimestamp last_seen;
+        -:   78:} QueryCluster;
+        -:   79:
+        -:   80:// Main query analyzer structure
+        -:   81:typedef struct {
+        -:   82:    MercuryRingBuffer* query_history;
+        -:   83:    SqlPattern* patterns;
+        -:   84:    size_t pattern_count;
+        -:   85:    QueryCluster* clusters;
+        -:   86:    size_t cluster_count;
+        -:   87:    size_t max_clusters;
+        -:   88:    
+        -:   89:    // Memory pool for query text storage
+        -:   90:    memory_pool_t query_text_pool;
+        -:   91:    
+        -:   92:    // Thread safety
+        -:   93:    pthread_mutex_t cluster_mutex;  // Protects cluster array access
+        -:   94:    pthread_mutex_t history_mutex;  // Protects ring buffer access
+        -:   95:    
+        -:   96:    // Statistics
+        -:   97:    _Atomic(uint64_t) total_queries_analyzed;
+        -:   98:    _Atomic(uint64_t) n_plus_one_patterns_detected;
+        -:   99:    _Atomic(uint64_t) similar_queries_found;
+        -:  100:    
+        -:  101:    // Current analysis state
+        -:  102:    NPlusOneSeverity current_severity;
+        -:  103:    int estimated_cause;
+        -:  104:    char optimization_suggestion[512];
+        -:  105:} QueryAnalyzer;
+        -:  106:
+        -:  107:// Global analyzer instance
+        -:  108:static QueryAnalyzer* g_analyzer = NULL;
+        -:  109:
+        -:  110:// === SQL PATTERN DEFINITIONS ===
+        -:  111:
+        -:  112:static const char* sql_patterns[] = {
+        -:  113:    // High-priority N+1 indicators
+        -:  114:    "SELECT * FROM",
+        -:  115:    "SELECT .* FROM .* WHERE .*id = ",
+        -:  116:    "SELECT .* FROM .* WHERE .*_id = ",
+        -:  117:    "SELECT .* FROM .* WHERE .*pk = ",
+        -:  118:    
+        -:  119:    // Django ORM patterns
+        -:  120:    "SELECT .* FROM \".*_.*\" WHERE \".*\".\"id\" = ",
+        -:  121:    "SELECT .* FROM \".*\" WHERE \".*\".\".*_id\" = ",
+        -:  122:    
+        -:  123:    // JOIN patterns (good - indicates optimized queries)
+        -:  124:    "SELECT .* FROM .* JOIN .* ON",
+        -:  125:    "SELECT .* FROM .* LEFT JOIN .* ON",
+        -:  126:    "SELECT .* FROM .* INNER JOIN .* ON",
+        -:  127:    
+        -:  128:    // Foreign key access patterns
+        -:  129:    "SELECT .* FROM \".*\" WHERE \".*\".\".*\" IN (",
+        -:  130:    
+        -:  131:    // Bulk operations (usually good)
+        -:  132:    "SELECT .* FROM .* WHERE .*id.* IN (",
+        -:  133:    "INSERT INTO .* VALUES",
+        -:  134:    "UPDATE .* SET .* WHERE .*id.* IN (",
+        -:  135:    "DELETE FROM .* WHERE .*id.* IN (",
+        -:  136:    
+        -:  137:    // Migration patterns
+        -:  138:    "CREATE TABLE",
+        -:  139:    "ALTER TABLE",
+        -:  140:    "DROP TABLE",
+        -:  141:    "CREATE INDEX",
+        -:  142:    "DROP INDEX"
+        -:  143:};
+        -:  144:
+        -:  145:static const SqlQueryType pattern_types[] = {
+        -:  146:    SQL_SELECT, SQL_SELECT, SQL_SELECT, SQL_SELECT,
+        -:  147:    SQL_SELECT, SQL_SELECT,
+        -:  148:    SQL_SELECT, SQL_SELECT, SQL_SELECT,
+        -:  149:    SQL_SELECT,
+        -:  150:    SQL_SELECT, SQL_INSERT, SQL_UPDATE, SQL_DELETE,
+        -:  151:    SQL_CREATE, SQL_ALTER, SQL_DROP, SQL_CREATE, SQL_DROP
+        -:  152:};
+        -:  153:
+        -:  154:// === UTILITY FUNCTIONS ===
+        -:  155:
+        -:  156:// Safe string allocation using memory pool
+     3178:  157:static char* pool_strdup(const char* str) {
+     3178:  158:    if (!str || !g_analyzer) return NULL;
+        -:  159:    
+     3178:  160:    size_t len = strlen(str);
+     3178:  161:    if (len >= 4096) {
+        -:  162:        // String too long for our pool blocks - truncate
+        -:  163:        len = 4095;
+       1*:  164:        MERCURY_WARN("Query string truncated to fit memory pool (original length: %zu)", strlen(str));
+        -:  165:    }
+        -:  166:    
+     3178:  167:    char* pool_str = memory_pool_alloc(&g_analyzer->query_text_pool);
+     3178:  168:    if (pool_str) {
+        -:  169:        strncpy(pool_str, str, len);
+     3178:  170:        pool_str[len] = '\0';
+        -:  171:    } else {
+    #####:  172:        MERCURY_ERROR("Failed to allocate query text from memory pool");
+        -:  173:    }
+        -:  174:    
+        -:  175:    return pool_str;
+        -:  176:}
+------------------
+pool_strdup:
+function pool_strdup called 73 returned 100% blocks executed 64%
+       73:  157:static char* pool_strdup(const char* str) {
+       73:  158:    if (!str || !g_analyzer) return NULL;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  159:    
+       73:  160:    size_t len = strlen(str);
+       73:  161:    if (len >= 4096) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  162:        // String too long for our pool blocks - truncate
+        -:  163:        len = 4095;
+    #####:  164:        MERCURY_WARN("Query string truncated to fit memory pool (original length: %zu)", strlen(str));
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  165:    }
+        -:  166:    
+       73:  167:    char* pool_str = memory_pool_alloc(&g_analyzer->query_text_pool);
+call    0 returned 100%
+       73:  168:    if (pool_str) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  169:        strncpy(pool_str, str, len);
+       73:  170:        pool_str[len] = '\0';
+        -:  171:    } else {
+    #####:  172:        MERCURY_ERROR("Failed to allocate query text from memory pool");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  173:    }
+        -:  174:    
+        -:  175:    return pool_str;
+        -:  176:}
+------------------
+pool_strdup:
+function pool_strdup called 3105 returned 100% blocks executed 82%
+     3105:  157:static char* pool_strdup(const char* str) {
+     3105:  158:    if (!str || !g_analyzer) return NULL;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  159:    
+     3105:  160:    size_t len = strlen(str);
+     3105:  161:    if (len >= 4096) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        -:  162:        // String too long for our pool blocks - truncate
+        -:  163:        len = 4095;
+        1:  164:        MERCURY_WARN("Query string truncated to fit memory pool (original length: %zu)", strlen(str));
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  165:    }
+        -:  166:    
+     3105:  167:    char* pool_str = memory_pool_alloc(&g_analyzer->query_text_pool);
+call    0 returned 100%
+     3105:  168:    if (pool_str) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  169:        strncpy(pool_str, str, len);
+     3105:  170:        pool_str[len] = '\0';
+        -:  171:    } else {
+    #####:  172:        MERCURY_ERROR("Failed to allocate query text from memory pool");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  173:    }
+        -:  174:    
+        -:  175:    return pool_str;
+        -:  176:}
+------------------
+        -:  177:
+        -:  178:// Safe string deallocation using memory pool
+        -:  179:static void pool_strfree(char* str) {
+    3138*:  180:    if (str && g_analyzer) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 never executed
+branch  3 never executed
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+    3138*:  181:        memory_pool_free(&g_analyzer->query_text_pool, str);
+call    0 returned 100%
+call    1 never executed
+call    2 returned 100%
+call    3 returned 100%
+        -:  182:    }
+        -:  183:}
+        -:  184:
+        -:  185:// Fast SQL query type detection
+     3178:  186:static SqlQueryType detect_query_type(const char* query) {
+     3178:  187:    if (!query) return SQL_UNKNOWN;
+        -:  188:    
+        -:  189:    // Skip whitespace
+    3185*:  190:    while (isspace(*query)) query++;
+        -:  191:    
+        -:  192:    // Convert first word to uppercase and compare
+     3178:  193:    if (strncasecmp(query, "SELECT", 6) == 0) return SQL_SELECT;
+      607:  194:    if (strncasecmp(query, "INSERT", 6) == 0) return SQL_INSERT;
+      407:  195:    if (strncasecmp(query, "UPDATE", 6) == 0) return SQL_UPDATE;
+      198:  196:    if (strncasecmp(query, "DELETE", 6) == 0) return SQL_DELETE;
+       4*:  197:    if (strncasecmp(query, "CREATE", 6) == 0) return SQL_CREATE;
+       3*:  198:    if (strncasecmp(query, "DROP", 4) == 0) return SQL_DROP;
+       2*:  199:    if (strncasecmp(query, "ALTER", 5) == 0) return SQL_ALTER;
+        -:  200:    
+        -:  201:    return SQL_UNKNOWN;
+        -:  202:}
+------------------
+detect_query_type:
+function detect_query_type called 73 returned 100% blocks executed 58%
+       73:  186:static SqlQueryType detect_query_type(const char* query) {
+       73:  187:    if (!query) return SQL_UNKNOWN;
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  188:    
+        -:  189:    // Skip whitespace
+      73*:  190:    while (isspace(*query)) query++;
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:  191:    
+        -:  192:    // Convert first word to uppercase and compare
+       73:  193:    if (strncasecmp(query, "SELECT", 6) == 0) return SQL_SELECT;
+branch  0 taken 4% (fallthrough)
+branch  1 taken 96%
+        3:  194:    if (strncasecmp(query, "INSERT", 6) == 0) return SQL_INSERT;
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        2:  195:    if (strncasecmp(query, "UPDATE", 6) == 0) return SQL_UPDATE;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        1:  196:    if (strncasecmp(query, "DELETE", 6) == 0) return SQL_DELETE;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  197:    if (strncasecmp(query, "CREATE", 6) == 0) return SQL_CREATE;
+branch  0 never executed
+branch  1 never executed
+    #####:  198:    if (strncasecmp(query, "DROP", 4) == 0) return SQL_DROP;
+branch  0 never executed
+branch  1 never executed
+    #####:  199:    if (strncasecmp(query, "ALTER", 5) == 0) return SQL_ALTER;
+branch  0 never executed
+branch  1 never executed
+        -:  200:    
+        -:  201:    return SQL_UNKNOWN;
+        -:  202:}
+------------------
+detect_query_type:
+function detect_query_type called 3105 returned 100% blocks executed 100%
+     3105:  186:static SqlQueryType detect_query_type(const char* query) {
+     3105:  187:    if (!query) return SQL_UNKNOWN;
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  188:    
+        -:  189:    // Skip whitespace
+     3112:  190:    while (isspace(*query)) query++;
+branch  0 taken 1%
+branch  1 taken 100% (fallthrough)
+        -:  191:    
+        -:  192:    // Convert first word to uppercase and compare
+     3105:  193:    if (strncasecmp(query, "SELECT", 6) == 0) return SQL_SELECT;
+branch  0 taken 19% (fallthrough)
+branch  1 taken 81%
+      604:  194:    if (strncasecmp(query, "INSERT", 6) == 0) return SQL_INSERT;
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+      405:  195:    if (strncasecmp(query, "UPDATE", 6) == 0) return SQL_UPDATE;
+branch  0 taken 49% (fallthrough)
+branch  1 taken 51%
+      197:  196:    if (strncasecmp(query, "DELETE", 6) == 0) return SQL_DELETE;
+branch  0 taken 2% (fallthrough)
+branch  1 taken 98%
+        4:  197:    if (strncasecmp(query, "CREATE", 6) == 0) return SQL_CREATE;
+branch  0 taken 75% (fallthrough)
+branch  1 taken 25%
+        3:  198:    if (strncasecmp(query, "DROP", 4) == 0) return SQL_DROP;
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        2:  199:    if (strncasecmp(query, "ALTER", 5) == 0) return SQL_ALTER;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:  200:    
+        -:  201:    return SQL_UNKNOWN;
+        -:  202:}
+------------------
+        -:  203:
+        -:  204:// Normalize query for similarity comparison
+     3178:  205:static void normalize_query(const char* query, char* normalized, size_t max_len) {
+     3178:  206:    if (!query || !normalized || max_len == 0) return;
+        -:  207:    
+        -:  208:    size_t i = 0, j = 0;
+        -:  209:    bool in_quotes = false;
+        -:  210:    bool prev_space = false;
+        -:  211:    
+   221809:  212:    while (query[i] && j < max_len - 1) {
+        -:  213:        char c = query[i];
+        -:  214:        
+        -:  215:        // Handle quoted strings
+   218631:  216:        if (c == '\'' || c == '"') {
+        5:  217:            in_quotes = !in_quotes;
+        5:  218:            normalized[j++] = '?';  // Replace quoted content with placeholder
+       25:  219:            while (query[++i] && query[i] != c && j < max_len - 1) {
+        -:  220:                // Skip quoted content
+        -:  221:            }
+        5:  222:            if (query[i] == c) i++;  // Skip closing quote
+        5:  223:            continue;
+        -:  224:        }
+        -:  225:        
+   218626:  226:        if (!in_quotes) {
+        -:  227:            // Replace numbers with placeholder
+   218597:  228:            if (isdigit(c)) {
+    12195:  229:                normalized[j++] = '?';
+    49949:  230:                while (query[i] && isdigit(query[i])) i++;
+    12195:  231:                continue;
+        -:  232:            }
+        -:  233:            
+        -:  234:            // Normalize whitespace
+   206402:  235:            if (isspace(c)) {
+    23843:  236:                if (!prev_space) {
+    23562:  237:                    normalized[j++] = ' ';
+        -:  238:                    prev_space = true;
+        -:  239:                }
+    23843:  240:                i++;
+    23843:  241:                continue;
+        -:  242:            }
+        -:  243:            
+        -:  244:            prev_space = false;
+   182559:  245:            normalized[j++] = tolower(c);
+        -:  246:        }
+        -:  247:        
+   182588:  248:        i++;
+        -:  249:    }
+        -:  250:    
+     3178:  251:    normalized[j] = '\0';
+        -:  252:    
+        -:  253:    // Trim trailing whitespace
+     3183:  254:    while (j > 0 && isspace(normalized[j-1])) {
+       5*:  255:        normalized[--j] = '\0';
+        -:  256:    }
+        -:  257:}
+------------------
+normalize_query:
+function normalize_query called 73 returned 100% blocks executed 97%
+       73:  205:static void normalize_query(const char* query, char* normalized, size_t max_len) {
+       73:  206:    if (!query || !normalized || max_len == 0) return;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100%
+branch  3 taken 0%
+        -:  207:    
+        -:  208:    size_t i = 0, j = 0;
+        -:  209:    bool in_quotes = false;
+        -:  210:    bool prev_space = false;
+        -:  211:    
+     2699:  212:    while (query[i] && j < max_len - 1) {
+branch  0 taken 97% (fallthrough)
+branch  1 taken 3%
+branch  2 taken 100%
+branch  3 taken 0% (fallthrough)
+        -:  213:        char c = query[i];
+        -:  214:        
+        -:  215:        // Handle quoted strings
+     2626:  216:        if (c == '\'' || c == '"') {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        2:  217:            in_quotes = !in_quotes;
+        2:  218:            normalized[j++] = '?';  // Replace quoted content with placeholder
+       10:  219:            while (query[++i] && query[i] != c && j < max_len - 1) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 80% (fallthrough)
+branch  3 taken 20%
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+        -:  220:                // Skip quoted content
+        -:  221:            }
+        2:  222:            if (query[i] == c) i++;  // Skip closing quote
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2:  223:            continue;
+        -:  224:        }
+        -:  225:        
+     2624:  226:        if (!in_quotes) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+        -:  227:            // Replace numbers with placeholder
+     2610:  228:            if (isdigit(c)) {
+branch  0 taken 4% (fallthrough)
+branch  1 taken 96%
+      109:  229:                normalized[j++] = '?';
+      229:  230:                while (query[i] && isdigit(query[i])) i++;
+branch  0 taken 70% (fallthrough)
+branch  1 taken 30%
+branch  2 taken 75%
+branch  3 taken 25% (fallthrough)
+      109:  231:                continue;
+        -:  232:            }
+        -:  233:            
+        -:  234:            // Normalize whitespace
+     2501:  235:            if (isspace(c)) {
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+      498:  236:                if (!prev_space) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      498:  237:                    normalized[j++] = ' ';
+        -:  238:                    prev_space = true;
+        -:  239:                }
+      498:  240:                i++;
+      498:  241:                continue;
+        -:  242:            }
+        -:  243:            
+        -:  244:            prev_space = false;
+     2003:  245:            normalized[j++] = tolower(c);
+        -:  246:        }
+        -:  247:        
+     2017:  248:        i++;
+        -:  249:    }
+        -:  250:    
+       73:  251:    normalized[j] = '\0';
+        -:  252:    
+        -:  253:    // Trim trailing whitespace
+       73:  254:    while (j > 0 && isspace(normalized[j-1])) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0%
+branch  3 taken 100% (fallthrough)
+    #####:  255:        normalized[--j] = '\0';
+        -:  256:    }
+        -:  257:}
+------------------
+normalize_query:
+function normalize_query called 3105 returned 100% blocks executed 100%
+     3105:  205:static void normalize_query(const char* query, char* normalized, size_t max_len) {
+     3105:  206:    if (!query || !normalized || max_len == 0) return;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100%
+branch  3 taken 0%
+        -:  207:    
+        -:  208:    size_t i = 0, j = 0;
+        -:  209:    bool in_quotes = false;
+        -:  210:    bool prev_space = false;
+        -:  211:    
+   219110:  212:    while (query[i] && j < max_len - 1) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 100%
+branch  3 taken 1% (fallthrough)
+        -:  213:        char c = query[i];
+        -:  214:        
+        -:  215:        // Handle quoted strings
+   216005:  216:        if (c == '\'' || c == '"') {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        3:  217:            in_quotes = !in_quotes;
+        3:  218:            normalized[j++] = '?';  // Replace quoted content with placeholder
+       15:  219:            while (query[++i] && query[i] != c && j < max_len - 1) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 80% (fallthrough)
+branch  3 taken 20%
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+        -:  220:                // Skip quoted content
+        -:  221:            }
+        3:  222:            if (query[i] == c) i++;  // Skip closing quote
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        3:  223:            continue;
+        -:  224:        }
+        -:  225:        
+   216002:  226:        if (!in_quotes) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+        -:  227:            // Replace numbers with placeholder
+   215987:  228:            if (isdigit(c)) {
+branch  0 taken 6% (fallthrough)
+branch  1 taken 94%
+    12086:  229:                normalized[j++] = '?';
+    49720:  230:                while (query[i] && isdigit(query[i])) i++;
+branch  0 taken 94% (fallthrough)
+branch  1 taken 6%
+branch  2 taken 80%
+branch  3 taken 20% (fallthrough)
+    12086:  231:                continue;
+        -:  232:            }
+        -:  233:            
+        -:  234:            // Normalize whitespace
+   203901:  235:            if (isspace(c)) {
+branch  0 taken 11% (fallthrough)
+branch  1 taken 89%
+    23345:  236:                if (!prev_space) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+    23064:  237:                    normalized[j++] = ' ';
+        -:  238:                    prev_space = true;
+        -:  239:                }
+    23345:  240:                i++;
+    23345:  241:                continue;
+        -:  242:            }
+        -:  243:            
+        -:  244:            prev_space = false;
+   180556:  245:            normalized[j++] = tolower(c);
+        -:  246:        }
+        -:  247:        
+   180571:  248:        i++;
+        -:  249:    }
+        -:  250:    
+     3105:  251:    normalized[j] = '\0';
+        -:  252:    
+        -:  253:    // Trim trailing whitespace
+     3110:  254:    while (j > 0 && isspace(normalized[j-1])) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 1%
+branch  3 taken 100% (fallthrough)
+        5:  255:        normalized[--j] = '\0';
+        -:  256:    }
+        -:  257:}
+------------------
+        -:  258:
+        -:  259:// Calculate Jaccard similarity between two normalized queries
+        -:  260:#ifdef ENABLE_UNUSED_FUNCTIONS
+        -:  261:static double calculate_jaccard_similarity(const char* query1, const char* query2) {
+        -:  262:    if (!query1 || !query2) return 0.0;
+        -:  263:    
+        -:  264:    // This is a simplified similarity calculation that avoids memory allocation
+        -:  265:    // In practice, you'd use a more sophisticated algorithm
+        -:  266:    int len1 = strlen(query1);
+        -:  267:    int len2 = strlen(query2);
+        -:  268:    int max_len = (len1 > len2) ? len1 : len2;
+        -:  269:    int min_len = (len1 < len2) ? len1 : len2;
+        -:  270:    
+        -:  271:    if (max_len == 0) {
+        -:  272:        return 0.0;
+        -:  273:    }
+        -:  274:    
+        -:  275:    // Calculate similarity based on common subsequences
+        -:  276:    double similarity = (double)min_len / max_len;
+        -:  277:    
+        -:  278:    // Boost similarity if queries have same structure
+        -:  279:    if (strstr(query1, "select") && strstr(query2, "select")) {
+        -:  280:        similarity *= 1.2;
+        -:  281:    }
+        -:  282:    if (strstr(query1, "where") && strstr(query2, "where")) {
+        -:  283:        similarity *= 1.1;
+        -:  284:    }
+        -:  285:    
+        -:  286:    return (similarity > 1.0) ? 1.0 : similarity;
+        -:  287:}
+        -:  288:#endif
+        -:  289:
+        -:  290:// === CORE ANALYZER FUNCTIONS ===
+        -:  291:
+        -:  292:// Initialize query analyzer
+        2:  293:static MercuryError init_query_analyzer(void) {
+        2:  294:    if (g_analyzer) {
+        -:  295:        return MERCURY_SUCCESS;  // Already initialized
+        -:  296:    }
+        -:  297:    
+        2:  298:    g_analyzer = mercury_aligned_alloc(sizeof(QueryAnalyzer), 64);
+        2:  299:    if (!g_analyzer) {
+    #####:  300:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate query analyzer");
+    #####:  301:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  302:    }
+        -:  303:    
+        -:  304:    // Initialize ring buffer for query history
+        2:  305:    g_analyzer->query_history = mercury_ring_buffer_create(sizeof(MercuryQueryRecord), MAX_QUERY_HISTORY);
+        2:  306:    if (!g_analyzer->query_history) {
+    #####:  307:        mercury_aligned_free(g_analyzer);
+    #####:  308:        g_analyzer = NULL;
+    #####:  309:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  310:    }
+        -:  311:    
+        -:  312:    // Initialize SQL patterns
+        -:  313:    size_t num_patterns = sizeof(sql_patterns) / sizeof(sql_patterns[0]);
+        2:  314:    g_analyzer->patterns = malloc(num_patterns * sizeof(SqlPattern));
+        2:  315:    if (!g_analyzer->patterns) {
+    #####:  316:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+    #####:  317:        mercury_aligned_free(g_analyzer);
+    #####:  318:        g_analyzer = NULL;
+    #####:  319:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate SQL patterns");
+    #####:  320:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  321:    }
+        -:  322:    
+        2:  323:    g_analyzer->pattern_count = num_patterns;
+        -:  324:    
+        -:  325:    // Initialize Boyer-Moore patterns
+       40:  326:    for (size_t i = 0; i < num_patterns; i++) {
+       38:  327:        strncpy(g_analyzer->patterns[i].pattern_text, sql_patterns[i], sizeof(g_analyzer->patterns[i].pattern_text) - 1);
+       38:  328:        g_analyzer->patterns[i].pattern_text[sizeof(g_analyzer->patterns[i].pattern_text) - 1] = '\0';
+       38:  329:        g_analyzer->patterns[i].pattern_matcher = mercury_boyer_moore_create(sql_patterns[i]);
+       38:  330:        g_analyzer->patterns[i].query_type = pattern_types[i];
+       64:  331:        g_analyzer->patterns[i].priority = (i < 6) ? 10 : 5;  // High priority for N+1 patterns
+        -:  332:    }
+        -:  333:    
+        -:  334:    // Initialize memory pool for query text storage (4KB blocks, 2500 blocks = ~10MB)
+        2:  335:    memory_pool_init(&g_analyzer->query_text_pool, 4096, 2500);
+        -:  336:    
+        -:  337:    // Initialize query clusters
+        2:  338:    g_analyzer->max_clusters = 100;
+        2:  339:    g_analyzer->clusters = malloc(g_analyzer->max_clusters * sizeof(QueryCluster));
+        2:  340:    if (!g_analyzer->clusters) {
+        -:  341:        // Cleanup on failure
+    #####:  342:        memory_pool_destroy(&g_analyzer->query_text_pool);
+    #####:  343:        for (size_t i = 0; i < num_patterns; i++) {
+    #####:  344:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+        -:  345:        }
+    #####:  346:        free(g_analyzer->patterns);
+    #####:  347:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+    #####:  348:        mercury_aligned_free(g_analyzer);
+    #####:  349:        g_analyzer = NULL;
+    #####:  350:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate query clusters");
+    #####:  351:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  352:    }
+        -:  353:    
+        2:  354:    g_analyzer->cluster_count = 0;
+        -:  355:    
+        -:  356:    // Initialize thread safety mutexes
+        2:  357:    if (pthread_mutex_init(&g_analyzer->cluster_mutex, NULL) != 0) {
+        -:  358:        // Cleanup on failure
+    #####:  359:        free(g_analyzer->clusters);
+    #####:  360:        memory_pool_destroy(&g_analyzer->query_text_pool);
+    #####:  361:        for (size_t i = 0; i < num_patterns; i++) {
+    #####:  362:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+        -:  363:        }
+    #####:  364:        free(g_analyzer->patterns);
+    #####:  365:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+    #####:  366:        mercury_aligned_free(g_analyzer);
+    #####:  367:        g_analyzer = NULL;
+    #####:  368:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to initialize cluster mutex");
+    #####:  369:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  370:    }
+        -:  371:    
+        2:  372:    if (pthread_mutex_init(&g_analyzer->history_mutex, NULL) != 0) {
+        -:  373:        // Cleanup on failure
+    #####:  374:        pthread_mutex_destroy(&g_analyzer->cluster_mutex);
+    #####:  375:        free(g_analyzer->clusters);
+    #####:  376:        memory_pool_destroy(&g_analyzer->query_text_pool);
+    #####:  377:        for (size_t i = 0; i < num_patterns; i++) {
+    #####:  378:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+        -:  379:        }
+    #####:  380:        free(g_analyzer->patterns);
+    #####:  381:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+    #####:  382:        mercury_aligned_free(g_analyzer);
+    #####:  383:        g_analyzer = NULL;
+    #####:  384:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to initialize history mutex");
+    #####:  385:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  386:    }
+        -:  387:    
+        -:  388:    // Initialize statistics
+        2:  389:    atomic_store(&g_analyzer->total_queries_analyzed, 0);
+        2:  390:    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
+        2:  391:    atomic_store(&g_analyzer->similar_queries_found, 0);
+        -:  392:    
+        2:  393:    g_analyzer->current_severity = N_PLUS_ONE_NONE;
+        2:  394:    g_analyzer->estimated_cause = 0;
+        2:  395:    strcpy(g_analyzer->optimization_suggestion, "No optimization needed");
+        -:  396:    
+        -:  397:    // MERCURY_INFO("Query analyzer initialized with %zu patterns", num_patterns);  // Too verbose
+        2:  398:    return MERCURY_SUCCESS;
+        -:  399:}
+------------------
+init_query_analyzer:
+function init_query_analyzer called 1 returned 100% blocks executed 39%
+        1:  293:static MercuryError init_query_analyzer(void) {
+        1:  294:    if (g_analyzer) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  295:        return MERCURY_SUCCESS;  // Already initialized
+        -:  296:    }
+        -:  297:    
+        1:  298:    g_analyzer = mercury_aligned_alloc(sizeof(QueryAnalyzer), 64);
+call    0 returned 100%
+        1:  299:    if (!g_analyzer) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  300:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate query analyzer");
+    #####:  301:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  302:    }
+        -:  303:    
+        -:  304:    // Initialize ring buffer for query history
+        1:  305:    g_analyzer->query_history = mercury_ring_buffer_create(sizeof(MercuryQueryRecord), MAX_QUERY_HISTORY);
+call    0 returned 100%
+        1:  306:    if (!g_analyzer->query_history) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  307:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  308:        g_analyzer = NULL;
+    #####:  309:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  310:    }
+        -:  311:    
+        -:  312:    // Initialize SQL patterns
+        -:  313:    size_t num_patterns = sizeof(sql_patterns) / sizeof(sql_patterns[0]);
+        1:  314:    g_analyzer->patterns = malloc(num_patterns * sizeof(SqlPattern));
+        1:  315:    if (!g_analyzer->patterns) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  316:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  317:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  318:        g_analyzer = NULL;
+    #####:  319:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate SQL patterns");
+    #####:  320:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  321:    }
+        -:  322:    
+        1:  323:    g_analyzer->pattern_count = num_patterns;
+        -:  324:    
+        -:  325:    // Initialize Boyer-Moore patterns
+       20:  326:    for (size_t i = 0; i < num_patterns; i++) {
+branch  0 taken 95%
+branch  1 taken 5% (fallthrough)
+       19:  327:        strncpy(g_analyzer->patterns[i].pattern_text, sql_patterns[i], sizeof(g_analyzer->patterns[i].pattern_text) - 1);
+call    0 returned 100%
+       19:  328:        g_analyzer->patterns[i].pattern_text[sizeof(g_analyzer->patterns[i].pattern_text) - 1] = '\0';
+       19:  329:        g_analyzer->patterns[i].pattern_matcher = mercury_boyer_moore_create(sql_patterns[i]);
+call    0 returned 100%
+       19:  330:        g_analyzer->patterns[i].query_type = pattern_types[i];
+       32:  331:        g_analyzer->patterns[i].priority = (i < 6) ? 10 : 5;  // High priority for N+1 patterns
+branch  0 taken 68% (fallthrough)
+branch  1 taken 32%
+        -:  332:    }
+        -:  333:    
+        -:  334:    // Initialize memory pool for query text storage (4KB blocks, 2500 blocks = ~10MB)
+        1:  335:    memory_pool_init(&g_analyzer->query_text_pool, 4096, 2500);
+call    0 returned 100%
+        -:  336:    
+        -:  337:    // Initialize query clusters
+        1:  338:    g_analyzer->max_clusters = 100;
+        1:  339:    g_analyzer->clusters = malloc(g_analyzer->max_clusters * sizeof(QueryCluster));
+        1:  340:    if (!g_analyzer->clusters) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  341:        // Cleanup on failure
+    #####:  342:        memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 never executed
+    #####:  343:        for (size_t i = 0; i < num_patterns; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  344:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 never executed
+        -:  345:        }
+    #####:  346:        free(g_analyzer->patterns);
+    #####:  347:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  348:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  349:        g_analyzer = NULL;
+    #####:  350:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate query clusters");
+    #####:  351:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  352:    }
+        -:  353:    
+        1:  354:    g_analyzer->cluster_count = 0;
+        -:  355:    
+        -:  356:    // Initialize thread safety mutexes
+        1:  357:    if (pthread_mutex_init(&g_analyzer->cluster_mutex, NULL) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  358:        // Cleanup on failure
+    #####:  359:        free(g_analyzer->clusters);
+    #####:  360:        memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 never executed
+    #####:  361:        for (size_t i = 0; i < num_patterns; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  362:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 never executed
+        -:  363:        }
+    #####:  364:        free(g_analyzer->patterns);
+    #####:  365:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  366:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  367:        g_analyzer = NULL;
+    #####:  368:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to initialize cluster mutex");
+    #####:  369:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  370:    }
+        -:  371:    
+        1:  372:    if (pthread_mutex_init(&g_analyzer->history_mutex, NULL) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  373:        // Cleanup on failure
+    #####:  374:        pthread_mutex_destroy(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  375:        free(g_analyzer->clusters);
+    #####:  376:        memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 never executed
+    #####:  377:        for (size_t i = 0; i < num_patterns; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  378:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 never executed
+        -:  379:        }
+    #####:  380:        free(g_analyzer->patterns);
+    #####:  381:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  382:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  383:        g_analyzer = NULL;
+    #####:  384:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to initialize history mutex");
+    #####:  385:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  386:    }
+        -:  387:    
+        -:  388:    // Initialize statistics
+        1:  389:    atomic_store(&g_analyzer->total_queries_analyzed, 0);
+        1:  390:    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
+        1:  391:    atomic_store(&g_analyzer->similar_queries_found, 0);
+        -:  392:    
+        1:  393:    g_analyzer->current_severity = N_PLUS_ONE_NONE;
+        1:  394:    g_analyzer->estimated_cause = 0;
+        1:  395:    strcpy(g_analyzer->optimization_suggestion, "No optimization needed");
+        -:  396:    
+        -:  397:    // MERCURY_INFO("Query analyzer initialized with %zu patterns", num_patterns);  // Too verbose
+        1:  398:    return MERCURY_SUCCESS;
+        -:  399:}
+------------------
+init_query_analyzer:
+function init_query_analyzer called 1 returned 100% blocks executed 39%
+        1:  293:static MercuryError init_query_analyzer(void) {
+        1:  294:    if (g_analyzer) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  295:        return MERCURY_SUCCESS;  // Already initialized
+        -:  296:    }
+        -:  297:    
+        1:  298:    g_analyzer = mercury_aligned_alloc(sizeof(QueryAnalyzer), 64);
+call    0 returned 100%
+        1:  299:    if (!g_analyzer) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  300:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate query analyzer");
+    #####:  301:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  302:    }
+        -:  303:    
+        -:  304:    // Initialize ring buffer for query history
+        1:  305:    g_analyzer->query_history = mercury_ring_buffer_create(sizeof(MercuryQueryRecord), MAX_QUERY_HISTORY);
+call    0 returned 100%
+        1:  306:    if (!g_analyzer->query_history) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  307:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  308:        g_analyzer = NULL;
+    #####:  309:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  310:    }
+        -:  311:    
+        -:  312:    // Initialize SQL patterns
+        -:  313:    size_t num_patterns = sizeof(sql_patterns) / sizeof(sql_patterns[0]);
+        1:  314:    g_analyzer->patterns = malloc(num_patterns * sizeof(SqlPattern));
+        1:  315:    if (!g_analyzer->patterns) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  316:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  317:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  318:        g_analyzer = NULL;
+    #####:  319:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate SQL patterns");
+    #####:  320:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  321:    }
+        -:  322:    
+        1:  323:    g_analyzer->pattern_count = num_patterns;
+        -:  324:    
+        -:  325:    // Initialize Boyer-Moore patterns
+       20:  326:    for (size_t i = 0; i < num_patterns; i++) {
+branch  0 taken 95%
+branch  1 taken 5% (fallthrough)
+       19:  327:        strncpy(g_analyzer->patterns[i].pattern_text, sql_patterns[i], sizeof(g_analyzer->patterns[i].pattern_text) - 1);
+call    0 returned 100%
+       19:  328:        g_analyzer->patterns[i].pattern_text[sizeof(g_analyzer->patterns[i].pattern_text) - 1] = '\0';
+       19:  329:        g_analyzer->patterns[i].pattern_matcher = mercury_boyer_moore_create(sql_patterns[i]);
+call    0 returned 100%
+       19:  330:        g_analyzer->patterns[i].query_type = pattern_types[i];
+       32:  331:        g_analyzer->patterns[i].priority = (i < 6) ? 10 : 5;  // High priority for N+1 patterns
+branch  0 taken 68% (fallthrough)
+branch  1 taken 32%
+        -:  332:    }
+        -:  333:    
+        -:  334:    // Initialize memory pool for query text storage (4KB blocks, 2500 blocks = ~10MB)
+        1:  335:    memory_pool_init(&g_analyzer->query_text_pool, 4096, 2500);
+call    0 returned 100%
+        -:  336:    
+        -:  337:    // Initialize query clusters
+        1:  338:    g_analyzer->max_clusters = 100;
+        1:  339:    g_analyzer->clusters = malloc(g_analyzer->max_clusters * sizeof(QueryCluster));
+        1:  340:    if (!g_analyzer->clusters) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  341:        // Cleanup on failure
+    #####:  342:        memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 never executed
+    #####:  343:        for (size_t i = 0; i < num_patterns; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  344:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 never executed
+        -:  345:        }
+    #####:  346:        free(g_analyzer->patterns);
+    #####:  347:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  348:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  349:        g_analyzer = NULL;
+    #####:  350:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate query clusters");
+    #####:  351:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  352:    }
+        -:  353:    
+        1:  354:    g_analyzer->cluster_count = 0;
+        -:  355:    
+        -:  356:    // Initialize thread safety mutexes
+        1:  357:    if (pthread_mutex_init(&g_analyzer->cluster_mutex, NULL) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  358:        // Cleanup on failure
+    #####:  359:        free(g_analyzer->clusters);
+    #####:  360:        memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 never executed
+    #####:  361:        for (size_t i = 0; i < num_patterns; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  362:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 never executed
+        -:  363:        }
+    #####:  364:        free(g_analyzer->patterns);
+    #####:  365:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  366:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  367:        g_analyzer = NULL;
+    #####:  368:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to initialize cluster mutex");
+    #####:  369:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  370:    }
+        -:  371:    
+        1:  372:    if (pthread_mutex_init(&g_analyzer->history_mutex, NULL) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  373:        // Cleanup on failure
+    #####:  374:        pthread_mutex_destroy(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  375:        free(g_analyzer->clusters);
+    #####:  376:        memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 never executed
+    #####:  377:        for (size_t i = 0; i < num_patterns; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  378:            mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 never executed
+        -:  379:        }
+    #####:  380:        free(g_analyzer->patterns);
+    #####:  381:        mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 never executed
+    #####:  382:        mercury_aligned_free(g_analyzer);
+call    0 never executed
+    #####:  383:        g_analyzer = NULL;
+    #####:  384:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to initialize history mutex");
+    #####:  385:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  386:    }
+        -:  387:    
+        -:  388:    // Initialize statistics
+        1:  389:    atomic_store(&g_analyzer->total_queries_analyzed, 0);
+        1:  390:    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
+        1:  391:    atomic_store(&g_analyzer->similar_queries_found, 0);
+        -:  392:    
+        1:  393:    g_analyzer->current_severity = N_PLUS_ONE_NONE;
+        1:  394:    g_analyzer->estimated_cause = 0;
+        1:  395:    strcpy(g_analyzer->optimization_suggestion, "No optimization needed");
+        -:  396:    
+        -:  397:    // MERCURY_INFO("Query analyzer initialized with %zu patterns", num_patterns);  // Too verbose
+        1:  398:    return MERCURY_SUCCESS;
+        -:  399:}
+------------------
+        -:  400:
+        -:  401:// Cleanup query analyzer
+        2:  402:static void cleanup_query_analyzer(void) {
+        2:  403:    if (!g_analyzer) return;
+        -:  404:    
+        -:  405:    // Cleanup patterns
+       40:  406:    for (size_t i = 0; i < g_analyzer->pattern_count; i++) {
+       38:  407:        mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+        -:  408:    }
+        2:  409:    free(g_analyzer->patterns);
+        -:  410:    
+        -:  411:    // Cleanup clusters
+        2:  412:    free(g_analyzer->clusters);
+        -:  413:    
+        -:  414:    // Cleanup memory pool
+        2:  415:    memory_pool_destroy(&g_analyzer->query_text_pool);
+        -:  416:    
+        -:  417:    // Cleanup thread safety mutexes
+        2:  418:    pthread_mutex_destroy(&g_analyzer->cluster_mutex);
+        2:  419:    pthread_mutex_destroy(&g_analyzer->history_mutex);
+        -:  420:    
+        -:  421:    // Cleanup ring buffer
+        2:  422:    mercury_ring_buffer_destroy(g_analyzer->query_history);
+        -:  423:    
+        2:  424:    mercury_aligned_free(g_analyzer);
+        2:  425:    g_analyzer = NULL;
+        -:  426:    
+        -:  427:    // MERCURY_INFO("Query analyzer cleaned up");  // Too verbose
+        -:  428:}
+------------------
+cleanup_query_analyzer:
+function cleanup_query_analyzer called 1 returned 100% blocks executed 100%
+        1:  402:static void cleanup_query_analyzer(void) {
+        1:  403:    if (!g_analyzer) return;
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  404:    
+        -:  405:    // Cleanup patterns
+       20:  406:    for (size_t i = 0; i < g_analyzer->pattern_count; i++) {
+branch  0 taken 95%
+branch  1 taken 5% (fallthrough)
+       19:  407:        mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 returned 100%
+        -:  408:    }
+        1:  409:    free(g_analyzer->patterns);
+        -:  410:    
+        -:  411:    // Cleanup clusters
+        1:  412:    free(g_analyzer->clusters);
+        -:  413:    
+        -:  414:    // Cleanup memory pool
+        1:  415:    memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 returned 100%
+        -:  416:    
+        -:  417:    // Cleanup thread safety mutexes
+        1:  418:    pthread_mutex_destroy(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        1:  419:    pthread_mutex_destroy(&g_analyzer->history_mutex);
+call    0 returned 100%
+        -:  420:    
+        -:  421:    // Cleanup ring buffer
+        1:  422:    mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 returned 100%
+        -:  423:    
+        1:  424:    mercury_aligned_free(g_analyzer);
+call    0 returned 100%
+        1:  425:    g_analyzer = NULL;
+        -:  426:    
+        -:  427:    // MERCURY_INFO("Query analyzer cleaned up");  // Too verbose
+        -:  428:}
+------------------
+cleanup_query_analyzer:
+function cleanup_query_analyzer called 1 returned 100% blocks executed 100%
+        1:  402:static void cleanup_query_analyzer(void) {
+        1:  403:    if (!g_analyzer) return;
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  404:    
+        -:  405:    // Cleanup patterns
+       20:  406:    for (size_t i = 0; i < g_analyzer->pattern_count; i++) {
+branch  0 taken 95%
+branch  1 taken 5% (fallthrough)
+       19:  407:        mercury_boyer_moore_destroy(g_analyzer->patterns[i].pattern_matcher);
+call    0 returned 100%
+        -:  408:    }
+        1:  409:    free(g_analyzer->patterns);
+        -:  410:    
+        -:  411:    // Cleanup clusters
+        1:  412:    free(g_analyzer->clusters);
+        -:  413:    
+        -:  414:    // Cleanup memory pool
+        1:  415:    memory_pool_destroy(&g_analyzer->query_text_pool);
+call    0 returned 100%
+        -:  416:    
+        -:  417:    // Cleanup thread safety mutexes
+        1:  418:    pthread_mutex_destroy(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        1:  419:    pthread_mutex_destroy(&g_analyzer->history_mutex);
+call    0 returned 100%
+        -:  420:    
+        -:  421:    // Cleanup ring buffer
+        1:  422:    mercury_ring_buffer_destroy(g_analyzer->query_history);
+call    0 returned 100%
+        -:  423:    
+        1:  424:    mercury_aligned_free(g_analyzer);
+call    0 returned 100%
+        1:  425:    g_analyzer = NULL;
+        -:  426:    
+        -:  427:    // MERCURY_INFO("Query analyzer cleaned up");  // Too verbose
+        -:  428:}
+------------------
+        -:  429:
+        -:  430:// Find or create query cluster (thread-safe)
+     3178:  431:static QueryCluster* find_or_create_cluster(uint64_t pattern_hash, const char* query) {
+     3178:  432:    if (!query || !g_analyzer || !g_analyzer->clusters) {
+    #####:  433:        MERCURY_ERROR("Invalid arguments or analyzer state in find_or_create_cluster");
+    #####:  434:        return NULL;
+        -:  435:    }
+        -:  436:    
+     3178:  437:    pthread_mutex_lock(&g_analyzer->cluster_mutex);
+        -:  438:    
+        -:  439:    // Look for existing cluster with bounds checking
+     4706:  440:    for (size_t i = 0; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
+     4654:  441:        if (g_analyzer->clusters[i].pattern_hash == pattern_hash) {
+     3126:  442:            pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+     3126:  443:            return &g_analyzer->clusters[i];
+        -:  444:        }
+        -:  445:    }
+        -:  446:    
+        -:  447:    // Create new cluster - resize array if needed
+       52:  448:    if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+        -:  449:        // Try to resize cluster array (double the size) with overflow protection
+        -:  450:        size_t current_max = g_analyzer->max_clusters;
+    #####:  451:        if (current_max > SIZE_MAX / 2 || current_max > 10000) {
+        -:  452:            // Prevent overflow and limit maximum clusters to reasonable size
+    #####:  453:            MERCURY_WARN("Cluster array at maximum size (%zu), attempting eviction", current_max);
+        -:  454:        } else {
+    #####:  455:            size_t new_max = current_max * 2;
+    #####:  456:            QueryCluster* new_clusters = realloc(g_analyzer->clusters, new_max * sizeof(QueryCluster));
+        -:  457:            
+    #####:  458:            if (new_clusters) {
+    #####:  459:                g_analyzer->clusters = new_clusters;
+    #####:  460:                g_analyzer->max_clusters = new_max;
+        -:  461:                MERCURY_DEBUG("Resized cluster array to %zu entries", new_max);
+        -:  462:            } else {
+    #####:  463:                MERCURY_WARN("Failed to resize cluster array from %zu to %zu entries", current_max, new_max);
+        -:  464:            }
+        -:  465:        }
+        -:  466:        
+        -:  467:        // If we still don't have space after attempted resize, try eviction
+    #####:  468:        if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+        -:  469:            // Try to evict oldest cluster to make space
+    #####:  470:            if (g_analyzer->cluster_count > 0) {
+        -:  471:                // Find oldest cluster (with earliest first_seen timestamp) with bounds checking
+        -:  472:                size_t oldest_idx = 0;
+    #####:  473:                uint64_t oldest_time = g_analyzer->clusters[0].first_seen.nanoseconds;
+        -:  474:                
+    #####:  475:                for (size_t i = 1; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
+    #####:  476:                    if (g_analyzer->clusters[i].first_seen.nanoseconds < oldest_time) {
+        -:  477:                        oldest_time = g_analyzer->clusters[i].first_seen.nanoseconds;
+        -:  478:                        oldest_idx = i;
+        -:  479:                    }
+        -:  480:                }
+        -:  481:                
+        -:  482:                // Validate indices before memmove to prevent buffer overflow
+    #####:  483:                if (oldest_idx < g_analyzer->cluster_count && oldest_idx + 1 < g_analyzer->max_clusters) {
+    #####:  484:                    size_t elements_to_move = g_analyzer->cluster_count - oldest_idx - 1;
+    #####:  485:                    if (elements_to_move > 0) {
+    #####:  486:                        memmove(&g_analyzer->clusters[oldest_idx], 
+    #####:  487:                               &g_analyzer->clusters[oldest_idx + 1],
+        -:  488:                               elements_to_move * sizeof(QueryCluster));
+        -:  489:                    }
+    #####:  490:                    g_analyzer->cluster_count--;
+        -:  491:                    
+        -:  492:                    MERCURY_DEBUG("Evicted oldest cluster at index %zu (max clusters: %zu)", 
+        -:  493:                                oldest_idx, g_analyzer->max_clusters);
+        -:  494:                } else {
+    #####:  495:                    MERCURY_ERROR("Invalid cluster index during eviction: oldest_idx=%zu, count=%zu, max=%zu", 
+        -:  496:                                oldest_idx, g_analyzer->cluster_count, g_analyzer->max_clusters);
+    #####:  497:                    pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+    #####:  498:                    return NULL;
+        -:  499:                }
+        -:  500:            } else {
+    #####:  501:                MERCURY_ERROR("Cannot create cluster - no memory and no existing clusters to evict");
+    #####:  502:                pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+    #####:  503:                return NULL;
+        -:  504:            }
+        -:  505:        }
+        -:  506:    }
+        -:  507:    
+        -:  508:    // Final bounds check before creating new cluster
+       52:  509:    if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+    #####:  510:        MERCURY_ERROR("Unable to create cluster - still no space after resize/eviction attempts");
+    #####:  511:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+    #####:  512:        return NULL;
+        -:  513:    }
+        -:  514:    
+        -:  515:    // Now we have space - create new cluster with bounds checking
+        -:  516:    size_t new_cluster_idx = g_analyzer->cluster_count;
+        -:  517:    if (new_cluster_idx >= g_analyzer->max_clusters) {
+        -:  518:        MERCURY_ERROR("Cluster index out of bounds: %zu >= %zu", new_cluster_idx, g_analyzer->max_clusters);
+        -:  519:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+        -:  520:        return NULL;
+        -:  521:    }
+        -:  522:    
+       52:  523:    QueryCluster* cluster = &g_analyzer->clusters[new_cluster_idx];
+       52:  524:    g_analyzer->cluster_count++;
+        -:  525:    
+       52:  526:    cluster->pattern_hash = pattern_hash;
+       52:  527:    cluster->query_count = 0;
+       52:  528:    cluster->total_time = 0.0;
+       52:  529:    cluster->avg_time = 0.0;
+        -:  530:    
+        -:  531:    // Safe string copy with bounds checking
+       52:  532:    size_t query_len = strlen(query);
+        -:  533:    size_t max_copy = sizeof(cluster->representative_query) - 1;
+       52:  534:    if (query_len > max_copy) {
+       1*:  535:        MERCURY_WARN("Query truncated from %zu to %zu characters", query_len, max_copy);
+        -:  536:    }
+       52:  537:    strncpy(cluster->representative_query, query, max_copy);
+       52:  538:    cluster->representative_query[max_copy] = '\0';
+        -:  539:    
+       52:  540:    cluster->first_seen = mercury_get_timestamp();
+       52:  541:    cluster->last_seen = cluster->first_seen;
+        -:  542:    
+        -:  543:    MERCURY_DEBUG("Created new cluster at index %zu (hash: %lu)", new_cluster_idx, pattern_hash);
+        -:  544:    
+       52:  545:    pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+       52:  546:    return cluster;
+        -:  547:}
+------------------
+find_or_create_cluster:
+function find_or_create_cluster called 73 returned 100% blocks executed 35%
+       73:  431:static QueryCluster* find_or_create_cluster(uint64_t pattern_hash, const char* query) {
+       73:  432:    if (!query || !g_analyzer || !g_analyzer->clusters) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+    #####:  433:        MERCURY_ERROR("Invalid arguments or analyzer state in find_or_create_cluster");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  434:        return NULL;
+        -:  435:    }
+        -:  436:    
+       73:  437:    pthread_mutex_lock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        -:  438:    
+        -:  439:    // Look for existing cluster with bounds checking
+      102:  440:    for (size_t i = 0; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
+branch  0 taken 89% (fallthrough)
+branch  1 taken 11%
+branch  2 taken 100%
+branch  3 taken 0% (fallthrough)
+       91:  441:        if (g_analyzer->clusters[i].pattern_hash == pattern_hash) {
+branch  0 taken 68% (fallthrough)
+branch  1 taken 32%
+       62:  442:            pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+       62:  443:            return &g_analyzer->clusters[i];
+        -:  444:        }
+        -:  445:    }
+        -:  446:    
+        -:  447:    // Create new cluster - resize array if needed
+       11:  448:    if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  449:        // Try to resize cluster array (double the size) with overflow protection
+        -:  450:        size_t current_max = g_analyzer->max_clusters;
+    #####:  451:        if (current_max > SIZE_MAX / 2 || current_max > 10000) {
+branch  0 never executed
+branch  1 never executed
+        -:  452:            // Prevent overflow and limit maximum clusters to reasonable size
+    #####:  453:            MERCURY_WARN("Cluster array at maximum size (%zu), attempting eviction", current_max);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  454:        } else {
+    #####:  455:            size_t new_max = current_max * 2;
+    #####:  456:            QueryCluster* new_clusters = realloc(g_analyzer->clusters, new_max * sizeof(QueryCluster));
+        -:  457:            
+    #####:  458:            if (new_clusters) {
+branch  0 never executed
+branch  1 never executed
+    #####:  459:                g_analyzer->clusters = new_clusters;
+    #####:  460:                g_analyzer->max_clusters = new_max;
+        -:  461:                MERCURY_DEBUG("Resized cluster array to %zu entries", new_max);
+        -:  462:            } else {
+    #####:  463:                MERCURY_WARN("Failed to resize cluster array from %zu to %zu entries", current_max, new_max);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  464:            }
+        -:  465:        }
+        -:  466:        
+        -:  467:        // If we still don't have space after attempted resize, try eviction
+    #####:  468:        if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+branch  0 never executed
+branch  1 never executed
+        -:  469:            // Try to evict oldest cluster to make space
+    #####:  470:            if (g_analyzer->cluster_count > 0) {
+branch  0 never executed
+branch  1 never executed
+        -:  471:                // Find oldest cluster (with earliest first_seen timestamp) with bounds checking
+        -:  472:                size_t oldest_idx = 0;
+    #####:  473:                uint64_t oldest_time = g_analyzer->clusters[0].first_seen.nanoseconds;
+        -:  474:                
+    #####:  475:                for (size_t i = 1; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  476:                    if (g_analyzer->clusters[i].first_seen.nanoseconds < oldest_time) {
+branch  0 never executed
+branch  1 never executed
+        -:  477:                        oldest_time = g_analyzer->clusters[i].first_seen.nanoseconds;
+        -:  478:                        oldest_idx = i;
+        -:  479:                    }
+        -:  480:                }
+        -:  481:                
+        -:  482:                // Validate indices before memmove to prevent buffer overflow
+    #####:  483:                if (oldest_idx < g_analyzer->cluster_count && oldest_idx + 1 < g_analyzer->max_clusters) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  484:                    size_t elements_to_move = g_analyzer->cluster_count - oldest_idx - 1;
+    #####:  485:                    if (elements_to_move > 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  486:                        memmove(&g_analyzer->clusters[oldest_idx], 
+    #####:  487:                               &g_analyzer->clusters[oldest_idx + 1],
+        -:  488:                               elements_to_move * sizeof(QueryCluster));
+        -:  489:                    }
+    #####:  490:                    g_analyzer->cluster_count--;
+        -:  491:                    
+        -:  492:                    MERCURY_DEBUG("Evicted oldest cluster at index %zu (max clusters: %zu)", 
+        -:  493:                                oldest_idx, g_analyzer->max_clusters);
+        -:  494:                } else {
+    #####:  495:                    MERCURY_ERROR("Invalid cluster index during eviction: oldest_idx=%zu, count=%zu, max=%zu", 
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  496:                                oldest_idx, g_analyzer->cluster_count, g_analyzer->max_clusters);
+    #####:  497:                    pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  498:                    return NULL;
+        -:  499:                }
+        -:  500:            } else {
+    #####:  501:                MERCURY_ERROR("Cannot create cluster - no memory and no existing clusters to evict");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  502:                pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  503:                return NULL;
+        -:  504:            }
+        -:  505:        }
+        -:  506:    }
+        -:  507:    
+        -:  508:    // Final bounds check before creating new cluster
+       11:  509:    if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  510:        MERCURY_ERROR("Unable to create cluster - still no space after resize/eviction attempts");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  511:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  512:        return NULL;
+        -:  513:    }
+        -:  514:    
+        -:  515:    // Now we have space - create new cluster with bounds checking
+        -:  516:    size_t new_cluster_idx = g_analyzer->cluster_count;
+        -:  517:    if (new_cluster_idx >= g_analyzer->max_clusters) {
+        -:  518:        MERCURY_ERROR("Cluster index out of bounds: %zu >= %zu", new_cluster_idx, g_analyzer->max_clusters);
+        -:  519:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+        -:  520:        return NULL;
+        -:  521:    }
+        -:  522:    
+       11:  523:    QueryCluster* cluster = &g_analyzer->clusters[new_cluster_idx];
+       11:  524:    g_analyzer->cluster_count++;
+        -:  525:    
+       11:  526:    cluster->pattern_hash = pattern_hash;
+       11:  527:    cluster->query_count = 0;
+       11:  528:    cluster->total_time = 0.0;
+       11:  529:    cluster->avg_time = 0.0;
+        -:  530:    
+        -:  531:    // Safe string copy with bounds checking
+       11:  532:    size_t query_len = strlen(query);
+        -:  533:    size_t max_copy = sizeof(cluster->representative_query) - 1;
+       11:  534:    if (query_len > max_copy) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  535:        MERCURY_WARN("Query truncated from %zu to %zu characters", query_len, max_copy);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  536:    }
+       11:  537:    strncpy(cluster->representative_query, query, max_copy);
+call    0 returned 100%
+       11:  538:    cluster->representative_query[max_copy] = '\0';
+call    0 returned 100%
+        -:  539:    
+       11:  540:    cluster->first_seen = mercury_get_timestamp();
+       11:  541:    cluster->last_seen = cluster->first_seen;
+        -:  542:    
+        -:  543:    MERCURY_DEBUG("Created new cluster at index %zu (hash: %lu)", new_cluster_idx, pattern_hash);
+        -:  544:    
+       11:  545:    pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+       11:  546:    return cluster;
+        -:  547:}
+------------------
+find_or_create_cluster:
+function find_or_create_cluster called 3105 returned 100% blocks executed 39%
+     3105:  431:static QueryCluster* find_or_create_cluster(uint64_t pattern_hash, const char* query) {
+     3105:  432:    if (!query || !g_analyzer || !g_analyzer->clusters) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+    #####:  433:        MERCURY_ERROR("Invalid arguments or analyzer state in find_or_create_cluster");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  434:        return NULL;
+        -:  435:    }
+        -:  436:    
+     3105:  437:    pthread_mutex_lock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        -:  438:    
+        -:  439:    // Look for existing cluster with bounds checking
+     4604:  440:    for (size_t i = 0; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 100%
+branch  3 taken 0% (fallthrough)
+     4563:  441:        if (g_analyzer->clusters[i].pattern_hash == pattern_hash) {
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+     3064:  442:            pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+     3064:  443:            return &g_analyzer->clusters[i];
+        -:  444:        }
+        -:  445:    }
+        -:  446:    
+        -:  447:    // Create new cluster - resize array if needed
+       41:  448:    if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  449:        // Try to resize cluster array (double the size) with overflow protection
+        -:  450:        size_t current_max = g_analyzer->max_clusters;
+    #####:  451:        if (current_max > SIZE_MAX / 2 || current_max > 10000) {
+branch  0 never executed
+branch  1 never executed
+        -:  452:            // Prevent overflow and limit maximum clusters to reasonable size
+    #####:  453:            MERCURY_WARN("Cluster array at maximum size (%zu), attempting eviction", current_max);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  454:        } else {
+    #####:  455:            size_t new_max = current_max * 2;
+    #####:  456:            QueryCluster* new_clusters = realloc(g_analyzer->clusters, new_max * sizeof(QueryCluster));
+        -:  457:            
+    #####:  458:            if (new_clusters) {
+branch  0 never executed
+branch  1 never executed
+    #####:  459:                g_analyzer->clusters = new_clusters;
+    #####:  460:                g_analyzer->max_clusters = new_max;
+        -:  461:                MERCURY_DEBUG("Resized cluster array to %zu entries", new_max);
+        -:  462:            } else {
+    #####:  463:                MERCURY_WARN("Failed to resize cluster array from %zu to %zu entries", current_max, new_max);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  464:            }
+        -:  465:        }
+        -:  466:        
+        -:  467:        // If we still don't have space after attempted resize, try eviction
+    #####:  468:        if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+branch  0 never executed
+branch  1 never executed
+        -:  469:            // Try to evict oldest cluster to make space
+    #####:  470:            if (g_analyzer->cluster_count > 0) {
+branch  0 never executed
+branch  1 never executed
+        -:  471:                // Find oldest cluster (with earliest first_seen timestamp) with bounds checking
+        -:  472:                size_t oldest_idx = 0;
+    #####:  473:                uint64_t oldest_time = g_analyzer->clusters[0].first_seen.nanoseconds;
+        -:  474:                
+    #####:  475:                for (size_t i = 1; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  476:                    if (g_analyzer->clusters[i].first_seen.nanoseconds < oldest_time) {
+branch  0 never executed
+branch  1 never executed
+        -:  477:                        oldest_time = g_analyzer->clusters[i].first_seen.nanoseconds;
+        -:  478:                        oldest_idx = i;
+        -:  479:                    }
+        -:  480:                }
+        -:  481:                
+        -:  482:                // Validate indices before memmove to prevent buffer overflow
+    #####:  483:                if (oldest_idx < g_analyzer->cluster_count && oldest_idx + 1 < g_analyzer->max_clusters) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  484:                    size_t elements_to_move = g_analyzer->cluster_count - oldest_idx - 1;
+    #####:  485:                    if (elements_to_move > 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  486:                        memmove(&g_analyzer->clusters[oldest_idx], 
+    #####:  487:                               &g_analyzer->clusters[oldest_idx + 1],
+        -:  488:                               elements_to_move * sizeof(QueryCluster));
+        -:  489:                    }
+    #####:  490:                    g_analyzer->cluster_count--;
+        -:  491:                    
+        -:  492:                    MERCURY_DEBUG("Evicted oldest cluster at index %zu (max clusters: %zu)", 
+        -:  493:                                oldest_idx, g_analyzer->max_clusters);
+        -:  494:                } else {
+    #####:  495:                    MERCURY_ERROR("Invalid cluster index during eviction: oldest_idx=%zu, count=%zu, max=%zu", 
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  496:                                oldest_idx, g_analyzer->cluster_count, g_analyzer->max_clusters);
+    #####:  497:                    pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  498:                    return NULL;
+        -:  499:                }
+        -:  500:            } else {
+    #####:  501:                MERCURY_ERROR("Cannot create cluster - no memory and no existing clusters to evict");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  502:                pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  503:                return NULL;
+        -:  504:            }
+        -:  505:        }
+        -:  506:    }
+        -:  507:    
+        -:  508:    // Final bounds check before creating new cluster
+       41:  509:    if (g_analyzer->cluster_count >= g_analyzer->max_clusters) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  510:        MERCURY_ERROR("Unable to create cluster - still no space after resize/eviction attempts");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  511:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 never executed
+    #####:  512:        return NULL;
+        -:  513:    }
+        -:  514:    
+        -:  515:    // Now we have space - create new cluster with bounds checking
+        -:  516:    size_t new_cluster_idx = g_analyzer->cluster_count;
+        -:  517:    if (new_cluster_idx >= g_analyzer->max_clusters) {
+        -:  518:        MERCURY_ERROR("Cluster index out of bounds: %zu >= %zu", new_cluster_idx, g_analyzer->max_clusters);
+        -:  519:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+        -:  520:        return NULL;
+        -:  521:    }
+        -:  522:    
+       41:  523:    QueryCluster* cluster = &g_analyzer->clusters[new_cluster_idx];
+       41:  524:    g_analyzer->cluster_count++;
+        -:  525:    
+       41:  526:    cluster->pattern_hash = pattern_hash;
+       41:  527:    cluster->query_count = 0;
+       41:  528:    cluster->total_time = 0.0;
+       41:  529:    cluster->avg_time = 0.0;
+        -:  530:    
+        -:  531:    // Safe string copy with bounds checking
+       41:  532:    size_t query_len = strlen(query);
+        -:  533:    size_t max_copy = sizeof(cluster->representative_query) - 1;
+       41:  534:    if (query_len > max_copy) {
+branch  0 taken 2% (fallthrough)
+branch  1 taken 98%
+        1:  535:        MERCURY_WARN("Query truncated from %zu to %zu characters", query_len, max_copy);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  536:    }
+       41:  537:    strncpy(cluster->representative_query, query, max_copy);
+call    0 returned 100%
+       41:  538:    cluster->representative_query[max_copy] = '\0';
+call    0 returned 100%
+        -:  539:    
+       41:  540:    cluster->first_seen = mercury_get_timestamp();
+       41:  541:    cluster->last_seen = cluster->first_seen;
+        -:  542:    
+        -:  543:    MERCURY_DEBUG("Created new cluster at index %zu (hash: %lu)", new_cluster_idx, pattern_hash);
+        -:  544:    
+       41:  545:    pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+       41:  546:    return cluster;
+        -:  547:}
+------------------
+        -:  548:
+        -:  549:// Update N+1 analysis based on current clusters
+     3192:  550:static void update_n_plus_one_analysis(void) {
+        -:  551:    // If no queries analyzed in current session, reset severity to NONE
+     3192:  552:    uint64_t total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
+     3192:  553:    if (total_queries == 0) {
+       2*:  554:        g_analyzer->current_severity = N_PLUS_ONE_NONE;
+       2*:  555:        g_analyzer->estimated_cause = 0;
+       2*:  556:        strcpy(g_analyzer->optimization_suggestion, "No queries analyzed");
+       2*:  557:        return;
+        -:  558:    }
+        -:  559:    
+        -:  560:    int max_cluster_size = 0;
+        -:  561:    int total_duplicates = 0;
+        -:  562:    double max_cluster_time = 0.0;
+        -:  563:    
+        -:  564:    // Analyze all clusters
+     9097:  565:    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+     5907:  566:        QueryCluster* cluster = &g_analyzer->clusters[i];
+     5907:  567:        if (cluster->query_count > 1) {
+        -:  568:            total_duplicates += cluster->query_count;
+        -:  569:            if (cluster->query_count > max_cluster_size) {
+        -:  570:                max_cluster_size = cluster->query_count;
+        -:  571:            }
+     5550:  572:            if (cluster->total_time > max_cluster_time) {
+        -:  573:                max_cluster_time = cluster->total_time;
+        -:  574:            }
+        -:  575:        }
+        -:  576:    }
+        -:  577:    
+        -:  578:    // Determine severity
+     3190:  579:    if (max_cluster_size < 3) {
+       57:  580:        g_analyzer->current_severity = N_PLUS_ONE_NONE;
+       57:  581:        g_analyzer->estimated_cause = 0;
+       57:  582:        strcpy(g_analyzer->optimization_suggestion, "No N+1 patterns detected");
+     3133:  583:    } else if (max_cluster_size < 8) {
+       81:  584:        g_analyzer->current_severity = N_PLUS_ONE_MILD;
+       81:  585:        g_analyzer->estimated_cause = 1;
+       81:  586:        strcpy(g_analyzer->optimization_suggestion, "Minor duplication detected - review serializer methods");
+     3052:  587:    } else if (max_cluster_size < N_PLUS_ONE_THRESHOLD) {
+       66:  588:        g_analyzer->current_severity = N_PLUS_ONE_MODERATE;
+       66:  589:        g_analyzer->estimated_cause = 2;
+       66:  590:        strcpy(g_analyzer->optimization_suggestion, "Use select_related() for foreign key access");
+     2986:  591:    } else if (max_cluster_size < 25) {
+      146:  592:        g_analyzer->current_severity = N_PLUS_ONE_HIGH;
+      146:  593:        g_analyzer->estimated_cause = 3;
+      146:  594:        strcpy(g_analyzer->optimization_suggestion, "Add prefetch_related() for reverse foreign keys");
+     2840:  595:    } else if (max_cluster_size < 50) {
+      213:  596:        g_analyzer->current_severity = N_PLUS_ONE_SEVERE;
+      213:  597:        g_analyzer->estimated_cause = 4;
+      213:  598:        strcpy(g_analyzer->optimization_suggestion, "Consider database denormalization or caching");
+        -:  599:    } else {
+    2627*:  600:        g_analyzer->current_severity = N_PLUS_ONE_CRITICAL;
+    2627*:  601:        g_analyzer->estimated_cause = 4;
+    2627*:  602:        strcpy(g_analyzer->optimization_suggestion, "Critical N+1 - immediate optimization required");
+        -:  603:    }
+        -:  604:    
+     3190:  605:    if (max_cluster_size >= 3) {
+     3133:  606:        atomic_fetch_add(&g_analyzer->n_plus_one_patterns_detected, 1);
+        -:  607:    }
+        -:  608:}
+------------------
+update_n_plus_one_analysis:
+function update_n_plus_one_analysis called 75 returned 100% blocks executed 90%
+       75:  550:static void update_n_plus_one_analysis(void) {
+        -:  551:    // If no queries analyzed in current session, reset severity to NONE
+       75:  552:    uint64_t total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
+       75:  553:    if (total_queries == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  554:        g_analyzer->current_severity = N_PLUS_ONE_NONE;
+    #####:  555:        g_analyzer->estimated_cause = 0;
+    #####:  556:        strcpy(g_analyzer->optimization_suggestion, "No queries analyzed");
+    #####:  557:        return;
+        -:  558:    }
+        -:  559:    
+        -:  560:    int max_cluster_size = 0;
+        -:  561:    int total_duplicates = 0;
+        -:  562:    double max_cluster_time = 0.0;
+        -:  563:    
+        -:  564:    // Analyze all clusters
+      181:  565:    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+branch  0 taken 59%
+branch  1 taken 41% (fallthrough)
+      106:  566:        QueryCluster* cluster = &g_analyzer->clusters[i];
+      106:  567:        if (cluster->query_count > 1) {
+branch  0 taken 60% (fallthrough)
+branch  1 taken 40%
+        -:  568:            total_duplicates += cluster->query_count;
+        -:  569:            if (cluster->query_count > max_cluster_size) {
+        -:  570:                max_cluster_size = cluster->query_count;
+        -:  571:            }
+       64:  572:            if (cluster->total_time > max_cluster_time) {
+        -:  573:                max_cluster_time = cluster->total_time;
+        -:  574:            }
+        -:  575:        }
+        -:  576:    }
+        -:  577:    
+        -:  578:    // Determine severity
+       75:  579:    if (max_cluster_size < 3) {
+branch  0 taken 19% (fallthrough)
+branch  1 taken 81%
+       14:  580:        g_analyzer->current_severity = N_PLUS_ONE_NONE;
+       14:  581:        g_analyzer->estimated_cause = 0;
+       14:  582:        strcpy(g_analyzer->optimization_suggestion, "No N+1 patterns detected");
+       61:  583:    } else if (max_cluster_size < 8) {
+branch  0 taken 21% (fallthrough)
+branch  1 taken 79%
+       13:  584:        g_analyzer->current_severity = N_PLUS_ONE_MILD;
+       13:  585:        g_analyzer->estimated_cause = 1;
+       13:  586:        strcpy(g_analyzer->optimization_suggestion, "Minor duplication detected - review serializer methods");
+       48:  587:    } else if (max_cluster_size < N_PLUS_ONE_THRESHOLD) {
+branch  0 taken 17% (fallthrough)
+branch  1 taken 83%
+        8:  588:        g_analyzer->current_severity = N_PLUS_ONE_MODERATE;
+        8:  589:        g_analyzer->estimated_cause = 2;
+        8:  590:        strcpy(g_analyzer->optimization_suggestion, "Use select_related() for foreign key access");
+       40:  591:    } else if (max_cluster_size < 25) {
+branch  0 taken 60% (fallthrough)
+branch  1 taken 40%
+       24:  592:        g_analyzer->current_severity = N_PLUS_ONE_HIGH;
+       24:  593:        g_analyzer->estimated_cause = 3;
+       24:  594:        strcpy(g_analyzer->optimization_suggestion, "Add prefetch_related() for reverse foreign keys");
+       16:  595:    } else if (max_cluster_size < 50) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       16:  596:        g_analyzer->current_severity = N_PLUS_ONE_SEVERE;
+       16:  597:        g_analyzer->estimated_cause = 4;
+       16:  598:        strcpy(g_analyzer->optimization_suggestion, "Consider database denormalization or caching");
+        -:  599:    } else {
+    #####:  600:        g_analyzer->current_severity = N_PLUS_ONE_CRITICAL;
+    #####:  601:        g_analyzer->estimated_cause = 4;
+    #####:  602:        strcpy(g_analyzer->optimization_suggestion, "Critical N+1 - immediate optimization required");
+        -:  603:    }
+        -:  604:    
+       75:  605:    if (max_cluster_size >= 3) {
+branch  0 taken 81% (fallthrough)
+branch  1 taken 19%
+       61:  606:        atomic_fetch_add(&g_analyzer->n_plus_one_patterns_detected, 1);
+        -:  607:    }
+        -:  608:}
+------------------
+update_n_plus_one_analysis:
+function update_n_plus_one_analysis called 3117 returned 100% blocks executed 100%
+     3117:  550:static void update_n_plus_one_analysis(void) {
+        -:  551:    // If no queries analyzed in current session, reset severity to NONE
+     3117:  552:    uint64_t total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
+     3117:  553:    if (total_queries == 0) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        2:  554:        g_analyzer->current_severity = N_PLUS_ONE_NONE;
+        2:  555:        g_analyzer->estimated_cause = 0;
+        2:  556:        strcpy(g_analyzer->optimization_suggestion, "No queries analyzed");
+        2:  557:        return;
+        -:  558:    }
+        -:  559:    
+        -:  560:    int max_cluster_size = 0;
+        -:  561:    int total_duplicates = 0;
+        -:  562:    double max_cluster_time = 0.0;
+        -:  563:    
+        -:  564:    // Analyze all clusters
+     8916:  565:    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+branch  0 taken 65%
+branch  1 taken 35% (fallthrough)
+     5801:  566:        QueryCluster* cluster = &g_analyzer->clusters[i];
+     5801:  567:        if (cluster->query_count > 1) {
+branch  0 taken 95% (fallthrough)
+branch  1 taken 5%
+        -:  568:            total_duplicates += cluster->query_count;
+        -:  569:            if (cluster->query_count > max_cluster_size) {
+        -:  570:                max_cluster_size = cluster->query_count;
+        -:  571:            }
+     5486:  572:            if (cluster->total_time > max_cluster_time) {
+        -:  573:                max_cluster_time = cluster->total_time;
+        -:  574:            }
+        -:  575:        }
+        -:  576:    }
+        -:  577:    
+        -:  578:    // Determine severity
+     3115:  579:    if (max_cluster_size < 3) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+       43:  580:        g_analyzer->current_severity = N_PLUS_ONE_NONE;
+       43:  581:        g_analyzer->estimated_cause = 0;
+       43:  582:        strcpy(g_analyzer->optimization_suggestion, "No N+1 patterns detected");
+     3072:  583:    } else if (max_cluster_size < 8) {
+branch  0 taken 2% (fallthrough)
+branch  1 taken 98%
+       68:  584:        g_analyzer->current_severity = N_PLUS_ONE_MILD;
+       68:  585:        g_analyzer->estimated_cause = 1;
+       68:  586:        strcpy(g_analyzer->optimization_suggestion, "Minor duplication detected - review serializer methods");
+     3004:  587:    } else if (max_cluster_size < N_PLUS_ONE_THRESHOLD) {
+branch  0 taken 2% (fallthrough)
+branch  1 taken 98%
+       58:  588:        g_analyzer->current_severity = N_PLUS_ONE_MODERATE;
+       58:  589:        g_analyzer->estimated_cause = 2;
+       58:  590:        strcpy(g_analyzer->optimization_suggestion, "Use select_related() for foreign key access");
+     2946:  591:    } else if (max_cluster_size < 25) {
+branch  0 taken 4% (fallthrough)
+branch  1 taken 96%
+      122:  592:        g_analyzer->current_severity = N_PLUS_ONE_HIGH;
+      122:  593:        g_analyzer->estimated_cause = 3;
+      122:  594:        strcpy(g_analyzer->optimization_suggestion, "Add prefetch_related() for reverse foreign keys");
+     2824:  595:    } else if (max_cluster_size < 50) {
+branch  0 taken 7% (fallthrough)
+branch  1 taken 93%
+      197:  596:        g_analyzer->current_severity = N_PLUS_ONE_SEVERE;
+      197:  597:        g_analyzer->estimated_cause = 4;
+      197:  598:        strcpy(g_analyzer->optimization_suggestion, "Consider database denormalization or caching");
+        -:  599:    } else {
+     2627:  600:        g_analyzer->current_severity = N_PLUS_ONE_CRITICAL;
+     2627:  601:        g_analyzer->estimated_cause = 4;
+     2627:  602:        strcpy(g_analyzer->optimization_suggestion, "Critical N+1 - immediate optimization required");
+        -:  603:    }
+        -:  604:    
+     3115:  605:    if (max_cluster_size >= 3) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+     3072:  606:        atomic_fetch_add(&g_analyzer->n_plus_one_patterns_detected, 1);
+        -:  607:    }
+        -:  608:}
+------------------
+        -:  609:
+        -:  610:// === PUBLIC API FUNCTIONS ===
+        -:  611:
+        -:  612:// Analyze a single query
+     3179:  613:int analyze_query(const char* query_text, double execution_time) {
+     3179:  614:    if (!query_text) {
+       1*:  615:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Query text cannot be NULL");
+       1*:  616:        return -1;
+        -:  617:    }
+        -:  618:    
+        -:  619:    // Initialize analyzer if needed
+     3178:  620:    if (!g_analyzer) {
+        2:  621:        if (init_query_analyzer() != MERCURY_SUCCESS) {
+    #####:  622:            MERCURY_ERROR("Failed to initialize query analyzer");
+    #####:  623:            return -1;
+        -:  624:        }
+        -:  625:    }
+        -:  626:    
+        -:  627:    // Verify analyzer is in valid state
+     3178:  628:    if (!g_analyzer->clusters || !g_analyzer->query_history) {
+    #####:  629:        MERCURY_ERROR("Query analyzer in corrupted state");
+    #####:  630:        return -1;
+        -:  631:    }
+        -:  632:    
+     3178:  633:    atomic_fetch_add(&g_analyzer->total_queries_analyzed, 1);
+        -:  634:    
+        -:  635:    // Normalize query for pattern matching
+        -:  636:    char normalized[1024];
+     3178:  637:    normalize_query(query_text, normalized, sizeof(normalized));
+        -:  638:    
+        -:  639:    // Calculate hash for similarity clustering
+        -:  640:    uint64_t query_hash = mercury_hash_string(normalized);
+        -:  641:    
+        -:  642:    // Detect query type
+     3178:  643:    SqlQueryType query_type = detect_query_type(query_text);
+        -:  644:    
+        -:  645:    // Create query record
+     3178:  646:    MercuryQueryRecord record = {0};
+     3178:  647:    record.query_text = pool_strdup(query_text);
+     3178:  648:    if (!record.query_text) {
+    #####:  649:        MERCURY_ERROR("Failed to allocate memory for query text (pool exhausted?)");
+    #####:  650:        return -1;
+        -:  651:    }
+     3178:  652:    record.hash = query_hash;
+     3178:  653:    record.execution_time = execution_time;
+     3178:  654:    record.timestamp = mercury_get_timestamp();
+     3178:  655:    record.similarity_score = 0;
+     3178:  656:    record.query_type = query_type;
+     3178:  657:    record.flags = 0;
+        -:  658:    
+        -:  659:    // Add to history buffer (thread-safe)
+     3178:  660:    pthread_mutex_lock(&g_analyzer->history_mutex);
+     3178:  661:    if (!mercury_ring_buffer_push(g_analyzer->query_history, &record)) {
+        -:  662:        // Buffer full - remove oldest entry
+        -:  663:        MercuryQueryRecord old_record;
+    1000*:  664:        if (mercury_ring_buffer_pop(g_analyzer->query_history, &old_record)) {
+    1000*:  665:            pool_strfree(old_record.query_text);  // Cleanup old query text
+        -:  666:        }
+    1000*:  667:        mercury_ring_buffer_push(g_analyzer->query_history, &record);
+        -:  668:    }
+     3178:  669:    pthread_mutex_unlock(&g_analyzer->history_mutex);
+        -:  670:    
+        -:  671:    // Update or create cluster using thread-safe function
+     3178:  672:    QueryCluster* cluster = find_or_create_cluster(query_hash, normalized);
+        -:  673:    
+        -:  674:    // Update cluster stats if cluster creation succeeded
+     3178:  675:    if (cluster) {
+        -:  676:        // Note: We need to acquire the mutex again for stats update
+     3178:  677:        pthread_mutex_lock(&g_analyzer->cluster_mutex);
+        -:  678:        
+        -:  679:        // Verify cluster is still valid (could have been evicted)
+        -:  680:        bool cluster_valid = false;
+     4706:  681:        for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+     4706:  682:            if (&g_analyzer->clusters[i] == cluster) {
+        -:  683:                cluster_valid = true;
+        -:  684:                break;
+        -:  685:            }
+        -:  686:        }
+        -:  687:        
+     3178:  688:        if (cluster_valid) {
+     3178:  689:            cluster->query_count++;
+     3178:  690:            cluster->total_time += execution_time;
+     3178:  691:            cluster->avg_time = cluster->total_time / cluster->query_count;
+     3178:  692:            cluster->last_seen = record.timestamp;
+        -:  693:            
+     3178:  694:            if (cluster->query_count > 1) {
+     3126:  695:                atomic_fetch_add(&g_analyzer->similar_queries_found, 1);
+        -:  696:            }
+        -:  697:            
+        -:  698:            // Update N+1 analysis (while holding mutex)
+     3178:  699:            update_n_plus_one_analysis();
+        -:  700:        }
+        -:  701:        
+     3178:  702:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+        -:  703:    }
+        -:  704:    
+        -:  705:    return 0;  // Success
+        -:  706:}
+------------------
+analyze_query:
+function analyze_query called 73 returned 100% blocks executed 66%
+       73:  613:int analyze_query(const char* query_text, double execution_time) {
+       73:  614:    if (!query_text) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  615:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Query text cannot be NULL");
+    #####:  616:        return -1;
+        -:  617:    }
+        -:  618:    
+        -:  619:    // Initialize analyzer if needed
+       73:  620:    if (!g_analyzer) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        1:  621:        if (init_query_analyzer() != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  622:            MERCURY_ERROR("Failed to initialize query analyzer");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  623:            return -1;
+        -:  624:        }
+        -:  625:    }
+        -:  626:    
+        -:  627:    // Verify analyzer is in valid state
+       73:  628:    if (!g_analyzer->clusters || !g_analyzer->query_history) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  629:        MERCURY_ERROR("Query analyzer in corrupted state");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  630:        return -1;
+        -:  631:    }
+        -:  632:    
+       73:  633:    atomic_fetch_add(&g_analyzer->total_queries_analyzed, 1);
+        -:  634:    
+        -:  635:    // Normalize query for pattern matching
+        -:  636:    char normalized[1024];
+       73:  637:    normalize_query(query_text, normalized, sizeof(normalized));
+call    0 returned 100%
+        -:  638:    
+        -:  639:    // Calculate hash for similarity clustering
+        -:  640:    uint64_t query_hash = mercury_hash_string(normalized);
+        -:  641:    
+        -:  642:    // Detect query type
+       73:  643:    SqlQueryType query_type = detect_query_type(query_text);
+call    0 returned 100%
+        -:  644:    
+        -:  645:    // Create query record
+       73:  646:    MercuryQueryRecord record = {0};
+       73:  647:    record.query_text = pool_strdup(query_text);
+call    0 returned 100%
+       73:  648:    if (!record.query_text) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  649:        MERCURY_ERROR("Failed to allocate memory for query text (pool exhausted?)");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  650:        return -1;
+        -:  651:    }
+       73:  652:    record.hash = query_hash;
+       73:  653:    record.execution_time = execution_time;
+call    0 returned 100%
+       73:  654:    record.timestamp = mercury_get_timestamp();
+       73:  655:    record.similarity_score = 0;
+       73:  656:    record.query_type = query_type;
+       73:  657:    record.flags = 0;
+        -:  658:    
+        -:  659:    // Add to history buffer (thread-safe)
+       73:  660:    pthread_mutex_lock(&g_analyzer->history_mutex);
+call    0 returned 100%
+       73:  661:    if (!mercury_ring_buffer_push(g_analyzer->query_history, &record)) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  662:        // Buffer full - remove oldest entry
+        -:  663:        MercuryQueryRecord old_record;
+    #####:  664:        if (mercury_ring_buffer_pop(g_analyzer->query_history, &old_record)) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  665:            pool_strfree(old_record.query_text);  // Cleanup old query text
+branch  0 never executed
+branch  1 never executed
+        -:  666:        }
+    #####:  667:        mercury_ring_buffer_push(g_analyzer->query_history, &record);
+call    0 never executed
+        -:  668:    }
+       73:  669:    pthread_mutex_unlock(&g_analyzer->history_mutex);
+call    0 returned 100%
+        -:  670:    
+        -:  671:    // Update or create cluster using thread-safe function
+       73:  672:    QueryCluster* cluster = find_or_create_cluster(query_hash, normalized);
+call    0 returned 100%
+        -:  673:    
+        -:  674:    // Update cluster stats if cluster creation succeeded
+       73:  675:    if (cluster) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  676:        // Note: We need to acquire the mutex again for stats update
+       73:  677:        pthread_mutex_lock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        -:  678:        
+        -:  679:        // Verify cluster is still valid (could have been evicted)
+        -:  680:        bool cluster_valid = false;
+      102:  681:        for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+      102:  682:            if (&g_analyzer->clusters[i] == cluster) {
+branch  0 taken 28% (fallthrough)
+branch  1 taken 72%
+        -:  683:                cluster_valid = true;
+        -:  684:                break;
+        -:  685:            }
+        -:  686:        }
+        -:  687:        
+       73:  688:        if (cluster_valid) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       73:  689:            cluster->query_count++;
+       73:  690:            cluster->total_time += execution_time;
+       73:  691:            cluster->avg_time = cluster->total_time / cluster->query_count;
+       73:  692:            cluster->last_seen = record.timestamp;
+        -:  693:            
+       73:  694:            if (cluster->query_count > 1) {
+branch  0 taken 85% (fallthrough)
+branch  1 taken 15%
+       62:  695:                atomic_fetch_add(&g_analyzer->similar_queries_found, 1);
+        -:  696:            }
+        -:  697:            
+        -:  698:            // Update N+1 analysis (while holding mutex)
+       73:  699:            update_n_plus_one_analysis();
+call    0 returned 100%
+        -:  700:        }
+        -:  701:        
+       73:  702:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        -:  703:    }
+        -:  704:    
+        -:  705:    return 0;  // Success
+        -:  706:}
+------------------
+analyze_query:
+function analyze_query called 3106 returned 100% blocks executed 82%
+     3106:  613:int analyze_query(const char* query_text, double execution_time) {
+     3106:  614:    if (!query_text) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  615:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Query text cannot be NULL");
+        1:  616:        return -1;
+        -:  617:    }
+        -:  618:    
+        -:  619:    // Initialize analyzer if needed
+     3105:  620:    if (!g_analyzer) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  621:        if (init_query_analyzer() != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  622:            MERCURY_ERROR("Failed to initialize query analyzer");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  623:            return -1;
+        -:  624:        }
+        -:  625:    }
+        -:  626:    
+        -:  627:    // Verify analyzer is in valid state
+     3105:  628:    if (!g_analyzer->clusters || !g_analyzer->query_history) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  629:        MERCURY_ERROR("Query analyzer in corrupted state");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  630:        return -1;
+        -:  631:    }
+        -:  632:    
+     3105:  633:    atomic_fetch_add(&g_analyzer->total_queries_analyzed, 1);
+        -:  634:    
+        -:  635:    // Normalize query for pattern matching
+        -:  636:    char normalized[1024];
+     3105:  637:    normalize_query(query_text, normalized, sizeof(normalized));
+call    0 returned 100%
+        -:  638:    
+        -:  639:    // Calculate hash for similarity clustering
+        -:  640:    uint64_t query_hash = mercury_hash_string(normalized);
+        -:  641:    
+        -:  642:    // Detect query type
+     3105:  643:    SqlQueryType query_type = detect_query_type(query_text);
+call    0 returned 100%
+        -:  644:    
+        -:  645:    // Create query record
+     3105:  646:    MercuryQueryRecord record = {0};
+     3105:  647:    record.query_text = pool_strdup(query_text);
+call    0 returned 100%
+     3105:  648:    if (!record.query_text) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  649:        MERCURY_ERROR("Failed to allocate memory for query text (pool exhausted?)");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  650:        return -1;
+        -:  651:    }
+     3105:  652:    record.hash = query_hash;
+     3105:  653:    record.execution_time = execution_time;
+call    0 returned 100%
+     3105:  654:    record.timestamp = mercury_get_timestamp();
+     3105:  655:    record.similarity_score = 0;
+     3105:  656:    record.query_type = query_type;
+     3105:  657:    record.flags = 0;
+        -:  658:    
+        -:  659:    // Add to history buffer (thread-safe)
+     3105:  660:    pthread_mutex_lock(&g_analyzer->history_mutex);
+call    0 returned 100%
+     3105:  661:    if (!mercury_ring_buffer_push(g_analyzer->query_history, &record)) {
+call    0 returned 100%
+branch  1 taken 32% (fallthrough)
+branch  2 taken 68%
+        -:  662:        // Buffer full - remove oldest entry
+        -:  663:        MercuryQueryRecord old_record;
+     1000:  664:        if (mercury_ring_buffer_pop(g_analyzer->query_history, &old_record)) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+     1000:  665:            pool_strfree(old_record.query_text);  // Cleanup old query text
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  666:        }
+     1000:  667:        mercury_ring_buffer_push(g_analyzer->query_history, &record);
+call    0 returned 100%
+        -:  668:    }
+     3105:  669:    pthread_mutex_unlock(&g_analyzer->history_mutex);
+call    0 returned 100%
+        -:  670:    
+        -:  671:    // Update or create cluster using thread-safe function
+     3105:  672:    QueryCluster* cluster = find_or_create_cluster(query_hash, normalized);
+call    0 returned 100%
+        -:  673:    
+        -:  674:    // Update cluster stats if cluster creation succeeded
+     3105:  675:    if (cluster) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  676:        // Note: We need to acquire the mutex again for stats update
+     3105:  677:        pthread_mutex_lock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        -:  678:        
+        -:  679:        // Verify cluster is still valid (could have been evicted)
+        -:  680:        bool cluster_valid = false;
+     4604:  681:        for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+     4604:  682:            if (&g_analyzer->clusters[i] == cluster) {
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        -:  683:                cluster_valid = true;
+        -:  684:                break;
+        -:  685:            }
+        -:  686:        }
+        -:  687:        
+     3105:  688:        if (cluster_valid) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+     3105:  689:            cluster->query_count++;
+     3105:  690:            cluster->total_time += execution_time;
+     3105:  691:            cluster->avg_time = cluster->total_time / cluster->query_count;
+     3105:  692:            cluster->last_seen = record.timestamp;
+        -:  693:            
+     3105:  694:            if (cluster->query_count > 1) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+     3064:  695:                atomic_fetch_add(&g_analyzer->similar_queries_found, 1);
+        -:  696:            }
+        -:  697:            
+        -:  698:            // Update N+1 analysis (while holding mutex)
+     3105:  699:            update_n_plus_one_analysis();
+call    0 returned 100%
+        -:  700:        }
+        -:  701:        
+     3105:  702:        pthread_mutex_unlock(&g_analyzer->cluster_mutex);
+call    0 returned 100%
+        -:  703:    }
+        -:  704:    
+        -:  705:    return 0;  // Success
+        -:  706:}
+------------------
+        -:  707:
+        -:  708:// Get duplicate query groups
+        5:  709:int get_duplicate_queries(char* result_buffer, size_t buffer_size) {
+        5:  710:    if (!result_buffer || buffer_size == 0) {
+       2*:  711:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid result buffer");
+       2*:  712:        return -1;
+        -:  713:    }
+        -:  714:    
+        3:  715:    if (!g_analyzer) {
+    #####:  716:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Query analyzer not initialized");
+    #####:  717:        return -1;
+        -:  718:    }
+        -:  719:    
+        3:  720:    MercuryString* result = mercury_string_create(buffer_size);
+        3:  721:    if (!result) {
+        -:  722:        return -1;
+        -:  723:    }
+        -:  724:    
+        -:  725:    int duplicate_groups = 0;
+        -:  726:    
+        -:  727:    // Find clusters with duplicates
+       10:  728:    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+        7:  729:        QueryCluster* cluster = &g_analyzer->clusters[i];
+        7:  730:        if (cluster->query_count > 1) {
+        -:  731:            char cluster_info[256];
+        3:  732:            snprintf(cluster_info, sizeof(cluster_info), 
+        -:  733:                    "Cluster %zu: %d queries, avg time %.2fms - %s\n",
+        -:  734:                    i, cluster->query_count, cluster->avg_time, 
+        3:  735:                    cluster->representative_query);
+        -:  736:            
+        3:  737:            if (mercury_string_append(result, cluster_info) != MERCURY_SUCCESS) {
+    #####:  738:                mercury_string_destroy(result);
+    #####:  739:                return -1;
+        -:  740:            }
+        -:  741:            
+        3:  742:            duplicate_groups++;
+        -:  743:        }
+        -:  744:    }
+        -:  745:    
+        -:  746:    // Copy result to buffer
+        3:  747:    const char* result_str = mercury_string_cstr(result);
+        3:  748:    strncpy(result_buffer, result_str, buffer_size - 1);
+        3:  749:    result_buffer[buffer_size - 1] = '\0';
+        -:  750:    
+        3:  751:    mercury_string_destroy(result);
+        3:  752:    return duplicate_groups;
+        -:  753:}
+------------------
+get_duplicate_queries:
+function get_duplicate_queries called 1 returned 100% blocks executed 78%
+        1:  709:int get_duplicate_queries(char* result_buffer, size_t buffer_size) {
+        1:  710:    if (!result_buffer || buffer_size == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  711:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid result buffer");
+    #####:  712:        return -1;
+        -:  713:    }
+        -:  714:    
+        1:  715:    if (!g_analyzer) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  716:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Query analyzer not initialized");
+    #####:  717:        return -1;
+        -:  718:    }
+        -:  719:    
+        1:  720:    MercuryString* result = mercury_string_create(buffer_size);
+call    0 returned 100%
+        1:  721:    if (!result) {
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  722:        return -1;
+        -:  723:    }
+        -:  724:    
+        -:  725:    int duplicate_groups = 0;
+        -:  726:    
+        -:  727:    // Find clusters with duplicates
+        2:  728:    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        1:  729:        QueryCluster* cluster = &g_analyzer->clusters[i];
+        1:  730:        if (cluster->query_count > 1) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  731:            char cluster_info[256];
+        1:  732:            snprintf(cluster_info, sizeof(cluster_info), 
+        -:  733:                    "Cluster %zu: %d queries, avg time %.2fms - %s\n",
+        -:  734:                    i, cluster->query_count, cluster->avg_time, 
+        1:  735:                    cluster->representative_query);
+call    0 returned 100%
+        -:  736:            
+        1:  737:            if (mercury_string_append(result, cluster_info) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  738:                mercury_string_destroy(result);
+call    0 never executed
+    #####:  739:                return -1;
+        -:  740:            }
+        -:  741:            
+        1:  742:            duplicate_groups++;
+        -:  743:        }
+        -:  744:    }
+        -:  745:    
+        -:  746:    // Copy result to buffer
+        1:  747:    const char* result_str = mercury_string_cstr(result);
+call    0 returned 100%
+        1:  748:    strncpy(result_buffer, result_str, buffer_size - 1);
+call    0 returned 100%
+        1:  749:    result_buffer[buffer_size - 1] = '\0';
+        -:  750:    
+        1:  751:    mercury_string_destroy(result);
+call    0 returned 100%
+        1:  752:    return duplicate_groups;
+        -:  753:}
+------------------
+get_duplicate_queries:
+function get_duplicate_queries called 4 returned 100% blocks executed 83%
+        4:  709:int get_duplicate_queries(char* result_buffer, size_t buffer_size) {
+        4:  710:    if (!result_buffer || buffer_size == 0) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        2:  711:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid result buffer");
+        2:  712:        return -1;
+        -:  713:    }
+        -:  714:    
+        2:  715:    if (!g_analyzer) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  716:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Query analyzer not initialized");
+    #####:  717:        return -1;
+        -:  718:    }
+        -:  719:    
+        2:  720:    MercuryString* result = mercury_string_create(buffer_size);
+call    0 returned 100%
+        2:  721:    if (!result) {
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  722:        return -1;
+        -:  723:    }
+        -:  724:    
+        -:  725:    int duplicate_groups = 0;
+        -:  726:    
+        -:  727:    // Find clusters with duplicates
+        8:  728:    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+branch  0 taken 75%
+branch  1 taken 25% (fallthrough)
+        6:  729:        QueryCluster* cluster = &g_analyzer->clusters[i];
+        6:  730:        if (cluster->query_count > 1) {
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        -:  731:            char cluster_info[256];
+        2:  732:            snprintf(cluster_info, sizeof(cluster_info), 
+        -:  733:                    "Cluster %zu: %d queries, avg time %.2fms - %s\n",
+        -:  734:                    i, cluster->query_count, cluster->avg_time, 
+        2:  735:                    cluster->representative_query);
+call    0 returned 100%
+        -:  736:            
+        2:  737:            if (mercury_string_append(result, cluster_info) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  738:                mercury_string_destroy(result);
+call    0 never executed
+    #####:  739:                return -1;
+        -:  740:            }
+        -:  741:            
+        2:  742:            duplicate_groups++;
+        -:  743:        }
+        -:  744:    }
+        -:  745:    
+        -:  746:    // Copy result to buffer
+        2:  747:    const char* result_str = mercury_string_cstr(result);
+call    0 returned 100%
+        2:  748:    strncpy(result_buffer, result_str, buffer_size - 1);
+call    0 returned 100%
+        2:  749:    result_buffer[buffer_size - 1] = '\0';
+        -:  750:    
+        2:  751:    mercury_string_destroy(result);
+call    0 returned 100%
+        2:  752:    return duplicate_groups;
+        -:  753:}
+------------------
+        -:  754:
+        -:  755:// Detect N+1 patterns
+        9:  756:int detect_n_plus_one_patterns(void) {
+        9:  757:    if (!g_analyzer) {
+        -:  758:        return 0;
+        -:  759:    }
+        -:  760:    
+        -:  761:    // Update analysis to ensure current state
+        7:  762:    update_n_plus_one_analysis();
+        -:  763:    
+        7:  764:    return (g_analyzer->current_severity > N_PLUS_ONE_NONE) ? 1 : 0;
+        -:  765:}
+------------------
+detect_n_plus_one_patterns:
+function detect_n_plus_one_patterns called 2 returned 100% blocks executed 100%
+        2:  756:int detect_n_plus_one_patterns(void) {
+        2:  757:    if (!g_analyzer) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:  758:        return 0;
+        -:  759:    }
+        -:  760:    
+        -:  761:    // Update analysis to ensure current state
+        1:  762:    update_n_plus_one_analysis();
+call    0 returned 100%
+        -:  763:    
+        1:  764:    return (g_analyzer->current_severity > N_PLUS_ONE_NONE) ? 1 : 0;
+        -:  765:}
+------------------
+detect_n_plus_one_patterns:
+function detect_n_plus_one_patterns called 7 returned 100% blocks executed 100%
+        7:  756:int detect_n_plus_one_patterns(void) {
+        7:  757:    if (!g_analyzer) {
+branch  0 taken 86% (fallthrough)
+branch  1 taken 14%
+        -:  758:        return 0;
+        -:  759:    }
+        -:  760:    
+        -:  761:    // Update analysis to ensure current state
+        6:  762:    update_n_plus_one_analysis();
+call    0 returned 100%
+        -:  763:    
+        6:  764:    return (g_analyzer->current_severity > N_PLUS_ONE_NONE) ? 1 : 0;
+        -:  765:}
+------------------
+        -:  766:
+        -:  767:// Get N+1 severity level
+        9:  768:int get_n_plus_one_severity(void) {
+        9:  769:    if (!g_analyzer) {
+        -:  770:        return 0;
+        -:  771:    }
+        -:  772:    
+        -:  773:    // Update analysis to ensure current state  
+        7:  774:    update_n_plus_one_analysis();
+        -:  775:    
+        7:  776:    return (int)g_analyzer->current_severity;
+        -:  777:}
+------------------
+get_n_plus_one_severity:
+function get_n_plus_one_severity called 2 returned 100% blocks executed 100%
+        2:  768:int get_n_plus_one_severity(void) {
+        2:  769:    if (!g_analyzer) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:  770:        return 0;
+        -:  771:    }
+        -:  772:    
+        -:  773:    // Update analysis to ensure current state  
+        1:  774:    update_n_plus_one_analysis();
+call    0 returned 100%
+        -:  775:    
+        1:  776:    return (int)g_analyzer->current_severity;
+        -:  777:}
+------------------
+get_n_plus_one_severity:
+function get_n_plus_one_severity called 7 returned 100% blocks executed 100%
+        7:  768:int get_n_plus_one_severity(void) {
+        7:  769:    if (!g_analyzer) {
+branch  0 taken 86% (fallthrough)
+branch  1 taken 14%
+        -:  770:        return 0;
+        -:  771:    }
+        -:  772:    
+        -:  773:    // Update analysis to ensure current state  
+        6:  774:    update_n_plus_one_analysis();
+call    0 returned 100%
+        -:  775:    
+        6:  776:    return (int)g_analyzer->current_severity;
+        -:  777:}
+------------------
+        -:  778:
+        -:  779:// Get estimated cause of N+1 issue
+        8:  780:int get_n_plus_one_cause(void) {
+        8:  781:    if (!g_analyzer) {
+        -:  782:        return 0;
+        -:  783:    }
+        -:  784:    
+       6*:  785:    return g_analyzer->estimated_cause;
+        -:  786:}
+------------------
+get_n_plus_one_cause:
+function get_n_plus_one_cause called 1 returned 100% blocks executed 67%
+        1:  780:int get_n_plus_one_cause(void) {
+        1:  781:    if (!g_analyzer) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  782:        return 0;
+        -:  783:    }
+        -:  784:    
+    #####:  785:    return g_analyzer->estimated_cause;
+        -:  786:}
+------------------
+get_n_plus_one_cause:
+function get_n_plus_one_cause called 7 returned 100% blocks executed 100%
+        7:  780:int get_n_plus_one_cause(void) {
+        7:  781:    if (!g_analyzer) {
+branch  0 taken 86% (fallthrough)
+branch  1 taken 14%
+        -:  782:        return 0;
+        -:  783:    }
+        -:  784:    
+        6:  785:    return g_analyzer->estimated_cause;
+        -:  786:}
+------------------
+        -:  787:
+        -:  788:// Get optimization suggestion
+        9:  789:const char* get_optimization_suggestion(void) {
+        9:  790:    if (!g_analyzer) {
+        -:  791:        return "Query analyzer not initialized";
+        -:  792:    }
+        -:  793:    
+        7:  794:    return g_analyzer->optimization_suggestion;
+        -:  795:}
+------------------
+get_optimization_suggestion:
+function get_optimization_suggestion called 2 returned 100% blocks executed 100%
+        2:  789:const char* get_optimization_suggestion(void) {
+        2:  790:    if (!g_analyzer) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:  791:        return "Query analyzer not initialized";
+        -:  792:    }
+        -:  793:    
+        1:  794:    return g_analyzer->optimization_suggestion;
+        -:  795:}
+------------------
+get_optimization_suggestion:
+function get_optimization_suggestion called 7 returned 100% blocks executed 100%
+        7:  789:const char* get_optimization_suggestion(void) {
+        7:  790:    if (!g_analyzer) {
+branch  0 taken 86% (fallthrough)
+branch  1 taken 14%
+        -:  791:        return "Query analyzer not initialized";
+        -:  792:    }
+        -:  793:    
+        6:  794:    return g_analyzer->optimization_suggestion;
+        -:  795:}
+------------------
+        -:  796:
+        -:  797:// Get query analysis statistics
+       53:  798:void get_query_statistics(uint64_t* total_queries, uint64_t* n_plus_one_detected, 
+        -:  799:                         uint64_t* similar_queries, int* active_clusters) {
+       53:  800:    if (!g_analyzer) {
+        2:  801:        if (total_queries) *total_queries = 0;
+        2:  802:        if (n_plus_one_detected) *n_plus_one_detected = 0;
+        2:  803:        if (similar_queries) *similar_queries = 0;
+        2:  804:        if (active_clusters) *active_clusters = 0;
+        2:  805:        return;
+        -:  806:    }
+        -:  807:    
+       51:  808:    if (total_queries) *total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
+       51:  809:    if (n_plus_one_detected) *n_plus_one_detected = atomic_load(&g_analyzer->n_plus_one_patterns_detected);
+       51:  810:    if (similar_queries) *similar_queries = atomic_load(&g_analyzer->similar_queries_found);
+       51:  811:    if (active_clusters) *active_clusters = (int)g_analyzer->cluster_count;
+        -:  812:}
+------------------
+get_query_statistics:
+function get_query_statistics called 5 returned 100% blocks executed 100%
+        5:  798:void get_query_statistics(uint64_t* total_queries, uint64_t* n_plus_one_detected, 
+        -:  799:                         uint64_t* similar_queries, int* active_clusters) {
+        5:  800:    if (!g_analyzer) {
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+        1:  801:        if (total_queries) *total_queries = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  802:        if (n_plus_one_detected) *n_plus_one_detected = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  803:        if (similar_queries) *similar_queries = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  804:        if (active_clusters) *active_clusters = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  805:        return;
+        -:  806:    }
+        -:  807:    
+        4:  808:    if (total_queries) *total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  809:    if (n_plus_one_detected) *n_plus_one_detected = atomic_load(&g_analyzer->n_plus_one_patterns_detected);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  810:    if (similar_queries) *similar_queries = atomic_load(&g_analyzer->similar_queries_found);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  811:    if (active_clusters) *active_clusters = (int)g_analyzer->cluster_count;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  812:}
+------------------
+get_query_statistics:
+function get_query_statistics called 48 returned 100% blocks executed 100%
+       48:  798:void get_query_statistics(uint64_t* total_queries, uint64_t* n_plus_one_detected, 
+        -:  799:                         uint64_t* similar_queries, int* active_clusters) {
+       48:  800:    if (!g_analyzer) {
+branch  0 taken 2% (fallthrough)
+branch  1 taken 98%
+        1:  801:        if (total_queries) *total_queries = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  802:        if (n_plus_one_detected) *n_plus_one_detected = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  803:        if (similar_queries) *similar_queries = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  804:        if (active_clusters) *active_clusters = 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  805:        return;
+        -:  806:    }
+        -:  807:    
+       47:  808:    if (total_queries) *total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       47:  809:    if (n_plus_one_detected) *n_plus_one_detected = atomic_load(&g_analyzer->n_plus_one_patterns_detected);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       47:  810:    if (similar_queries) *similar_queries = atomic_load(&g_analyzer->similar_queries_found);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       47:  811:    if (active_clusters) *active_clusters = (int)g_analyzer->cluster_count;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  812:}
+------------------
+        -:  813:
+        -:  814:// Reset query analyzer state
+       25:  815:void reset_query_analyzer(void) {
+       25:  816:    if (!g_analyzer) {
+        4:  817:        return;
+        -:  818:    }
+        -:  819:    
+        -:  820:    // Clear ring buffer
+        -:  821:    MercuryQueryRecord record;
+     2159:  822:    while (mercury_ring_buffer_pop(g_analyzer->query_history, &record)) {
+     2138:  823:        pool_strfree(record.query_text);
+        -:  824:    }
+        -:  825:    
+        -:  826:    // Reset clusters
+       21:  827:    g_analyzer->cluster_count = 0;
+        -:  828:    
+        -:  829:    // Reset statistics
+       21:  830:    atomic_store(&g_analyzer->total_queries_analyzed, 0);
+       21:  831:    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
+       21:  832:    atomic_store(&g_analyzer->similar_queries_found, 0);
+        -:  833:    
+       21:  834:    g_analyzer->current_severity = N_PLUS_ONE_NONE;
+       21:  835:    g_analyzer->estimated_cause = 0;
+       21:  836:    strcpy(g_analyzer->optimization_suggestion, "No optimization needed");
+        -:  837:    
+        -:  838:    // MERCURY_INFO("Query analyzer state reset");  // Too verbose for normal operation
+        -:  839:}
+------------------
+reset_query_analyzer:
+function reset_query_analyzer called 6 returned 100% blocks executed 100%
+        6:  815:void reset_query_analyzer(void) {
+        6:  816:    if (!g_analyzer) {
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        2:  817:        return;
+        -:  818:    }
+        -:  819:    
+        -:  820:    // Clear ring buffer
+        -:  821:    MercuryQueryRecord record;
+       37:  822:    while (mercury_ring_buffer_pop(g_analyzer->query_history, &record)) {
+call    0 returned 100%
+branch  1 taken 89%
+branch  2 taken 11% (fallthrough)
+       33:  823:        pool_strfree(record.query_text);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  824:    }
+        -:  825:    
+        -:  826:    // Reset clusters
+        4:  827:    g_analyzer->cluster_count = 0;
+        -:  828:    
+        -:  829:    // Reset statistics
+        4:  830:    atomic_store(&g_analyzer->total_queries_analyzed, 0);
+        4:  831:    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
+        4:  832:    atomic_store(&g_analyzer->similar_queries_found, 0);
+        -:  833:    
+        4:  834:    g_analyzer->current_severity = N_PLUS_ONE_NONE;
+        4:  835:    g_analyzer->estimated_cause = 0;
+        4:  836:    strcpy(g_analyzer->optimization_suggestion, "No optimization needed");
+        -:  837:    
+        -:  838:    // MERCURY_INFO("Query analyzer state reset");  // Too verbose for normal operation
+        -:  839:}
+------------------
+reset_query_analyzer:
+function reset_query_analyzer called 19 returned 100% blocks executed 100%
+       19:  815:void reset_query_analyzer(void) {
+       19:  816:    if (!g_analyzer) {
+branch  0 taken 11% (fallthrough)
+branch  1 taken 89%
+        2:  817:        return;
+        -:  818:    }
+        -:  819:    
+        -:  820:    // Clear ring buffer
+        -:  821:    MercuryQueryRecord record;
+     2122:  822:    while (mercury_ring_buffer_pop(g_analyzer->query_history, &record)) {
+call    0 returned 100%
+branch  1 taken 99%
+branch  2 taken 1% (fallthrough)
+     2105:  823:        pool_strfree(record.query_text);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  824:    }
+        -:  825:    
+        -:  826:    // Reset clusters
+       17:  827:    g_analyzer->cluster_count = 0;
+        -:  828:    
+        -:  829:    // Reset statistics
+       17:  830:    atomic_store(&g_analyzer->total_queries_analyzed, 0);
+       17:  831:    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
+       17:  832:    atomic_store(&g_analyzer->similar_queries_found, 0);
+        -:  833:    
+       17:  834:    g_analyzer->current_severity = N_PLUS_ONE_NONE;
+       17:  835:    g_analyzer->estimated_cause = 0;
+       17:  836:    strcpy(g_analyzer->optimization_suggestion, "No optimization needed");
+        -:  837:    
+        -:  838:    // MERCURY_INFO("Query analyzer state reset");  // Too verbose for normal operation
+        -:  839:}
+------------------
+        -:  840:
+        -:  841:// === LIBRARY INITIALIZATION ===
+        -:  842:
+        -:  843:// Library constructor (called when .so is loaded)
+        -:  844:__attribute__((constructor))
+        -:  845:static void query_analyzer_init(void) {
+        -:  846:    // MERCURY_INFO("libquery_analyzer.so loaded");  // Too verbose
+        -:  847:}
+        -:  848:
+        -:  849:// Library destructor (called when .so is unloaded)
+        -:  850:__attribute__((destructor))
+        2:  851:static void query_analyzer_cleanup(void) {
+        2:  852:    cleanup_query_analyzer();
+        -:  853:    // MERCURY_INFO("libquery_analyzer.so unloaded");  // Too verbose
+        2:  854:}
+------------------
+query_analyzer_cleanup:
+function query_analyzer_cleanup called 1 returned 100% blocks executed 100%
+        1:  851:static void query_analyzer_cleanup(void) {
+        1:  852:    cleanup_query_analyzer();
+call    0 returned 100%
+        -:  853:    // MERCURY_INFO("libquery_analyzer.so unloaded");  // Too verbose
+        1:  854:}
+------------------
+query_analyzer_cleanup:
+function query_analyzer_cleanup called 1 returned 100% blocks executed 100%
+        1:  851:static void query_analyzer_cleanup(void) {
+        1:  852:    cleanup_query_analyzer();
+call    0 returned 100%
+        -:  853:    // MERCURY_INFO("libquery_analyzer.so unloaded");  // Too verbose
+        1:  854:}
+------------------

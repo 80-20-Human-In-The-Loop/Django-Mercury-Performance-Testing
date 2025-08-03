@@ -257,6 +257,7 @@ static void normalize_query(const char* query, char* normalized, size_t max_len)
 }
 
 // Calculate Jaccard similarity between two normalized queries
+#ifdef ENABLE_UNUSED_FUNCTIONS
 static double calculate_jaccard_similarity(const char* query1, const char* query2) {
     if (!query1 || !query2) return 0.0;
     
@@ -284,6 +285,7 @@ static double calculate_jaccard_similarity(const char* query1, const char* query
     
     return (similarity > 1.0) ? 1.0 : similarity;
 }
+#endif
 
 // === CORE ANALYZER FUNCTIONS ===
 

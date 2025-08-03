@@ -161,6 +161,7 @@ static TestOrchestrator* g_orchestrator = NULL;
 // === UTILITY FUNCTIONS ===
 
 // Calculate simple checksum for configuration validation
+#ifdef ENABLE_UNUSED_FUNCTIONS
 static uint32_t calculate_checksum(const void* data, size_t size) {
     const uint8_t* bytes = (const uint8_t*)data;
     uint32_t checksum = 0;
@@ -171,6 +172,7 @@ static uint32_t calculate_checksum(const void* data, size_t size) {
     
     return checksum;
 }
+#endif
 
 // Initialize memory-mapped history file
 static MercuryError init_history_file(const char* history_path) {
