@@ -237,20 +237,20 @@ After Mercury:
 
 ## 🚧 Roadmap
 
-### Phase 1: Initial PyPI Release ✅ (v0.0.1 - December 2024)
+### Phase 1: Initial PyPI Release 
 - ✅ Basic performance monitoring
 - ✅ N+1 detection
 - ✅ Educational guidance
 - ✅ Published to PyPI as `django-mercury-performance`
 
-### Phase 2: Stabilization & Enhancement (v0.1.0 - Q1 2025)
+### Phase 2: Stabilization & Enhancement
 - 🔜 Fix test compatibility with new package structure
 - 🔜 Add standard TestCase for non-API views
 - 🔜 Historical performance tracking
 - 🔜 Performance regression detection
 - 🔜 Improved documentation and examples
 
-### Phase 3: MCP Integration (v0.2.0 - Q2 2025)
+### Phase 3: MCP Integration
 - 🔜 AI-assisted optimization suggestions
 - 🔜 Automated fix generation with human review
 - 🔜 Learning mode for junior developers
