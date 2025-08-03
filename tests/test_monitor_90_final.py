@@ -63,8 +63,8 @@ class TestScoreCalculations(unittest.TestCase):
                             self.assertIsNotNone(score.response_time_score)
                             self.assertIsNotNone(score.memory_efficiency_score)
                             self.assertIsNotNone(score.query_efficiency_score)
-                            self.assertIsNotNone(score.cache_efficiency_score)
-                            self.assertIsNotNone(score.overall_score)
+                            self.assertIsNotNone(score.cache_performance_score)
+                            self.assertIsNotNone(score.total_score)
 
 
 class TestMonitorContextManager(unittest.TestCase):
