@@ -301,6 +301,7 @@ class TestExceptionRecovery(unittest.TestCase):
         self.test_case = DjangoMercuryAPITestCase()
         DjangoMercuryAPITestCase._mercury_enabled = True
         DjangoMercuryAPITestCase._test_executions = []
+        DjangoMercuryAPITestCase._test_failures = []
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     def test_monitor_partial_failure_recovery(self, mock_monitor_class):
