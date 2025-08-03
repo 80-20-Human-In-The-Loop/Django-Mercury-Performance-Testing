@@ -273,7 +273,7 @@ Performance scoring with detailed breakdown.
 Configuration object for Mercury settings.
 
 ```python
-from performance_testing.python_bindings.mercury_config import (
+from django_mercury.python_bindings.mercury_config import (
     get_mercury_config,
     update_mercury_config,
     configure_for_environment
@@ -291,7 +291,7 @@ prod_config = configure_for_environment('production')
 Performance threshold configuration.
 
 ```python
-from performance_testing.python_bindings.mercury_config import PerformanceThresholds
+from django_mercury.python_bindings.mercury_config import PerformanceThresholds
 
 thresholds = PerformanceThresholds(
     response_time_ms=200.0,
@@ -306,7 +306,7 @@ thresholds = PerformanceThresholds(
 ### Color Output
 
 ```python
-from performance_testing.python_bindings.colors import colors, ColorMode
+from django_mercury.python_bindings.colors import colors, ColorMode
 
 # Configure color output
 colors = PerformanceColors(ColorMode.AUTO)
@@ -321,7 +321,7 @@ status_text = colors.format_performance_status("excellent")
 ### Validation
 
 ```python
-from performance_testing.python_bindings.validation import (
+from django_mercury.python_bindings.validation import (
     validate_mercury_config,
     validate_thresholds,
     sanitize_operation_name
@@ -337,7 +337,7 @@ safe_name = sanitize_operation_name(user_input)
 ### Thread Safety
 
 ```python
-from performance_testing.python_bindings.thread_safety import (
+from django_mercury.python_bindings.thread_safety import (
     ThreadSafeCounter,
     ThreadSafeDict,
     synchronized
@@ -365,7 +365,7 @@ class MyClass:
 ## Constants
 
 ```python
-from performance_testing.python_bindings.constants import (
+from django_mercury.python_bindings.constants import (
     RESPONSE_TIME_THRESHOLDS,
     MEMORY_THRESHOLDS,
     QUERY_COUNT_THRESHOLDS,

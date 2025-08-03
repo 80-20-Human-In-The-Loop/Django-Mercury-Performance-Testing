@@ -147,10 +147,17 @@ class TestPurePythonIntegration(unittest.TestCase):
         mock_psutil.Process.return_value = mock_process
         
         mock_tracemalloc.is_tracing.return_value = False
-        mock_snapshot = Mock()
+        
+        # Create two snapshots - initial and final
+        initial_snapshot = Mock()
+        final_snapshot = Mock()
+        
+        # The final snapshot compares to initial and shows 5MB difference
         mock_stat = Mock(size_diff=5 * 1024 * 1024)  # 5 MB
-        mock_snapshot.compare_to.return_value = [mock_stat]
-        mock_tracemalloc.take_snapshot.side_effect = [mock_snapshot, Mock()]
+        final_snapshot.compare_to.return_value = [mock_stat]
+        
+        # take_snapshot is called twice: once in start_monitoring, once in stop_monitoring
+        mock_tracemalloc.take_snapshot.side_effect = [initial_snapshot, final_snapshot]
         
         # Run monitoring
         with python_performance_monitor() as monitor:

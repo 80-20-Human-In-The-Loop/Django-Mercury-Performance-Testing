@@ -8,8 +8,7 @@ from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from performance_testing.python_bindings.django_integration_mercury import DjangoMercuryAPITestCase
-from performance_testing.python_bindings.monitor import monitor_django_view
+from django_mercury import DjangoMercuryAPITestCase, monitor_django_view
 
 
 class BasicPerformanceTestCase(DjangoMercuryAPITestCase):

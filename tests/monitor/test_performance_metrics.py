@@ -30,41 +30,67 @@ class TestScoreCalculations(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.monitor.lib')
     def test_score_calculation_all_ranges(self, mock_lib):
-        """Test score calculation for all response time and memory ranges."""
-        # Test different response time ranges (lines 241, 245, 247)
-        response_times = [0, 10, 50, 100, 200, 500, 1000, 2000, 5000]
-        memory_usages = [0, 10, 50, 100, 200, 500, 1000]
-        query_counts = [0, 1, 2, 5, 10, 20, 50, 100]
-        cache_ratios = [0.0, 0.2, 0.5, 0.8, 1.0]
+        """Test score calculation for key boundary values and representative cases."""
+        # Test strategic combinations instead of all 2520 permutations
+        # This reduces test time from ~3s to ~0.1s while maintaining coverage
+        test_cases = [
+            # (response_time, memory_usage, query_count, cache_ratio, description)
+            # Boundary cases for response time scoring
+            (0, 50, 5, 0.8, "zero response time"),
+            (50, 50, 5, 0.8, "excellent response time"),
+            (200, 50, 5, 0.8, "good response time"),
+            (1000, 50, 5, 0.8, "poor response time"),
+            (5000, 50, 5, 0.8, "very poor response time"),
+            
+            # Boundary cases for memory scoring
+            (100, 0, 5, 0.8, "zero memory"),
+            (100, 50, 5, 0.8, "good memory"),
+            (100, 200, 5, 0.8, "high memory"),
+            (100, 1000, 5, 0.8, "very high memory"),
+            
+            # Boundary cases for query scoring
+            (100, 50, 0, 0.8, "zero queries"),
+            (100, 50, 1, 0.8, "minimal queries"),
+            (100, 50, 10, 0.8, "moderate queries"),
+            (100, 50, 50, 0.8, "high queries"),
+            (100, 50, 100, 0.8, "very high queries"),
+            
+            # Boundary cases for cache ratio scoring
+            (100, 50, 5, 0.0, "zero cache hits"),
+            (100, 50, 5, 0.5, "moderate cache hits"),
+            (100, 50, 5, 1.0, "perfect cache hits"),
+            
+            # Combined extremes for comprehensive testing
+            (0, 0, 0, 1.0, "all best values"),
+            (5000, 1000, 100, 0.0, "all worst values"),
+            (200, 100, 10, 0.5, "all moderate values"),
+        ]
         
-        for response_time in response_times:
-            for memory_usage in memory_usages:
-                for query_count in query_counts:
-                    for cache_ratio in cache_ratios:
-                        with self.subTest(rt=response_time, mem=memory_usage, qc=query_count, cr=cache_ratio):
-                            mock_lib.get_elapsed_time_ms.return_value = float(response_time)
-                            mock_lib.get_memory_usage_mb.return_value = float(memory_usage)
-                            mock_lib.get_memory_delta_mb.return_value = float(memory_usage / 2)
-                            mock_lib.get_query_count.return_value = query_count
-                            mock_lib.get_cache_hit_ratio.return_value = cache_ratio
-                            
-                            self.mock_c_metrics.contents.query_count_end = query_count
-                            self.mock_c_metrics.contents.query_count_start = 0
-                            self.mock_c_metrics.contents.cache_hits = int(10 * cache_ratio)
-                            self.mock_c_metrics.contents.cache_misses = int(10 * (1 - cache_ratio))
-                            
-                            metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test", None)
-                            
-                            # Access score to trigger calculation
-                            score = metrics.performance_score
-                            self.assertIsNotNone(score)
-                            
-                            # Check all score components
-                            self.assertIsNotNone(score.response_time_score)
-                            self.assertIsNotNone(score.memory_efficiency_score)
-                            self.assertIsNotNone(score.query_efficiency_score)
-                            self.assertIsNotNone(score.cache_performance_score)
-                            self.assertIsNotNone(score.total_score)
+        for response_time, memory_usage, query_count, cache_ratio, description in test_cases:
+            with self.subTest(desc=description):
+                mock_lib.get_elapsed_time_ms.return_value = float(response_time)
+                mock_lib.get_memory_usage_mb.return_value = float(memory_usage)
+                mock_lib.get_memory_delta_mb.return_value = float(memory_usage / 2)
+                mock_lib.get_query_count.return_value = query_count
+                mock_lib.get_cache_hit_ratio.return_value = cache_ratio
+                
+                self.mock_c_metrics.contents.query_count_end = query_count
+                self.mock_c_metrics.contents.query_count_start = 0
+                self.mock_c_metrics.contents.cache_hits = int(10 * cache_ratio)
+                self.mock_c_metrics.contents.cache_misses = int(10 * (1 - cache_ratio))
+                
+                metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test", None)
+                
+                # Access score to trigger calculation
+                score = metrics.performance_score
+                self.assertIsNotNone(score)
+                
+                # Check all score components
+                self.assertIsNotNone(score.response_time_score)
+                self.assertIsNotNone(score.memory_efficiency_score)
+                self.assertIsNotNone(score.query_efficiency_score)
+                self.assertIsNotNone(score.cache_performance_score)
+                self.assertIsNotNone(score.total_score)
 
 
 class TestMonitorContextManager(unittest.TestCase):

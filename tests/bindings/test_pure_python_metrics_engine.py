@@ -264,7 +264,7 @@ class TestPythonMetricsEngine(unittest.TestCase):
         stats = self.engine.calculate_statistics()
         
         self.assertEqual(stats['count'], 3)
-        self.assertAlmostEqual(stats['mean'], 1001.0, places=1)
+        self.assertAlmostEqual(stats['mean'], 1000.33, places=1)  # (1 + 1000 + 2000) / 3
         self.assertEqual(stats['min'], 1.0)
         self.assertEqual(stats['max'], 2000.0)
         self.assertGreater(stats['std_dev'], 800)  # Large standard deviation

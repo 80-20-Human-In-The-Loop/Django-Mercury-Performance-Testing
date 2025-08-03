@@ -25,7 +25,7 @@ class UserAPITestCase(TestCase):
 
 ### After (Mercury)
 ```python
-from performance_testing.python_bindings.django_integration_mercury import DjangoMercuryAPITestCase
+from django_mercury import DjangoMercuryAPITestCase
 
 class UserAPITestCase(DjangoMercuryAPITestCase):
     def test_user_list(self):
@@ -178,7 +178,7 @@ class PerformanceTestCase(DjangoMercuryAPITestCase):
 
 1. **Install Mercury**
    ```bash
-   cd performance_testing/c_core
+   cd django_mercury/c_core
    make
    ```
 
@@ -188,7 +188,7 @@ class PerformanceTestCase(DjangoMercuryAPITestCase):
    from django.test import TestCase
    
    # With
-   from performance_testing.python_bindings.django_integration_mercury import DjangoMercuryAPITestCase
+   from django_mercury import DjangoMercuryAPITestCase
    ```
 
 3. **Remove Manual Timing Code**

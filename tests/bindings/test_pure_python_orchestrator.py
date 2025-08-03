@@ -268,7 +268,8 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
     def test_monitor_lifecycle(self, mock_monitor_class, mock_time):
         """Test that monitors are properly created and cleaned up."""
-        mock_time.side_effect = [1000.0, 1010.0]
+        # Need times for: start_test1, start_test2, end_test2
+        mock_time.side_effect = [1000.0, 1010.0, 1020.0]
         
         mock_monitor1 = Mock()
         mock_monitor2 = Mock()
@@ -284,16 +285,18 @@ class TestPythonTestOrchestrator(unittest.TestCase):
         self.assertEqual(len(self.orchestrator.monitors), 2)
         self.assertIn('test_2', self.orchestrator.monitors)
         
-        # End first test
+        # End first test (won't return full results since current_test is test_2)
         mock_monitor1.get_metrics.return_value = {}
-        self.orchestrator.end_test('test_1', 'passed')
+        result = self.orchestrator.end_test('test_1', 'passed')
+        self.assertEqual(result, {})  # Empty since test_1 is not current
         self.assertEqual(len(self.orchestrator.monitors), 1)
         self.assertNotIn('test_1', self.orchestrator.monitors)
         self.assertIn('test_2', self.orchestrator.monitors)
         
-        # End second test
+        # End second test (will return full results)
         mock_monitor2.get_metrics.return_value = {}
-        self.orchestrator.end_test('test_2', 'passed')
+        result = self.orchestrator.end_test('test_2', 'passed')
+        self.assertNotEqual(result, {})  # Has results since test_2 is current
         self.assertEqual(len(self.orchestrator.monitors), 0)
     
     def test_get_summary_various_statuses(self):

@@ -9,7 +9,7 @@
 
 **Part of the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem**
 
-> A performance testing framework for Django that helps you understand and fix performance issues, not just detect them.
+> Test Django app speed. Learn why it's slow. Fix it.
 
 ## 🚀 Quick Install
 
@@ -29,21 +29,21 @@ class MyPerformanceTest(DjangoMercuryAPITestCase):
 
 ## 🌟 Origin Story
 
-Mercury was born from a real need at [EduLite](https://github.com/ibrahim-sisar/EduLite) - an open-source education platform designed for students in areas with poor internet connectivity. When we discovered our UserSearchView was making **825 queries for paginated results**, we knew we needed better tools.
+Mercury started at [EduLite](https://github.com/ibrahim-sisar/EduLite). EduLite helps students learn with slow internet. We found our UserSearchView made **825 database queries** to show one page!
 
-Instead of just fixing the issue, we built Mercury - a framework that not only catches performance problems but teaches developers how to fix them. This aligns with the **Fair**, **Free**, and **Open** values of [EduLite](https://github.com/ibrahim-sisar/EduLite) - as we wanted people of all skill levels to be able to contribute and learn!
+We built Mercury to find these problems and teach you how to fix them. Mercury follows EduLite's values: **Fair**, **Free**, and **Open**. Everyone can use it and learn.
 
-## 🎯 Current Status: v0.0.1 Released on PyPI! 🎉
+## 🎯 Current Status: v0.0.2 on PyPI! 🎉
 
-**What's Working NOW:**
-- ✅ **Available on PyPI** - Install with `pip install django-mercury-performance`
-- ✅ N+1 query detection with severity analysis
-- ✅ Performance grading (F to A+) 
-- ✅ Two test case classes: `DjangoMercuryAPITestCase` and `DjangoPerformanceAPITestCase`
-- ✅ Smart operation type detection
-- ✅ Educational guidance when tests fail
-- ✅ C-powered monitoring for minimal overhead
-- ✅ Comprehensive metrics: response time, queries, memory
+**What Works Now:**
+- ✅ **Install from PyPI** - `pip install django-mercury-performance`
+- ✅ Finds N+1 query problems
+- ✅ Grades speed (F to A+) 
+- ✅ Two test types: `DjangoMercuryAPITestCase` and `DjangoPerformanceAPITestCase`
+- ✅ Knows what type of code runs
+- ✅ Teaches when tests fail
+- ✅ Fast C code for speed
+- ✅ Tracks time, queries, and memory
 
 **What We Actually Found:**
 ```text
@@ -52,11 +52,11 @@ Severity: CRITICAL (825 queries)
 ```
 
 **Coming Soon:**
-- 🔜 MCP (Model Context Protocol) integration for AI-assisted optimization
-- 🔜 Historical performance tracking
-- 🔜 Standard TestCase for non-API views
-- 🔜 Performance regression detection
-- 🔜 Better test compatibility (updating tests for new package structure)
+- 🔜 AI help to fix slow code
+- 🔜 Track speed over time
+- 🔜 Test all view types
+- 🔜 Find when code gets slower
+- 🔜 Better test support
 
 ## 📦 Installation
 
@@ -83,41 +83,59 @@ make clean && make
 
 ## 🚀 Quick Start
 
-### Two Classes, Two Approaches
+### Two Ways to Test Performance
 
-#### 1. DjangoMercuryAPITestCase - Automatic Monitoring
+Choose the test class that fits your needs.
+
+#### 1. DjangoMercuryAPITestCase - Automatic Testing
+
+Mercury watches your tests automatically. You write normal tests. Mercury finds problems.
 
 ```python
 from django_mercury import DjangoMercuryAPITestCase
 
 class UserSearchPerformanceTest(DjangoMercuryAPITestCase):
-    """Mercury automatically monitors every test method."""
+    """Mercury monitors every test automatically."""
     
     def test_user_search(self):
-        # Just write your test - Mercury handles the rest
+        # Write your normal test
         response = self.client.get('/api/users/search/?q=test')
         self.assertEqual(response.status_code, 200)
-        # Mercury automatically analyzes and reports performance
+        # Mercury checks performance automatically
 ```
 
-#### 2. DjangoPerformanceAPITestCase - Modular Control
+**What Mercury does:**
+- Counts database queries
+- Measures response time  
+- Tracks memory usage
+- Finds N+1 problems
+- Shows clear reports
+
+#### 2. DjangoPerformanceAPITestCase - Manual Control
+
+You control when to monitor. Good for specific performance checks.
 
 ```python
 from django_mercury import DjangoPerformanceAPITestCase
 from django_mercury import monitor_django_view
 
 class AdvancedPerformanceTest(DjangoPerformanceAPITestCase):
-    """For when you need specific assertions and control."""
+    """Control exactly what you test."""
     
     def test_with_assertions(self):
         with monitor_django_view("search") as monitor:
             response = self.client.get('/api/users/search/')
         
-        # Use specific assertions
-        self.assertResponseTimeLess(monitor, 100)
-        self.assertQueriesLess(monitor, 10)
-        self.assertNoNPlusOne(monitor)
+        # Check specific limits
+        self.assertResponseTimeLess(monitor, 100)  # Under 100ms
+        self.assertQueriesLess(monitor, 10)         # Under 10 queries
+        self.assertNoNPlusOne(monitor)              # No N+1 problems
 ```
+
+**You control:**
+- When monitoring starts
+- What to check
+- Your performance limits
 
 ## 📊 Real Output from Mercury
 
@@ -136,25 +154,25 @@ This is actual output from testing EduLite:
 ╰─────────────────────────────────────────────────────────────╯
 ```
 
-## 🎓 The  Philosophy in Action
+## 🎓 How Mercury Works
 
-Mercury embodies the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop/Community) philosophy:
+Mercury follows the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop/Community) way:
 
-**80% Automation:**
-- Automatic performance monitoring
-- N+1 detection and analysis
-- Performance grading
-- Threshold management
+**80% Computer Help:**
+- Watches performance automatically
+- Finds N+1 problems
+- Grades your code speed
+- Manages limits
 
-**20% Human Wisdom:**
-- Understanding WHY performance matters
-- Choosing the right optimization strategy
-- Learning from the guidance
-- Making architectural decisions
+**20% Human Control:**
+- You understand WHY speed matters
+- You choose how to fix problems
+- You learn from the guides
+- You make design choices
 
-**Example: Educational Guidance**
+**Example: How Mercury Teaches**
 
-When a test fails, Mercury doesn't just say "failed" - it teaches:
+When a test fails, Mercury helps you learn:
 
 ```text
 📚 MERCURY EDUCATIONAL GUIDANCE
@@ -177,29 +195,29 @@ When a test fails, Mercury doesn't just say "failed" - it teaches:
 ============================================================
 ```
 
-## 🛠️ Available Assertions
+## 🛠️ Performance Checks
 
-### DjangoPerformanceAPITestCase Methods
+### Test Methods You Can Use
 
 ```python
-# Time assertions
-self.assertResponseTimeLess(monitor, 100)    # < 100ms
-self.assertPerformanceFast(monitor)          # Predefined "fast"
-self.assertPerformanceNotSlow(monitor)       # Not "slow"
+# Check response time
+self.assertResponseTimeLess(monitor, 100)    # Must be under 100ms
+self.assertPerformanceFast(monitor)          # Must be fast
+self.assertPerformanceNotSlow(monitor)       # Must not be slow
 
-# Query assertions  
-self.assertQueriesLess(monitor, 10)          # < 10 queries
-self.assertNoNPlusOne(monitor)               # No N+1 detected
+# Check database queries  
+self.assertQueriesLess(monitor, 10)          # Must use less than 10 queries
+self.assertNoNPlusOne(monitor)               # Must not have N+1 problems
 
-# Memory assertions
-self.assertMemoryLess(monitor, 50)           # < 50MB
-self.assertMemoryEfficient(monitor)          # Reasonable memory use
+# Check memory use
+self.assertMemoryLess(monitor, 50)           # Must use less than 50MB
+self.assertMemoryEfficient(monitor)          # Must use memory well
 
-# Cache assertions
-self.assertGoodCachePerformance(monitor, 0.8) # 80% hit ratio
+# Check cache use
+self.assertGoodCachePerformance(monitor, 0.8) # Must hit cache 80% of time
 ```
 
-## 🔧 Configuration
+## 🔧 Setup Options
 
 ```python
 class MyTest(DjangoMercuryAPITestCase):
@@ -207,78 +225,265 @@ class MyTest(DjangoMercuryAPITestCase):
     def setUpClass(cls):
         super().setUpClass()
         
-        # Configure Mercury
+        # Turn Mercury features on or off
         cls.configure_mercury(
-            enabled=True,
-            auto_scoring=True,
-            verbose_reporting=False,
-            educational_guidance=True  # Learn while you test!
+            enabled=True,               # Turn on Mercury
+            auto_scoring=True,          # Grade tests automatically
+            verbose_reporting=False,    # Show less detail
+            educational_guidance=True   # Show help messages
         )
         
-        # Set thresholds
+        # Set your speed limits
         cls.set_performance_thresholds({
-            'response_time_ms': 100,
-            'query_count_max': 10,
-            'memory_overhead_mb': 20,
+            'response_time_ms': 100,    # Max time: 100ms
+            'query_count_max': 10,      # Max queries: 10
+            'memory_overhead_mb': 20,   # Max extra memory: 20MB
         })
 ```
 
-## 🎯 Real Impact on EduLite
+## 🧪 Testing Django Mercury
+
+We provide two test runners to help you test the framework.
+
+### What Our Tests Do
+
+Tests make sure Django Mercury works correctly. They check:
+- Python code works as expected
+- C extensions compile and run fast
+- Performance monitoring catches problems
+- Everything works together
+
+### Two Test Runners
+
+#### 1. Python Test Runner: `test_runner.py`
+
+Tests all Python code with performance timing.
+
+**Features:**
+- Shows test speed with colors (🟢 fast, 🟡 medium, 🔴 slow, 💀 very slow)
+- Coverage reports (how much code is tested)
+- Finds slow tests automatically
+- Groups results by module
+
+#### 2. C Test Runner: `c_test_runner.sh`  
+
+Tests all C extensions for speed and correctness.
+
+**Features:**
+- Builds C libraries
+- Runs unit tests
+- Checks memory safety
+- Generates coverage reports
+
+### How to Run Tests
+
+#### Quick Start (Test Everything)
+
+```bash
+# Test Python code
+python test_runner.py
+
+# Test C code  
+./c_test_runner.sh test
+```
+
+#### Detailed Testing
+
+```bash
+# Python tests with coverage report
+python test_runner.py --coverage --verbose
+
+# C tests with coverage analysis
+./c_test_runner.sh coverage
+
+# Test everything
+python test_runner.py --all
+./c_test_runner.sh all
+```
+
+### Understanding Test Output
+
+#### Python Test Colors
+
+Your tests show timing with colors:
+
+| Color | Time | Meaning |
+|-------|------|---------|
+| 🟢 Green | <0.1s | Fast - Great! |
+| 🟡 Yellow | 0.1-0.5s | Medium - OK |
+| 🔴 Red | 0.5-2s | Slow - Needs work |
+| 💀 Purple | >2s | Very slow - Problem! |
+
+#### Example Output
+
+```
+🚀 Starting Timed Test Run
+==================================================
+Legend: 🟢 <0.1s | 🟡 0.1-0.5s | 🔴 >0.5s | 💀 >2s
+==================================================
+
+🏃 Running: tests.monitor.test_django_base ... 🟢 0.045s ✅
+🏃 Running: tests.monitor.test_metrics ... 🟡 0.234s ✅
+🏃 Running: tests.integration.test_api ... 🔴 0.678s ✅
+
+📊 PERFORMANCE SUMMARY
+Total time: 0.957s
+Average per test: 0.319s
+```
+
+### Common Testing Tasks
+
+#### Run Specific Tests
+
+```bash
+# Test only monitor module
+python test_runner.py --module monitor
+
+# List all test modules
+python test_runner.py --list-modules
+```
+
+#### Build and Clean
+
+```bash
+# Clean everything
+./c_test_runner.sh clean
+
+# Rebuild C libraries
+./c_test_runner.sh build
+
+# Run benchmarks
+./c_test_runner.sh benchmark
+```
+
+#### Before You Commit
+
+Always run these commands:
+
+```bash
+# 1. Check Python tests pass
+python test_runner.py
+
+# 2. Check C tests pass
+./c_test_runner.sh test
+
+# 3. Check code style
+black django_mercury/
+ruff check django_mercury/
+```
+
+### Adding Your Own Tests
+
+#### Python Tests
+
+Create a file in `tests/` directory:
+
+```python
+# tests/test_my_feature.py
+import unittest
+from django_mercury import DjangoMercuryAPITestCase
+
+class TestMyFeature(DjangoMercuryAPITestCase):
+    def test_feature_works(self):
+        # Your test here
+        response = self.client.get('/api/test/')
+        self.assertEqual(response.status_code, 200)
+```
+
+#### C Tests
+
+Create a file in `django_mercury/c_core/tests/`:
+
+```c
+// simple_test_myfeature.c
+#include <stdio.h>
+#include <assert.h>
+
+int main() {
+    printf("Testing my feature...\n");
+    // Your test here
+    assert(1 == 1);
+    printf("✅ Test passed!\n");
+    return 0;
+}
+```
+
+### Getting Help
+
+- **Test failures?** Check the error message first
+- **Slow tests?** Look for `time.sleep()` or database queries
+- **C compilation errors?** Run `./c_test_runner.sh clean` then `build`
+- **Still stuck?** Open an issue with your test output
+
+## 🎯 Real Results at EduLite
 
 Before Mercury:
-- UserSearchView: **825 queries** for pagination
-- No visibility into performance issues
-- Users in poor connectivity areas suffered
+- UserSearchView used **825 queries** to show one page
+- We could not see speed problems
+- Students with slow internet could not use the app
 
 After Mercury:
-- Identified the exact problem
-- Reduced to **12 queries**
-- Performance monitoring on every PR
+- Found the exact problem
+- Fixed it to use only **12 queries**
+- Now we check speed on every code change
 
-## 🚧 Roadmap
+## 🚧 Future Plans
 
-### Phase 1: Initial PyPI Release 
-- ✅ Basic performance monitoring
-- ✅ N+1 detection
-- ✅ Educational guidance
-- ✅ Published to PyPI as `django-mercury-performance`
+### Phase 1: First Release ✅
+- ✅ Watch performance
+- ✅ Find N+1 problems
+- ✅ Show helpful guides
+- ✅ Available on PyPI
 
-### Phase 2: Stabilization & Enhancement
-- 🔜 Fix test compatibility with new package structure
-- 🔜 Add standard TestCase for non-API views
-- 🔜 Historical performance tracking
-- 🔜 Performance regression detection
-- 🔜 Improved documentation and examples
+### Phase 2: Make It Better
+- 🔜 Fix test problems
+- 🔜 Support all view types
+- 🔜 Track speed over time
+- 🔜 Find when code gets slower
+- 🔜 Better guides and examples
 
-### Phase 3: MCP Integration
-- 🔜 AI-assisted optimization suggestions
-- 🔜 Automated fix generation with human review
-- 🔜 Learning mode for junior developers
-- 🔜 Plugin system for custom analyzers
+### Phase 3: Add AI Help
+- 🔜 AI suggests fixes
+- 🔜 Create fixes you can review
+- 🔜 Help new developers learn
+- 🔜 Let you add custom checks
 
 ## 🤝 Contributing
 
-Mercury is part of both [EduLite](https://github.com/ibrahim-sisar/EduLite) and the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem. We believe in:
+Mercury is part of [EduLite](https://github.com/ibrahim-sisar/EduLite) and [Human in the Loop](https://github.com/80-20-Human-In-The-Loop). We welcome everyone.
 
-- **Education First**: Tools should teach, not just detect
-- **Human Understanding**: Keep humans in control of their code
-- **Open Source**: Built by the community, for the community
+### Our Values
 
-### How to Contribute
+- **Education First**: Tools should teach, not just find problems
+- **Human Understanding**: You control your code
+- **Open Source**: Built together, shared with everyone
 
-1. Try Mercury on your Django project
-2. Report issues and suggestions
-3. Help us build MCP integration
-4. Share your performance optimization stories
+### How You Can Help
 
-## 🏫 Built for Education
+1. **Test Mercury** - Try it on your Django project
+2. **Report Problems** - Tell us what doesn't work
+3. **Share Ideas** - Suggest improvements
+4. **Write Code** - Fix bugs or add features
+5. **Improve Docs** - Make them clearer
+6. **Help Others** - Answer questions
 
-Mercury was created for [EduLite](https://github.com/ibrahim-sisar/EduLite), an education platform serving students in challenging conditions. Every feature is designed to:
+### Getting Started
 
-- Work with limited resources
-- Teach while testing
-- Build developer skills
-- Ensure quality for end users
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+**New to open source?** Start here:
+- Look for "good first issue" labels
+- Ask questions - we're here to help
+- Small fixes matter too
+
+## 🏫 Made for Learning
+
+Mercury was made for [EduLite](https://github.com/ibrahim-sisar/EduLite). EduLite helps students learn even with slow internet. Mercury helps by:
+
+- Working on slow computers
+- Teaching as it tests
+- Helping developers learn
+- Making apps work for everyone
 
 ## 📄 License
 
@@ -286,31 +491,31 @@ This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
 ### Why GPL-3.0?
 
-We chose GPL-3.0 because it enforces the same standards and values we believe in:
+We use GPL-3.0 because it matches our values:
 
-- **🌍 Open**: The source code must remain open and accessible to everyone
-- **🆓 Free**: Free as in freedom - you can use, study, share, and improve the software
-- **⚖️ Fair**: Any improvements or derivatives must be shared back with the community
-- **🤝 Copyleft**: Ensures the software and its derivatives remain free forever
+- **🌍 Open**: Code stays open for everyone
+- **🆓 Free**: You can use, study, share, and improve it
+- **⚖️ Fair**: Improvements must be shared
+- **🤝 Copyleft**: Stays free forever
 
-This means if you create and distribute a modified version, you must:
-- Make your source code available
-- License it under GPL-3.0
-- Preserve all copyright and license notices
-- Document your changes
+If you share a changed version, you must:
+- Share your code
+- Use GPL-3.0 license
+- Keep all notices
+- List your changes
 
-This aligns perfectly with the Human in the Loop philosophy of keeping knowledge open and accessible.
+This keeps knowledge open for all.
 
 For the full license text, see [LICENSE](LICENSE) or visit [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
-## 🙏 Acknowledgments
+## 🙏 Thanks To
 
-- [EduLite Team](https://github.com/ibrahim-sisar/EduLite) - For the real-world use case
-- [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) - For the philosophy
-- Django/DRF Community - For the foundation
+- [EduLite Team](https://github.com/ibrahim-sisar/EduLite) - For showing us the need
+- [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) - For the ideas
+- Django/DRF Community - For the tools
 
 ---
 
-**Mercury**: Because finding N+1 queries shouldn't require a PhD in database optimization.
+**Mercury**: Making performance testing simple for everyone.
 
-*Built with ❤️ by developers who believe in human understanding, not just automation.*
+*Built with ❤️ by developers who believe people should understand their code.*

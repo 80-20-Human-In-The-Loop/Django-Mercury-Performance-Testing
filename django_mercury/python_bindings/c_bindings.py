@@ -203,8 +203,12 @@ class CExtensionLoader:
         with self._lock:
             if self._initialized:
                 return True
-                
-            logger.info("Initializing Mercury C extensions...")
+            
+            # Check if we're in test mode and should be quieter
+            import os
+            test_mode = os.environ.get('MERCURY_TEST_MODE', '0') == '1'
+            if not test_mode:
+                logger.info("Initializing Mercury C extensions...")
             
             success_count = 0
             total_load_time = 0.0
@@ -222,9 +226,11 @@ class CExtensionLoader:
                     success_count += 1
                     # Set public interface
                     setattr(self, lib_key, library_info.handle)
-                    logger.info(f"✅ Loaded {library_info.name} ({load_time:.2f}ms)")
+                    if not test_mode:
+                        logger.info(f"✅ Loaded {library_info.name} ({load_time:.2f}ms)")
                 else:
-                    logger.warning(f"❌ Failed to load {library_info.name}: {library_info.error_message}")
+                    if not test_mode:
+                        logger.warning(f"❌ Failed to load {library_info.name}: {library_info.error_message}")
                     self._stats.errors_encountered += 1
             
             # Update statistics
@@ -252,12 +258,14 @@ class CExtensionLoader:
             
             # Log initialization summary
             if success_count > 0:
-                logger.info(f"🚀 Mercury C extensions initialized: {success_count}/{len(LIBRARY_CONFIG)} libraries loaded")
-                logger.info(f"   Performance boost: {self._stats.performance_boost_factor:.1f}x faster")
-                logger.info(f"   Load time: {total_load_time:.2f}ms")
+                if not test_mode:
+                    logger.info(f"🚀 Mercury C extensions initialized: {success_count}/{len(LIBRARY_CONFIG)} libraries loaded")
+                    logger.info(f"   Performance boost: {self._stats.performance_boost_factor:.1f}x faster")
+                    logger.info(f"   Load time: {total_load_time:.2f}ms")
             else:
-                logger.warning("⚠️  No C extensions loaded - running in pure Python fallback mode")
-                logger.info("   To enable C extensions, run: cd c_core && make && make install")
+                if not test_mode:
+                    logger.warning("⚠️  No C extensions loaded - running in pure Python fallback mode")
+                    logger.info("   To enable C extensions, run: cd c_core && make && make install")
             
             return success_count > 0
     
@@ -328,7 +336,8 @@ class CExtensionLoader:
                 function_count += self._configure_legacy_performance(handle)
                 
         except Exception as e:
-            logger.warning(f"Failed to configure {lib_key} functions: {e}")
+            if os.environ.get('MERCURY_TEST_MODE', '0') != '1':
+                logger.warning(f"Failed to configure {lib_key} functions: {e}")
             
         self._stats.functions_configured += function_count
         return function_count
@@ -384,7 +393,8 @@ class CExtensionLoader:
             functions_configured += 1
             
         except AttributeError as e:
-            logger.debug(f"Some query analyzer functions not available: {e}")
+            if os.environ.get('MERCURY_TEST_MODE', '0') != '1':
+                logger.debug(f"Some query analyzer functions not available: {e}")
             
         return functions_configured
     
@@ -469,7 +479,8 @@ class CExtensionLoader:
             functions_configured += 1
             
         except AttributeError as e:
-            logger.debug(f"Some metrics engine functions not available: {e}")
+            if os.environ.get('MERCURY_TEST_MODE', '0') != '1':
+                logger.debug(f"Some metrics engine functions not available: {e}")
             
         return functions_configured
     
@@ -525,7 +536,8 @@ class CExtensionLoader:
             
             
         except AttributeError as e:
-            logger.debug(f"Some test orchestrator functions not available: {e}")
+            if os.environ.get('MERCURY_TEST_MODE', '0') != '1':
+                logger.debug(f"Some test orchestrator functions not available: {e}")
             
         return functions_configured
     
@@ -548,7 +560,8 @@ class CExtensionLoader:
                 functions_configured += 1
                 
         except AttributeError as e:
-            logger.debug(f"Legacy performance functions not available: {e}")
+            if os.environ.get('MERCURY_TEST_MODE', '0') != '1':
+                logger.debug(f"Legacy performance functions not available: {e}")
             
         return functions_configured
     
@@ -566,7 +579,8 @@ class CExtensionLoader:
         )
         
         if session_id == -1:
-            logger.warning("Failed to start performance monitoring session")
+            if os.environ.get('MERCURY_TEST_MODE', '0') != '1':
+                logger.warning("Failed to start performance monitoring session")
             yield None
             return
             
@@ -579,7 +593,8 @@ class CExtensionLoader:
                     # Extract metrics here if needed
                     self.metrics_engine.free_metrics(metrics_ptr)
             except Exception as e:
-                logger.error(f"Error stopping performance session: {e}")
+                if os.environ.get('MERCURY_TEST_MODE', '0') != '1':
+                    logger.error(f"Error stopping performance session: {e}")
     
     def get_stats(self) -> ExtensionStats:
         """Get extension loading and usage statistics."""
@@ -607,7 +622,13 @@ class CExtensionLoader:
             self._libraries.clear()
             self._initialized = False
             
-            logger.info("C extensions cleaned up")
+            # Only log if not in test mode and logger is still active
+            try:
+                if not os.environ.get('MERCURY_TEST_MODE', '0') == '1':
+                    logger.info("C extensions cleaned up")
+            except (ValueError, OSError):
+                # Logger might be closed during shutdown
+                pass
 
 # === GLOBAL INSTANCE ===
 
@@ -631,13 +652,17 @@ def is_c_extension_available(library_name: str) -> bool:
 # Try to initialize on import, but don't fail if it doesn't work
 try:
     _init_success = initialize_c_extensions()
-    if _init_success:
-        logger.info("Mercury C extensions automatically initialized")
-    else:
-        logger.info("Mercury running in Python fallback mode")
+    test_mode = os.environ.get('MERCURY_TEST_MODE', '0') == '1'
+    if not test_mode:
+        if _init_success:
+            logger.info("Mercury C extensions automatically initialized")
+        else:
+            logger.info("Mercury running in Python fallback mode")
 except Exception as e:
-    logger.warning(f"Failed to auto-initialize C extensions: {e}")
-    logger.info("Mercury will run in Python fallback mode")
+    test_mode = os.environ.get('MERCURY_TEST_MODE', '0') == '1'
+    if not test_mode:
+        logger.warning(f"Failed to auto-initialize C extensions: {e}")
+        logger.info("Mercury will run in Python fallback mode")
 
 # === CLEANUP ON EXIT ===
 

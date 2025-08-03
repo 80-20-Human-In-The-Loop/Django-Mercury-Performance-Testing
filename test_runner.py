@@ -615,6 +615,17 @@ def run_c_integration_tests(verbose: bool = False) -> bool:
 
 def setup_test_environment():
     """Set up the test environment."""
+    import logging
+    
+    # Suppress verbose logging during tests
+    logging.getLogger('django_mercury.python_bindings.c_bindings').setLevel(logging.WARNING)
+    logging.getLogger('performance_testing.validation').setLevel(logging.ERROR)
+    logging.getLogger('performance_testing.functional_test').setLevel(logging.ERROR)
+    logging.getLogger('performance_testing.test_integration').setLevel(logging.ERROR)
+    logging.getLogger('performance_testing.independent1').setLevel(logging.ERROR)
+    logging.getLogger('performance_testing.independent2').setLevel(logging.ERROR)
+    logging.getLogger('performance_testing.thread_safety').setLevel(logging.ERROR)
+    
     # Ensure tests directory exists
     tests_dir = PERFORMANCE_TESTING_ROOT / "tests"
     tests_dir.mkdir(exist_ok=True)

@@ -353,7 +353,7 @@ class PythonQueryAnalyzer:
         if not 'LIMIT' in sql.upper() and analysis['type'] == 'SELECT':
             analysis['recommendations'].append('Consider adding LIMIT for large result sets')
         
-        if analysis['estimated_complexity'] > 5:
+        if analysis['estimated_complexity'] >= 5:
             analysis['recommendations'].append('Query appears complex, consider optimization')
         
         # Cache the result
@@ -459,7 +459,10 @@ class PythonTestOrchestrator:
         monitor = self.monitors[test_name]
         monitor.stop_monitoring()
         
-        # Collect results
+        # Always clean up the monitor
+        del self.monitors[test_name]
+        
+        # Collect results if this is the current test
         if self.current_test and self.current_test['name'] == test_name:
             self.current_test['end_time'] = time.time()
             self.current_test['duration'] = (
@@ -471,10 +474,9 @@ class PythonTestOrchestrator:
             # Add to results
             self.test_results.append(self.current_test)
             
-            # Clean up
+            # Clean up current test
             result = self.current_test.copy()
             self.current_test = None
-            del self.monitors[test_name]
             
             return result
         

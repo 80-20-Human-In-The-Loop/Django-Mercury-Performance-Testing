@@ -31,18 +31,92 @@ Django Mercury is part of the [Human in the Loop](https://github.com/80-20-Human
 
 ### 3. Testing Your Changes
 
+Django Mercury has comprehensive testing for both Python and C components. We provide helper scripts to make testing easy.
+
+#### Test Structure
+```
+tests/                      # Python tests
+├── test_complete_integration.py
+├── test_c_extensions.py
+├── monitor/               # Monitor-specific tests
+└── ...
+
+django_mercury/c_core/tests/  # C tests
+├── simple_test_*.c        # Basic unit tests
+├── comprehensive_test_*.c # Full feature tests
+├── edge_test_*.c         # Edge case tests
+└── coverage_boost_test.c  # Coverage improvement tests
+```
+
+#### Quick Test Commands
+
 ```bash
-# Run Python tests
-python test_runner.py
+# Run ALL Python tests with coverage
+pytest tests/ -v --cov=django_mercury --cov-report=term-missing
 
-# Test C extensions
-cd django_mercury/c_core
-make test
+# Run specific Python test file
+pytest tests/test_complete_integration.py -v
 
-# Check code quality
+# Run C tests using helper script (from project root)
+./c_run_tests.sh          # Run simple C tests
+./c_run_tests.sh coverage # Run C tests with coverage analysis
+./c_run_tests.sh all      # Run all C tests and coverage
+
+# Check Python code quality
 black django_mercury/
 isort django_mercury/
-flake8 django_mercury/
+ruff check django_mercury/
+
+# Quick build check
+python setup.py build_ext --inplace
+```
+
+#### Test Helpers
+
+**c_run_tests.sh** - C test runner script (in project root)
+- `./c_run_tests.sh test` - Run unit tests
+- `./c_run_tests.sh coverage` - Generate coverage report
+- `./c_run_tests.sh clean` - Clean test artifacts
+- `./c_run_tests.sh build` - Build C libraries
+- `./c_run_tests.sh benchmark` - Run performance benchmarks
+- `./c_run_tests.sh memcheck` - Memory leak detection (Linux)
+
+#### Adding New Tests
+
+**Python Tests:**
+1. Create test file in `tests/` directory
+2. Inherit from `unittest.TestCase` or `DjangoMercuryAPITestCase`
+3. Follow naming convention: `test_*.py`
+4. Example:
+```python
+# tests/test_my_feature.py
+import unittest
+from django_mercury import DjangoMercuryAPITestCase
+
+class TestMyFeature(DjangoMercuryAPITestCase):
+    def test_feature_works(self):
+        # Your test here
+        self.assertTrue(True)
+```
+
+**C Tests:**
+1. Create test file in `django_mercury/c_core/tests/`
+2. Follow naming convention: `simple_test_*.c` or `comprehensive_test_*.c`
+3. Include test framework: `#include "test_framework.h"`
+4. Register tests in the Makefile
+5. Example:
+```c
+// django_mercury/c_core/tests/simple_test_myfeature.c
+#include <stdio.h>
+#include <assert.h>
+#include "../myfeature.h"
+
+int main() {
+    printf("Testing my feature...\n");
+    assert(my_function() == expected_value);
+    printf("✓ All tests passed!\n");
+    return 0;
+}
 ```
 
 ### 4. Submitting Changes
@@ -133,8 +207,29 @@ We follow the Contributor Covenant Code of Conduct. Key points:
 
 ## Development Setup Tips
 
+### Quick Setup
+```bash
+# Clone and setup
+git clone https://github.com/your-username/Django-Mercury-Performance-Testing.git
+cd Django-Mercury-Performance-Testing
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -e ".[dev]"
+
+# Build C extensions
+./c_run_tests.sh build
+
+# Verify everything works
+pytest tests/ -v
+./c_run_tests.sh test
+```
+
 ### Building C Extensions
 ```bash
+# Using helper script (recommended)
+./c_run_tests.sh build
+
+# Or manually
 cd django_mercury/c_core
 make clean
 make
@@ -144,20 +239,46 @@ make test
 ### Running Specific Tests
 ```bash
 # Python tests
-pytest tests/test_specific.py::TestClass::test_method
+pytest tests/test_specific.py::TestClass::test_method -v
 
-# C tests
+# Run tests matching a pattern
+pytest tests/ -k "test_performance" -v
+
+# C tests - run individual test binary
 cd django_mercury/c_core
-./test_metrics_engine
+./simple_test_performance_monitor
+
+# Or use helper for all tests
+./c_run_tests.sh test
 ```
 
 ### Performance Testing Your Changes
 ```bash
-# Use the performance testing on itself!
+# Test the performance impact of your changes
+python test_performance_comparison.py
+
+# Use Mercury to test itself!
 python -c "
 from django_mercury import DjangoMercuryAPITestCase
 # Your performance test here
 "
+```
+
+### Debugging Tips
+```bash
+# Run Python tests with verbose output
+pytest tests/ -vvs
+
+# Debug C tests with gdb (Linux/Mac)
+cd django_mercury/c_core
+gdb ./simple_test_performance_monitor
+
+# Check for memory leaks (Linux)
+./c_run_tests.sh memcheck
+
+# Generate coverage reports
+pytest tests/ --cov=django_mercury --cov-report=html
+./c_run_tests.sh coverage
 ```
 
 ## Getting Help
