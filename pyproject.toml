@@ -13,7 +13,7 @@ authors = [
 maintainers = [
     {name = "Django Mercury Team", email = "mercury@djangoperformance.dev"}
 ]
-license = "GPL-3.0-or-later"
+license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
