@@ -20,6 +20,7 @@
 #include "common.h"
 #include <math.h>
 #include <ctype.h>
+#include <strings.h>  // For strncasecmp on macOS/POSIX systems
 
 // === CONSTANTS ===
 
@@ -558,14 +559,12 @@ static void update_n_plus_one_analysis(void) {
     }
     
     int max_cluster_size = 0;
-    int total_duplicates = 0;
     double max_cluster_time = 0.0;
     
     // Analyze all clusters
     for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
         QueryCluster* cluster = &g_analyzer->clusters[i];
         if (cluster->query_count > 1) {
-            total_duplicates += cluster->query_count;
             if (cluster->query_count > max_cluster_size) {
                 max_cluster_size = cluster->query_count;
             }

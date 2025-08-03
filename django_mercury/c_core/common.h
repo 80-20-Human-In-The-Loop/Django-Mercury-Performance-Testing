@@ -184,7 +184,7 @@ typedef struct MERCURY_ALIGNED(8) {
  * 
  * @return MercuryTimestamp containing current time in nanoseconds
  */
-MERCURY_INLINE MercuryTimestamp mercury_get_timestamp(void) {
+static inline MercuryTimestamp mercury_get_timestamp(void) {
     MercuryTimestamp ts = {0};
     
 #ifdef MERCURY_LINUX
