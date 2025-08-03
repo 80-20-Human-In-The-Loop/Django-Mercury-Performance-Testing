@@ -68,8 +68,8 @@ class TestErrorReporting(unittest.TestCase):
         
         error_message = str(context.exception)
         
-        # Should show relative path
-        self.assertIn("tests/test_error_reporting.py", error_message)
+        # Should show relative path (updated for new test structure)
+        self.assertIn("tests/core/test_error_reporting.py", error_message)
         self.assertIn(str(test_line), error_message)
         self.assertIn("test_file_name_with_relative_path", error_message)
         

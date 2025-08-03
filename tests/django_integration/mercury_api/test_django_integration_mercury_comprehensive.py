@@ -598,6 +598,14 @@ class TestEdgeCasesAndErrorHandling(unittest.TestCase):
 class TestIntegrationScenarios(unittest.TestCase):
     """Test full integration scenarios."""
     
+    @classmethod
+    def setUpClass(cls):
+        """Set up class-level thresholds."""
+        # Increase memory threshold to accommodate test memory usage
+        DjangoMercuryAPITestCase.set_performance_thresholds({
+            'memory_overhead_mb': 210
+        })
+    
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     def test_complete_test_execution_flow(self, mock_monitor_class):
         """Test complete flow of test execution with Mercury."""

@@ -18,7 +18,7 @@ def test_libperformance():
     print("Testing libperformance.so...")
     
     # Load library
-    lib_path = Path(__file__).parent.parent / "c_core" / "libperformance.so"
+    lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libperformance.so"
     lib = ctypes.CDLL(str(lib_path))
     
     # Define structure
@@ -115,7 +115,7 @@ def test_all_libraries():
     """Test that all C libraries can be loaded."""
     print("\nTesting all C libraries...")
     
-    c_core = Path(__file__).parent.parent / "c_core"
+    c_core = Path(__file__).parent.parent.parent / "django_mercury" / "c_core"
     libraries = [
         "libquery_analyzer.so",
         "libmetrics_engine.so", 

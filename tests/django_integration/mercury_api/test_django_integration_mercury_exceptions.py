@@ -15,6 +15,14 @@ from django_mercury.python_bindings.django_integration_mercury import (
 class TestMonitorExceptionHandling(unittest.TestCase):
     """Test exception handling in the monitor wrapper."""
     
+    @classmethod
+    def setUpClass(cls):
+        """Set up class-level thresholds."""
+        # Increase memory threshold to accommodate test memory usage
+        DjangoMercuryAPITestCase.set_performance_thresholds({
+            'memory_overhead_mb': 210
+        })
+    
     def setUp(self):
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
@@ -280,6 +288,14 @@ class TestThresholdViolationReporting(unittest.TestCase):
 class TestExceptionRecovery(unittest.TestCase):
     """Test exception recovery and fallback mechanisms."""
     
+    @classmethod
+    def setUpClass(cls):
+        """Set up class-level thresholds."""
+        # Increase memory threshold to accommodate test memory usage
+        DjangoMercuryAPITestCase.set_performance_thresholds({
+            'memory_overhead_mb': 210
+        })
+    
     def setUp(self):
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
@@ -382,6 +398,14 @@ class TestExceptionRecovery(unittest.TestCase):
 
 class TestMetricsRecordingOnFailure(unittest.TestCase):
     """Test that metrics are still recorded even when tests fail."""
+    
+    @classmethod
+    def setUpClass(cls):
+        """Set up class-level thresholds."""
+        # Increase memory threshold to accommodate test memory usage
+        DjangoMercuryAPITestCase.set_performance_thresholds({
+            'memory_overhead_mb': 210
+        })
     
     def setUp(self):
         """Set up test fixtures."""

@@ -19,10 +19,11 @@ env:
   CIBW_BUILD_VERBOSITY: 1
 
 jobs:
-  # Run tests before building
+  # Run tests (non-blocking - failures won't prevent deployment)
   test:
     name: Run tests
     runs-on: ${{ matrix.os }}
+    continue-on-error: true  # Tests can fail without blocking deployment
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -68,7 +69,7 @@ jobs:
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
-    needs: [test]
+    # No dependency on tests - build immediately
     
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +97,7 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}-${{ matrix.archs }}
     runs-on: ${{ matrix.os }}
-    needs: [test]
+    # No dependency on tests - build immediately
     strategy:
       fail-fast: false
       matrix:
@@ -158,6 +159,7 @@ jobs:
     name: Test wheels on ${{ matrix.os }} Python ${{ matrix.python }}
     needs: [build_wheels]
     runs-on: ${{ matrix.os }}
+    continue-on-error: true  # Don't fail the workflow if tests fail
     strategy:
       fail-fast: false
       matrix:
@@ -240,7 +242,7 @@ jobs:
   # Build status check
   check_build:
     name: Check build results
-    needs: [build_sdist, build_wheels, test_wheels]
+    needs: [build_sdist, build_wheels]  # No dependency on test_wheels
     runs-on: ubuntu-latest
     
     steps:

@@ -66,7 +66,7 @@ class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
             c_bindings.initialize_c_extensions()
         
         # Get direct access to libperformance.so
-        lib_path = Path(__file__).parent.parent / "django_mercury" / "c_core" / "libperformance.so"
+        lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libperformance.so"
         self.lib = ctypes.CDLL(str(lib_path))
         self._setup_ctypes()
     
@@ -203,7 +203,7 @@ class TestThreadSafety(unittest.TestCase):
         if not c_bindings.c_extensions._initialized:
             c_bindings.initialize_c_extensions()
         
-        lib_path = Path(__file__).parent.parent / "django_mercury" / "c_core" / "libperformance.so"
+        lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libperformance.so"
         self.lib = ctypes.CDLL(str(lib_path))
         self._setup_ctypes()
     
@@ -344,7 +344,7 @@ class TestErrorHandling(unittest.TestCase):
     
     def test_null_parameters(self):
         """Test handling of null parameters."""
-        lib_path = Path(__file__).parent.parent / "django_mercury" / "c_core" / "libperformance.so"
+        lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libperformance.so"
         lib = ctypes.CDLL(str(lib_path))
         
         # Configure function
