@@ -67,7 +67,7 @@ jobs:
       
       - name: Run Python tests
         run: |
-          python test_runner.py --coverage --verbose
+          python test_runner.py --coverage --ci
       
       - name: Run C Core Unit Tests (Linux/macOS)
         if: runner.os != 'Windows'

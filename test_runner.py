@@ -35,9 +35,10 @@ class TestTimeout(Exception):
 class TimedTextTestResult(unittest.TextTestResult):
     """Custom test result that tracks timing for each test."""
     
-    def __init__(self, stream, descriptions, verbosity):
+    def __init__(self, stream, descriptions, verbosity, ci_mode=False):
         super().__init__(stream, descriptions, verbosity)
         self.verbosity = verbosity  # Store verbosity for later use
+        self.ci_mode = ci_mode  # CI-friendly output mode
         self.test_times: Dict[str, float] = {}
         self.current_test_start: Optional[float] = None
         self.current_test_name: Optional[str] = None
@@ -56,8 +57,8 @@ class TimedTextTestResult(unittest.TextTestResult):
         self.current_test_start = time.time()
         self.current_test_name = test.id()
         
-        # Show test name in real-time
-        if self.verbosity >= 2:
+        # Show test name in real-time (unless in CI mode)
+        if self.verbosity >= 2 and not self.ci_mode:
             self.stream.write(f"\n🏃 Running: {test.id()} ... ")
             self.stream.flush()
     
@@ -99,42 +100,59 @@ class TimedTextTestResult(unittest.TextTestResult):
             self.module_color_stats[module_name][color_emoji] += 1
             self.all_tests_with_times.append((test_id, elapsed, color_emoji))
             
-            if self.verbosity >= 2:
-                self.stream.write(indicator)
-                self.stream.flush()
-            elif self.verbosity == 1 and elapsed > 0.5:
-                # Even in normal verbosity, show slow tests
-                self.stream.write(f"\n⚠️  SLOW TEST: {test_id} took {indicator}")
-                self.stream.flush()
+            if not self.ci_mode:
+                if self.verbosity >= 2:
+                    self.stream.write(indicator)
+                    self.stream.flush()
+                elif self.verbosity == 1 and elapsed > 0.5:
+                    # Even in normal verbosity, show slow tests
+                    self.stream.write(f"\n⚠️  SLOW TEST: {test_id} took {indicator}")
+                    self.stream.flush()
                 
         super().stopTest(test)
         
     def addSuccess(self, test):
         """Called when a test passes."""
         super().addSuccess(test)
-        if self.verbosity >= 2:
+        if self.verbosity >= 2 and not self.ci_mode:
             self.stream.write(" [PASS]")
+            self.stream.flush()
+        elif self.ci_mode and self.verbosity >= 1:
+            # In CI mode, just show a dot for progress
+            self.stream.write(".")
             self.stream.flush()
             
     def addError(self, test, err):
         """Called when a test has an error."""
         super().addError(test, err)
-        if self.verbosity >= 2:
+        if self.ci_mode:
+            # In CI mode, always show errors immediately
+            self.stream.write(f"\n❌ ERROR: {test.id()}\n")
+            self.stream.flush()
+        elif self.verbosity >= 2:
             self.stream.write(" [ERROR]")
             self.stream.flush()
             
     def addFailure(self, test, err):
         """Called when a test fails."""
         super().addFailure(test, err)
-        if self.verbosity >= 2:
+        if self.ci_mode:
+            # In CI mode, always show failures immediately
+            self.stream.write(f"\n❌ FAILURE: {test.id()}\n")
+            self.stream.flush()
+        elif self.verbosity >= 2:
             self.stream.write(" [FAIL]")
             self.stream.flush()
             
     def addSkip(self, test, reason):
         """Called when a test is skipped."""
         super().addSkip(test, reason)
-        if self.verbosity >= 2:
+        if self.verbosity >= 2 and not self.ci_mode:
             self.stream.write(" ⏭️")
+            self.stream.flush()
+        elif self.ci_mode and self.verbosity >= 1:
+            # In CI mode, show an 's' for skipped tests
+            self.stream.write("s")
             self.stream.flush()
 
 
@@ -143,9 +161,14 @@ class TimedTextTestRunner(unittest.TextTestRunner):
     
     resultclass = TimedTextTestResult
     
-    def __init__(self, timeout_seconds=5.0, **kwargs):
+    def __init__(self, timeout_seconds=5.0, ci_mode=False, **kwargs):
         super().__init__(**kwargs)
         self.timeout_seconds = timeout_seconds
+        self.ci_mode = ci_mode
+    
+    def _makeResult(self):
+        """Override to pass ci_mode to the result class."""
+        return self.resultclass(self.stream, self.descriptions, self.verbosity, self.ci_mode)
         
     @contextmanager
     def timeout_handler(self, test_name):
@@ -166,10 +189,18 @@ class TimedTextTestRunner(unittest.TextTestRunner):
     
     def run(self, test):
         """Run the test suite with timing."""
-        self.stream.write("\n[START] Starting Timed Test Run\n")
-        self.stream.write("=" * 70 + "\n")
-        self.stream.write("Legend: GREEN <0.1s | YELLOW 0.1-0.5s | RED >0.5s | CRITICAL >2s\n")
-        self.stream.write("=" * 70 + "\n")
+        if not self.ci_mode:
+            self.stream.write("\n[START] Starting Timed Test Run\n")
+            self.stream.write("=" * 70 + "\n")
+            self.stream.write("Legend: GREEN <0.1s | YELLOW 0.1-0.5s | RED >0.5s | CRITICAL >2s\n")
+            self.stream.write("=" * 70 + "\n")
+        else:
+            # Minimal header for CI mode
+            self.stream.write("\nRunning tests")
+            if test.countTestCases() > 0:
+                self.stream.write(f" ({test.countTestCases()} tests)")
+            self.stream.write(": ")
+            self.stream.flush()
         
         # Set a flag to prevent recursive test runs
         if hasattr(self, '_running') and self._running:
@@ -425,11 +456,11 @@ def get_test_modules() -> List[str]:
     return test_modules
 
 
-def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_timing: bool = False) -> bool:
+def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_timing: bool = False, ci_mode: bool = False) -> bool:
     """Run tests with coverage reporting."""
     if not COVERAGE_AVAILABLE:
         print("❌ Coverage not available, running tests without coverage")
-        return run_tests_without_coverage(test_modules, verbose, no_timing)
+        return run_tests_without_coverage(test_modules, verbose, no_timing, ci_mode)
     
     # Configure coverage
     cov = coverage.Coverage(
@@ -447,7 +478,7 @@ def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_t
     
     try:
         # Run the tests
-        success = run_tests_without_coverage(test_modules, verbose, no_timing)
+        success = run_tests_without_coverage(test_modules, verbose, no_timing, ci_mode)
         
         # Stop coverage
         cov.stop()
@@ -485,9 +516,10 @@ def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_t
         return False
 
 
-def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, no_timing: bool = False) -> bool:
+def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, no_timing: bool = False, ci_mode: bool = False) -> bool:
     """Run tests without coverage."""
-    print("[TEST] Running unit tests...")
+    if not ci_mode:
+        print("[TEST] Running unit tests...")
     
     # Create test suite
     loader = unittest.TestLoader()
@@ -497,7 +529,8 @@ def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, n
         try:
             module = __import__(module_name, fromlist=[''])
             suite.addTests(loader.loadTestsFromModule(module))
-            print(f"[PASS] Loaded tests from {module_name}")
+            if not ci_mode:
+                print(f"[PASS] Loaded tests from {module_name}")
         except ImportError as e:
             print(f"[WARNING] Could not import {module_name}: {e}")
             print(f"   [HINT] Check for syntax errors or missing dependencies in the module")
@@ -516,7 +549,7 @@ def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, n
     if no_timing:
         runner = unittest.TextTestRunner(verbosity=verbosity, buffer=False)
     else:
-        runner = TimedTextTestRunner(verbosity=verbosity, buffer=False, timeout_seconds=5.0)
+        runner = TimedTextTestRunner(verbosity=verbosity, buffer=False, timeout_seconds=5.0, ci_mode=ci_mode)
     result = runner.run(suite)
     
     # Print summary
@@ -548,14 +581,14 @@ def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, n
     return success
 
 
-def run_specific_module_tests(module_name: str, verbose: bool = False, with_coverage: bool = False, no_timing: bool = False) -> bool:
+def run_specific_module_tests(module_name: str, verbose: bool = False, with_coverage: bool = False, no_timing: bool = False, ci_mode: bool = False) -> bool:
     """Run tests for a specific module."""
     test_module = f"tests.test_{module_name}"
     
     if with_coverage and COVERAGE_AVAILABLE:
-        return run_tests_with_coverage([test_module], verbose, no_timing)
+        return run_tests_with_coverage([test_module], verbose, no_timing, ci_mode)
     else:
-        return run_tests_without_coverage([test_module], verbose, no_timing)
+        return run_tests_without_coverage([test_module], verbose, no_timing, ci_mode)
 
 
 def run_c_integration_tests(verbose: bool = False) -> bool:
@@ -686,8 +719,16 @@ def main():
             action="store_true",
             help="Disable test timing (use standard runner)"
         )
+        parser.add_argument(
+            "--ci", "--ci-mode",
+            action="store_true",
+            help="CI-friendly output mode (minimal output, only show failures)"
+        )
         
         args = parser.parse_args()
+        
+        # Auto-detect CI environment
+        ci_mode = args.ci or os.environ.get('CI', '').lower() in ['true', '1', 'yes']
         
         # Setup environment
         setup_test_environment()
@@ -721,15 +762,17 @@ def main():
             success = success and c_success
         
         if args.module:
-            print(f"[TARGET] Running tests for module: {args.module}")
-            module_success = run_specific_module_tests(args.module, args.verbose, args.coverage, args.no_timing)
+            if not ci_mode:
+                print(f"[TARGET] Running tests for module: {args.module}")
+            module_success = run_specific_module_tests(args.module, args.verbose, args.coverage, args.no_timing, ci_mode)
             success = success and module_success
         elif not args.c_tests or args.all:  # Run Python tests if not just C tests
-            print(f"[TEST] Running all tests ({len(test_modules)} modules)")
+            if not ci_mode:
+                print(f"[TEST] Running all tests ({len(test_modules)} modules)")
             if args.coverage:
-                python_success = run_tests_with_coverage(test_modules, args.verbose, args.no_timing)
+                python_success = run_tests_with_coverage(test_modules, args.verbose, args.no_timing, ci_mode)
             else:
-                python_success = run_tests_without_coverage(test_modules, args.verbose, args.no_timing)
+                python_success = run_tests_without_coverage(test_modules, args.verbose, args.no_timing, ci_mode)
             success = success and python_success
         
         # Final summary

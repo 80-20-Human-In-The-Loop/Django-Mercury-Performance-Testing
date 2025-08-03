@@ -207,8 +207,8 @@ void increment_cache_misses(void) {
  * @return Handle for the monitoring session, -1 on error
  */
 int64_t start_performance_monitoring_enhanced(const char* operation_name, const char* operation_type) {
-    if (!operation_name || !operation_type) {
-        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation name and type cannot be NULL");
+    if (!operation_name) {
+        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation name cannot be NULL");
         return -1;
     }
     
@@ -249,7 +249,9 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
     strncpy(metrics->operation_name, operation_name, sizeof(metrics->operation_name) - 1);
     metrics->operation_name[sizeof(metrics->operation_name) - 1] = '\0';
     
-    strncpy(metrics->operation_type, operation_type, sizeof(metrics->operation_type) - 1);
+    // Use default type if not provided
+    const char* type_to_use = operation_type ? operation_type : "unknown";
+    strncpy(metrics->operation_type, type_to_use, sizeof(metrics->operation_type) - 1);
     metrics->operation_type[sizeof(metrics->operation_type) - 1] = '\0';
     
     // Initialize session-specific data

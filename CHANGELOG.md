@@ -5,6 +5,35 @@ All notable changes to Django Mercury Performance Testing will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.2] - 2025-08-03
+
+### Fixed
+- Python 3.8 compatibility issues with type hints (List[Path] instead of list[Path])
+- Windows build failures for C11 atomics support (added /std:c11 flag for MSVC)
+- Unicode encoding errors on Windows (replaced emoji characters with ASCII equivalents)
+- CI/CD build order ensuring C libraries are compiled before tests run
+- Cross-platform compilation issues (POSIX compatibility, platform-specific flags)
+
+### Added
+- Pure Python fallback mode when C extensions are unavailable
+- Enhanced test runner script (c_test_runner.sh) with coverage and debugging capabilities
+- Comprehensive C test suite including edge cases and boundary testing
+- Multi-OS CI/CD support via GitHub Actions (Linux, macOS, Windows)
+- DJANGO_MERCURY_PURE_PYTHON environment variable for forcing fallback mode
+
+### Changed
+- Improved CI/CD architecture using cibuildwheel for multi-platform wheel building
+- Refactored test structure with better organization and separation
+- Enhanced error handling and recovery in C extension loading
+- Better distinction between Python C extensions and standalone C libraries
+
+### Internal
+- Extensive test suite improvements with higher coverage
+- Added simple_test targets in Makefile for easier testing
+- Improved build system robustness with better error messages
+- Reorganized test files for clarity and maintainability
+- Added comprehensive performance monitoring tests
+
 ## [0.0.1] - 2025-08-02
 
 ### Added

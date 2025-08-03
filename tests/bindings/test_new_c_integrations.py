@@ -72,20 +72,23 @@ class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
     
     def _setup_ctypes(self):
         """Configure ctypes for the C functions."""
-        # Define the structure
+        # Define the structure - must match the C structure exactly
+        # ctypes automatically adds 4 bytes padding after session_cache_misses for alignment
         class EnhancedPerformanceMetrics(ctypes.Structure):
             _fields_ = [
-                ("start_time_ns", ctypes.c_uint64),
-                ("end_time_ns", ctypes.c_uint64),
-                ("memory_start_bytes", ctypes.c_size_t),
-                ("memory_peak_bytes", ctypes.c_size_t),
-                ("memory_end_bytes", ctypes.c_size_t),
-                ("query_count_start", ctypes.c_uint32),
-                ("query_count_end", ctypes.c_uint32),
-                ("cache_hits", ctypes.c_uint32),
-                ("cache_misses", ctypes.c_uint32),
-                ("operation_name", ctypes.c_char * 256),
-                ("operation_type", ctypes.c_char * 64)
+                ("start_time_ns", ctypes.c_uint64),           # offset 0
+                ("end_time_ns", ctypes.c_uint64),             # offset 8
+                ("memory_start_bytes", ctypes.c_size_t),      # offset 16
+                ("memory_peak_bytes", ctypes.c_size_t),       # offset 24
+                ("memory_end_bytes", ctypes.c_size_t),        # offset 32
+                ("session_query_count", ctypes.c_uint32),     # offset 40
+                ("session_cache_hits", ctypes.c_uint32),      # offset 44
+                ("session_cache_misses", ctypes.c_uint32),    # offset 48
+                # ctypes automatically adds 4 bytes padding here for alignment
+                ("operation_name", ctypes.c_char * 256),      # offset 52
+                ("operation_type", ctypes.c_char * 64),       # offset 308
+                ("session_mutex", ctypes.c_byte * 40),        # offset 376 (pthread_mutex_t)
+                ("session_id", ctypes.c_int64)                # offset 416
             ]
         
         self.EnhancedPerformanceMetrics = EnhancedPerformanceMetrics
@@ -216,12 +219,14 @@ class TestThreadSafety(unittest.TestCase):
                 ("memory_start_bytes", ctypes.c_size_t),
                 ("memory_peak_bytes", ctypes.c_size_t),
                 ("memory_end_bytes", ctypes.c_size_t),
-                ("query_count_start", ctypes.c_uint32),
-                ("query_count_end", ctypes.c_uint32),
-                ("cache_hits", ctypes.c_uint32),
-                ("cache_misses", ctypes.c_uint32),
+                ("session_query_count", ctypes.c_uint32),
+                ("session_cache_hits", ctypes.c_uint32),
+                ("session_cache_misses", ctypes.c_uint32),
+                # ctypes automatically adds 4 bytes padding here
                 ("operation_name", ctypes.c_char * 256),
-                ("operation_type", ctypes.c_char * 64)
+                ("operation_type", ctypes.c_char * 64),
+                ("session_mutex", ctypes.c_byte * 40),
+                ("session_id", ctypes.c_int64)
             ]
         
         self.lib.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]

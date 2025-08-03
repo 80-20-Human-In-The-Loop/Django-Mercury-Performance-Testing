@@ -81,10 +81,10 @@ debug = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Django-Mercury/Performance-Testing"
-Documentation = "https://github.com/Django-Mercury/Performance-Testing#readme"
-Repository = "https://github.com/Django-Mercury/Performance-Testing.git"
-"Bug Tracker" = "https://github.com/Django-Mercury/Performance-Testing/issues"
+Homepage = "https://pypi.org/project/django-mercury-performance/"
+Documentation = "https://github.com/80-20-Human-In-The-Loop/Django-Mercury-Performance-Testing/wiki"
+Repository = "https://github.com/80-20-Human-In-The-Loop/Django-Mercury-Performance-Testing"
+"Bug Tracker" = "https://github.com/80-20-Human-In-The-Loop/Django-Mercury-Performance-Testing/issues"
 Changelog = "https://github.com/Django-Mercury/Performance-Testing/blob/main/CHANGELOG.md"
 
 [project.scripts]
