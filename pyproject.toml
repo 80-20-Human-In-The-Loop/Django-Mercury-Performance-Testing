@@ -156,7 +156,7 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "tests.settings"
+DJANGO_SETTINGS_MODULE = "tests.config.test_settings"
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 addopts = [
@@ -244,10 +244,19 @@ skip = [
 build-verbosity = 1
 
 # Environment variables - suppress warnings during build
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1"}
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
 
-# Simple test that doesn't depend on external packages
-test-command = "python -c \"import django_mercury; print('SUCCESS: Package installed')\""
+# Build settings - try C extensions but fall back to pure Python if needed
+environment-pass = ["DJANGO_MERCURY_PURE_PYTHON"]
+
+# Pre-build check to ensure build tools are available
+before-build = "python -c \"import sys; print(f'Building for Python {sys.version}'); import setuptools; print(f'setuptools: {setuptools.__version__}')\""
+
+# Simple test that doesn't depend on Django configuration - just test basic imports
+test-command = [
+    "python -c \"import django_mercury; print(f'✅ django-mercury {django_mercury.__version__} imported successfully')\"",
+    "python -c \"from django_mercury.python_bindings.loader import get_implementation_info; print(f'📊 Implementation: {get_implementation_info()}')\""
+]
 
 # Don't test on emulated architectures (too slow)
 test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
@@ -259,7 +268,10 @@ manylinux-x86_64-image = "manylinux2014"
 manylinux-aarch64-image = "manylinux2014"
 
 # Install system dependencies for C compilation
-before-all = "yum install -y gcc make python3-devel || true"
+before-all = [
+    "yum install -y gcc make python3-devel || apt-get update && apt-get install -y build-essential python3-dev || true",
+    "python -c \"import sys; print(f'Python: {sys.version}')\"",
+]
 
 # macOS-specific configuration  
 [tool.cibuildwheel.macos]
@@ -267,12 +279,15 @@ before-all = "yum install -y gcc make python3-devel || true"
 archs = ["x86_64", "arm64", "universal2"]
 
 # Set deployment target for compatibility
-environment = {MACOSX_DEPLOYMENT_TARGET="10.9"}
+environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
 
 # Windows-specific configuration
 [tool.cibuildwheel.windows]
 # Only build 64-bit
 archs = ["AMD64"]
+
+# Environment variables for Windows
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1"}
 
 # Install delvewheel for wheel repair
 before-build = "pip install delvewheel"
