@@ -13,7 +13,7 @@ Basic Usage:
             # Performance is automatically monitored and analyzed
 """
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 __author__ = 'Django Mercury Team'
 
 # Lazy imports to avoid Django configuration issues during installation

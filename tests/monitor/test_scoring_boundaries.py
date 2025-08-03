@@ -55,17 +55,18 @@ class TestMetricsScoring(unittest.TestCase):
         # Test exact boundary values to hit specific lines
         test_cases = [
             # (response_time, expected_score_range)
-            (0.0, (90, 100)),      # Excellent
-            (49.9, (90, 100)),     # Still excellent
-            (50.0, (75, 90)),      # Good (line 241)
-            (99.9, (75, 90)),      # Still good
-            (100.0, (60, 75)),     # Fair (line 245)
-            (199.9, (60, 75)),     # Still fair
-            (200.0, (40, 60)),     # Slow (line 247)
-            (499.9, (40, 60)),     # Still slow
-            (500.0, (20, 40)),     # Very slow
-            (999.9, (20, 40)),     # Still very slow
-            (1000.0, (0, 20)),     # Extremely slow
+            # Note: Response time score is out of 30 points max, not 100
+            (0.0, (29, 30)),       # Excellent (<=10ms gets 30 points)
+            (49.9, (24, 26)),      # Good (<=50ms gets 25 points)
+            (50.0, (24, 26)),      # Good (line 241) 
+            (99.9, (19, 21)),      # Good (<=100ms gets 20 points)
+            (100.0, (19, 21)),     # Fair (line 245)
+            (199.9, (11, 13)),     # Acceptable (<=200ms gets 12 points)
+            (200.0, (11, 13)),     # Slow (line 247)
+            (499.9, (4, 6)),       # Slow (<=500ms gets 5 points)
+            (500.0, (4, 6)),       # Very slow
+            (999.9, (1, 3)),       # Very slow (<=1000ms gets 2 points)
+            (1000.0, (1, 3)),      # Very slow (exactly 1000ms still gets 2 points)
         ]
         
         for response_time, expected_range in test_cases:
@@ -100,15 +101,17 @@ class TestMetricsScoring(unittest.TestCase):
         # Test memory delta scoring boundaries
         test_cases = [
             # (memory_delta_mb, expected_score_range)
-            (0.0, (90, 100)),      # No memory increase
-            (9.9, (90, 100)),      # Still excellent
-            (10.0, (75, 90)),      # Small increase (line 759)
-            (49.9, (75, 90)),      # Still small
-            (50.0, (50, 75)),      # Moderate (line 761)
-            (99.9, (50, 75)),      # Still moderate
-            (100.0, (25, 50)),     # High (line 763)
-            (199.9, (25, 50)),     # Still high
-            (200.0, (0, 25)),      # Very high
+            # Note: Memory efficiency score is out of 20 points max, not 100
+            # The scoring is based on memory_overhead, not memory_delta directly
+            (0.0, (13, 15)),       # No memory increase (<=30MB overhead gets 14 points)
+            (9.9, (13, 15)),       # Still excellent
+            (10.0, (13, 15)),      # Small increase (line 759)
+            (49.9, (2, 4)),        # Getting higher (<=100MB overhead gets 3 points)
+            (50.0, (2, 4)),        # Moderate (line 761)
+            (99.9, (0, 1)),        # High overhead
+            (100.0, (0, 1)),       # High (line 763)
+            (199.9, (0, 1)),       # Very high
+            (200.0, (0, 1)),       # Extremely high
         ]
         
         for memory_delta, expected_range in test_cases:

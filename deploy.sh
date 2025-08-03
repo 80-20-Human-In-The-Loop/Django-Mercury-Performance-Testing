@@ -56,6 +56,7 @@ DRY_RUN=false
 FORCE=false
 SKIP_TESTS=false
 COVERAGE_THRESHOLD=75  # Lower threshold for initial release
+PYPI_PURE_PYTHON=false  # Default to building with C extensions
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -70,6 +71,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-tests)
             SKIP_TESTS=true
+            shift
+            ;;
+        --pure-python)
+            PYPI_PURE_PYTHON=true
             shift
             ;;
         --coverage-threshold)
@@ -91,11 +96,13 @@ while [[ $# -gt 0 ]]; do
             echo "  --dry-run              Run all checks without deploying"
             echo "  --force                Bypass some safety checks"
             echo "  --skip-tests           Skip test execution (not recommended)"
+            echo "  --pure-python          Build pure Python wheel (no C extensions)"
             echo "  --coverage-threshold   Set coverage threshold (default: 75)"
             echo "  --help, -h             Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0                     # Full deployment"
+            echo "  $0                     # Full deployment with C extensions"
+            echo "  $0 --pure-python       # Deploy pure Python version (universal)"
             echo "  $0 --dry-run           # Test deployment process"
             echo ""
             echo_highlight "⚡ Performance Testing for Django Applications ⚡"
@@ -346,6 +353,12 @@ echo_info "  Version: $PYPROJECT_VERSION"
 echo_info "  Public documentation: README.md"
 echo_info "  Packaging controlled by: MANIFEST.in"
 
+if [ "$PYPI_PURE_PYTHON" = true ]; then
+    echo_info "  Build type: Pure Python (universal wheel)"
+else
+    echo_info "  Build type: With C extensions (platform-specific)"
+fi
+
 # ==========================================
 # TESTING (Optional for initial release)
 # ==========================================
@@ -398,17 +411,30 @@ echo_success "Build environment cleaned"
 
 # Build package
 echo_info "Building package..."
-if ! python -m build; then
+
+# Check if we should build pure Python for PyPI
+if [ "$PYPI_PURE_PYTHON" = "true" ] || [ "$FORCE_PURE_PYTHON" = "true" ]; then
+    echo_info "Building pure Python wheel for maximum compatibility..."
+    DJANGO_MERCURY_PURE_PYTHON=1 python -m build
+else
+    echo_info "Building with C extensions (platform-specific wheel)..."
+    python -m build
+fi
+
+if [ $? -ne 0 ]; then
     echo_error "Package build failed!"
     exit 1
 fi
 
-# Verify build outputs
-if [ ! -f "dist/django_mercury_performance-${PYPROJECT_VERSION}-py3-none-any.whl" ]; then
-    echo_error "Wheel file not found!"
+# Verify build outputs - handle both pure Python and platform-specific wheels
+WHEEL_FILE=$(ls dist/*.whl 2>/dev/null | head -n1)
+if [ -z "$WHEEL_FILE" ]; then
+    echo_error "No wheel file found!"
     exit 1
 fi
+echo_success "Found wheel: $(basename $WHEEL_FILE)"
 
+# Check for source distribution
 if [ ! -f "dist/django_mercury_performance-${PYPROJECT_VERSION}.tar.gz" ]; then
     echo_error "Source distribution not found!"
     exit 1
@@ -444,7 +470,7 @@ source "$TEMP_VENV/bin/activate"
 
 # Install the package locally
 echo_info "Installing package from wheel..."
-if ! pip install dist/django_mercury_performance-${PYPROJECT_VERSION}-py3-none-any.whl; then
+if ! pip install "$WHEEL_FILE"; then
     echo_error "Local package installation failed!"
     deactivate
     rm -rf "$TEMP_VENV"

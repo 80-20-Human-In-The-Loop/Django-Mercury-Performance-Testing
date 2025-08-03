@@ -399,9 +399,28 @@ def get_test_modules() -> List[str]:
     tests_dir = PERFORMANCE_TESTING_ROOT / "tests"
     test_modules = []
     
-    for test_file in tests_dir.glob("test_*.py"):
-        module_name = test_file.stem
-        test_modules.append(f"tests.{module_name}")
+    # Define test subdirectories
+    test_subdirs = [
+        'monitor',
+        'django_integration/mercury_api',
+        'django_integration/performance_api',
+        'hooks',
+        'bindings',
+        'core',
+        'config',
+        'integration'
+    ]
+    
+    # Discover tests from each subdirectory
+    for subdir in test_subdirs:
+        subdir_path = tests_dir / subdir
+        if subdir_path.exists():
+            # Get all test files in this subdirectory
+            for test_file in subdir_path.glob("test_*.py"):
+                # Construct the module path
+                module_parts = ['tests'] + subdir.split('/') + [test_file.stem]
+                module_name = '.'.join(module_parts)
+                test_modules.append(module_name)
     
     return test_modules
 
@@ -557,7 +576,7 @@ def run_c_integration_tests(verbose: bool = False) -> bool:
     
     # Run the integration test
     try:
-        test_script = PERFORMANCE_TESTING_ROOT / "tests" / "test_c_integration_simple.py"
+        test_script = PERFORMANCE_TESTING_ROOT / "tests" / "bindings" / "test_c_integration_simple.py"
         if test_script.exists():
             import subprocess
             result = subprocess.run(

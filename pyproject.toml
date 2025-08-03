@@ -4,24 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-mercury-performance"
-version = "0.0.1"
+version = "0.0.2"
 description = "A performance testing framework for Django that helps you understand and fix performance issues, not just detect them"
 readme = "README.md"
 authors = [
-    {name = "Django Mercury Team", email = "mercury@djangoperformance.dev"}
+    {name = "Django Mercury Team", email = "mathewstormdev@gmail.com"}
 ]
 maintainers = [
-    {name = "Django Mercury Team", email = "mercury@djangoperformance.dev"}
+    {name = "Mathew Storm", email = "mathewstormdev@gmail.com"}
 ]
 license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Django",
-    "Framework :: Django :: 3.2",
-    "Framework :: Django :: 4.0",
-    "Framework :: Django :: 4.1",
-    "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.0",
     "Framework :: Django :: 5.1",
     "Intended Audience :: Developers",
