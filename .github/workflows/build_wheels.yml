@@ -42,16 +42,32 @@ jobs:
           pip install -e ".[dev]"
           pip install pytest-cov
       
-      - name: Run Python tests
+      - name: Build C libraries (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
-          python test_runner.py --coverage --verbose
+          echo "Building C libraries..."
+          cd django_mercury/c_core
+          make clean
+          make all
+          echo "Checking built libraries:"
+          ls -la *.so || echo "No .so files found"
+          cd ../..
       
-      - name: Test C extensions (Linux/macOS)
+      - name: Build Python C extensions (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           python setup.py build_ext --inplace
           python -c "from django_mercury.python_bindings.loader import check_c_extensions; available, details = check_c_extensions(); print(f'C Extensions: {available}')"
           echo "C extensions built successfully"
+      
+      - name: Set Windows to use pure Python
+        if: runner.os == 'Windows'
+        run: |
+          echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+      
+      - name: Run Python tests
+        run: |
+          python test_runner.py --coverage --verbose
       
       - name: Run C Core Unit Tests (Linux/macOS)
         if: runner.os != 'Windows'
