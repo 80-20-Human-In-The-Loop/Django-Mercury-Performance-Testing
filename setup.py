@@ -109,7 +109,7 @@ def get_c_extensions():
     # Platform-specific compilation flags  
     if sys.platform == 'win32':
         # Windows with MSVC
-        compile_args = ['/O2', '/W3']
+        compile_args = ['/O2', '/W3', '/std:c11']  # Add C11 standard for atomics
         link_args = []
         libraries = []
     elif sys.platform == 'darwin':

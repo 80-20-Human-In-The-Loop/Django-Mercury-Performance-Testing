@@ -232,9 +232,9 @@ jobs:
           python -c "
           try:
               import django_mercury
-              print(f'✅ SUCCESS: django-mercury {django_mercury.__version__} imported')
+              print(f'[SUCCESS] django-mercury {django_mercury.__version__} imported')
           except Exception as e:
-              print(f'❌ FAILED: Import failed - {e}')
+              print(f'[FAILED] Import failed - {e}')
               exit(1)
           " || {
             echo "Import test failed, but continuing..."

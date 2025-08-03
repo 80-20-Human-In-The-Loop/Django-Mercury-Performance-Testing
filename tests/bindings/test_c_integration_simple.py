@@ -108,7 +108,7 @@ def test_libperformance():
     assert handle == -1
     print("  ✓ NULL operation name returns -1")
     
-    print("\n✅ All tests passed!")
+    print("\n[PASS] All tests passed!")
 
 
 def test_all_libraries():
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 60)
     if success:
-        print("✅ ALL TESTS PASSED")
+        print("[PASS] ALL TESTS PASSED")
     else:
         print("❌ SOME TESTS FAILED")
         sys.exit(1)

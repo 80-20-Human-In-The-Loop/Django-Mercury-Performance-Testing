@@ -45,9 +45,9 @@ class TimedTextTestResult(unittest.TextTestResult):
         self.module_times: Dict[str, float] = defaultdict(float)
         
         # Enhanced performance tracking
-        self.color_counts = {'GREEN': 0, 'YELLOW': 0, 'RED': 0, 'CRITICAL': 0}
-        self.color_tests = {'GREEN': [], 'YELLOW': [], 'RED': [], 'CRITICAL': []}
-        self.module_color_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'GREEN': 0, 'YELLOW': 0, 'RED': 0, 'CRITICAL': 0})
+        self.color_counts = {'🟢': 0, '🟡': 0, '🔴': 0, '💀': 0}
+        self.color_tests = {'🟢': [], '🟡': [], '🔴': [], '💀': []}
+        self.module_color_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'🟢': 0, '🟡': 0, '🔴': 0, '💀': 0})
         self.all_tests_with_times: List[Tuple[str, float, str]] = []  # (test_name, time, color)
         
     def startTest(self, test):
@@ -76,22 +76,22 @@ class TimedTextTestResult(unittest.TextTestResult):
             color_emoji = ''
             if elapsed > 2.0:
                 # Critical - purple/black for tests over 2 seconds
-                indicator = f"\033[35mCRITICAL {elapsed:.3f}s - CRITICAL SLOWNESS!\033[0m"
-                color_emoji = 'CRITICAL'
+                indicator = f"\033[35m💀 {elapsed:.3f}s - CRITICAL SLOWNESS!\033[0m"
+                color_emoji = '💀'
                 self.slow_tests.append((test_id, elapsed))
             elif elapsed > 0.5:
                 # Big red warning for tests over 0.5 seconds
-                indicator = f"\033[1;31mRED {elapsed:.3f}s - TOO SLOW!\033[0m"
-                color_emoji = 'RED'
+                indicator = f"\033[1;31m🔴 {elapsed:.3f}s - TOO SLOW!\033[0m"
+                color_emoji = '🔴'
                 self.slow_tests.append((test_id, elapsed))
             elif elapsed > 0.1:
                 # Yellow warning for tests 0.1-0.5 seconds
-                indicator = f"\033[33mYELLOW {elapsed:.3f}s\033[0m"
-                color_emoji = 'YELLOW'
+                indicator = f"\033[33m🟡 {elapsed:.3f}s\033[0m"
+                color_emoji = '🟡'
             else:
                 # Green for fast tests
-                indicator = f"\033[32mGREEN {elapsed:.3f}s\033[0m"
-                color_emoji = 'GREEN'
+                indicator = f"\033[32m🟢 {elapsed:.3f}s\033[0m"
+                color_emoji = '🟢'
             
             # Track color statistics
             self.color_counts[color_emoji] += 1
@@ -166,9 +166,9 @@ class TimedTextTestRunner(unittest.TextTestRunner):
     
     def run(self, test):
         """Run the test suite with timing."""
-        self.stream.write("\n[START] Starting Timed Test Run\n")
+        self.stream.write("\n🚀 Starting Timed Test Run\n")
         self.stream.write("=" * 70 + "\n")
-        self.stream.write("Legend: GREEN <0.1s | YELLOW 0.1-0.5s | RED >0.5s | CRITICAL >2s\n")
+        self.stream.write("Legend: 🟢 <0.1s | 🟡 0.1-0.5s | 🔴 >0.5s | 💀 >2s\n")
         self.stream.write("=" * 70 + "\n")
         
         # Set a flag to prevent recursive test runs
@@ -192,7 +192,7 @@ class TimedTextTestRunner(unittest.TextTestRunner):
     def _print_performance_summary(self, result, total_time):
         """Print a detailed performance summary."""
         self.stream.write("\n" + "=" * 70 + "\n")
-        self.stream.write("[STATS] PERFORMANCE SUMMARY\n")
+        self.stream.write("📊 PERFORMANCE SUMMARY\n")
         self.stream.write("=" * 70 + "\n")
         
         # Overall stats
@@ -209,15 +209,15 @@ class TimedTextTestRunner(unittest.TextTestRunner):
             sorted_slow = sorted(result.slow_tests, key=lambda x: x[1], reverse=True)
             for i, (test_name, elapsed) in enumerate(sorted_slow[:10], 1):
                 if elapsed > 2.0:
-                    self.stream.write(f"{i}. \033[35mCRITICAL {test_name}: {elapsed:.3f}s\033[0m\n")
+                    self.stream.write(f"{i}. \033[35m💀 {test_name}: {elapsed:.3f}s\033[0m\n")
                 elif elapsed > 0.5:
-                    self.stream.write(f"{i}. \033[31mRED {test_name}: {elapsed:.3f}s\033[0m\n")
+                    self.stream.write(f"{i}. \033[31m🔴 {test_name}: {elapsed:.3f}s\033[0m\n")
                 else:
-                    self.stream.write(f"{i}. \033[33mYELLOW {test_name}: {elapsed:.3f}s\033[0m\n")
+                    self.stream.write(f"{i}. \033[33m🟡 {test_name}: {elapsed:.3f}s\033[0m\n")
         
         # Module timing breakdown
         if result.module_times:
-            self.stream.write("\n[MODULE] TIME BY MODULE:\n")
+            self.stream.write("\n📦 TIME BY MODULE:\n")
             self.stream.write("-" * 50 + "\n")
             sorted_modules = sorted(result.module_times.items(), key=lambda x: x[1], reverse=True)
             for module, module_time in sorted_modules:
@@ -244,21 +244,21 @@ class TimedTextTestRunner(unittest.TextTestRunner):
         if total_tests == 0:
             return
             
-        self.stream.write("\n[TARGET] PERFORMANCE ANALYTICS\n")
+        self.stream.write("\n🎯 PERFORMANCE ANALYTICS\n")
         self.stream.write("=" * 70 + "\n")
         self.stream.write("Test Distribution:\n")
         
-        for color, count in [('CRITICAL', result.color_counts['CRITICAL']), 
-                           ('RED', result.color_counts['RED']), 
-                           ('YELLOW', result.color_counts['YELLOW']), 
-                           ('GREEN', result.color_counts['GREEN'])]:
+        for color, count in [('💀', result.color_counts['💀']), 
+                           ('🔴', result.color_counts['🔴']), 
+                           ('🟡', result.color_counts['🟡']), 
+                           ('🟢', result.color_counts['🟢'])]:
             if count > 0:
                 percentage = (count / total_tests) * 100
-                if color == 'CRITICAL':
+                if color == '💀':
                     category = "Critical (>2s)"
-                elif color == 'RED':
+                elif color == '🔴':
                     category = "Slow (0.5-2s)"
-                elif color == 'YELLOW':
+                elif color == '🟡':
                     category = "Medium (0.1-0.5s)"
                 else:
                     category = "Fast (<0.1s)"
@@ -269,13 +269,13 @@ class TimedTextTestRunner(unittest.TextTestRunner):
         if not result.module_color_stats:
             return
             
-        self.stream.write("\n[STATS] MODULE PERFORMANCE ANALYSIS\n")
+        self.stream.write("\n📊 MODULE PERFORMANCE ANALYSIS\n")
         self.stream.write("-" * 70 + "\n")
         
         # Find modules with slow tests
         modules_with_slow_tests = []
         for module, stats in result.module_color_stats.items():
-            slow_count = stats['RED'] + stats['CRITICAL']
+            slow_count = stats['🔴'] + stats['💀']
             if slow_count > 0:
                 modules_with_slow_tests.append((module, slow_count, stats))
         
@@ -286,57 +286,57 @@ class TimedTextTestRunner(unittest.TextTestRunner):
             
             for i, (module, slow_count, stats) in enumerate(modules_with_slow_tests[:5], 1):
                 detail = []
-                if stats['CRITICAL'] > 0:
-                    detail.append(f"{stats['CRITICAL']}CRITICAL")
-                if stats['RED'] > 0:
-                    detail.append(f"{stats['RED']}RED")
-                if stats['YELLOW'] > 0:
-                    detail.append(f"{stats['YELLOW']}YELLOW")
+                if stats['💀'] > 0:
+                    detail.append(f"{stats['💀']}💀")
+                if stats['🔴'] > 0:
+                    detail.append(f"{stats['🔴']}🔴")
+                if stats['🟡'] > 0:
+                    detail.append(f"{stats['🟡']}🟡")
                 detail_str = ", ".join(detail) if detail else ""
                 self.stream.write(f"  {i}. {module}: {slow_count} slow tests ({detail_str})\n")
         else:
-            self.stream.write("[SUCCESS] No modules have slow tests!\n")
+            self.stream.write("🎉 No modules have slow tests!\n")
     
     def _get_performance_insights(self, result):
         """Generate smart performance insights based on test distribution."""
-        self.stream.write("\n[METRICS] PERFORMANCE INSIGHTS\n")
+        self.stream.write("\n📈 PERFORMANCE INSIGHTS\n")
         self.stream.write("-" * 70 + "\n")
         
         # Smart reporting based on what categories exist
-        if result.color_counts['CRITICAL'] > 0:
+        if result.color_counts['💀'] > 0:
             # Focus on critical tests
             self.stream.write("🚨 CRITICAL ATTENTION NEEDED:\n")
-            critical_tests = sorted(result.color_tests['CRITICAL'], key=lambda x: x[1], reverse=True)
+            critical_tests = sorted(result.color_tests['💀'], key=lambda x: x[1], reverse=True)
             for i, (test_name, elapsed) in enumerate(critical_tests[:5], 1):
                 self.stream.write(f"  {i}. {test_name}: {elapsed:.3f}s\n")
                 
-        elif result.color_counts['RED'] > 0:
+        elif result.color_counts['🔴'] > 0:
             # Focus on slow tests
             self.stream.write("⚠️  SLOW TESTS NEED OPTIMIZATION:\n")
-            slow_tests = sorted(result.color_tests['RED'], key=lambda x: x[1], reverse=True)
+            slow_tests = sorted(result.color_tests['🔴'], key=lambda x: x[1], reverse=True)
             for i, (test_name, elapsed) in enumerate(slow_tests[:5], 1):
                 self.stream.write(f"  {i}. {test_name}: {elapsed:.3f}s\n")
                 
-        elif result.color_counts['YELLOW'] > 0:
+        elif result.color_counts['🟡'] > 0:
             # Focus on medium tests if no slow ones
-            self.stream.write("[STATS] SLOWEST MEDIUM TESTS:\n")
-            medium_tests = sorted(result.color_tests['YELLOW'], key=lambda x: x[1], reverse=True)
+            self.stream.write("📊 SLOWEST MEDIUM TESTS:\n")
+            medium_tests = sorted(result.color_tests['🟡'], key=lambda x: x[1], reverse=True)
             for i, (test_name, elapsed) in enumerate(medium_tests[:5], 1):
                 self.stream.write(f"  {i}. {test_name}: {elapsed:.3f}s\n")
                 
         else:
             # Only green tests - show slowest greens
-            self.stream.write("[EXCELLENT] ALL TESTS ARE FAST! Slowest green tests:\n")
-            green_tests = sorted(result.color_tests['GREEN'], key=lambda x: x[1], reverse=True)
+            self.stream.write("✨ ALL TESTS ARE FAST! Slowest green tests:\n")
+            green_tests = sorted(result.color_tests['🟢'], key=lambda x: x[1], reverse=True)
             for i, (test_name, elapsed) in enumerate(green_tests[:5], 1):
                 self.stream.write(f"  {i}. {test_name}: {elapsed:.3f}s\n")
         
         # Add summary recommendation
-        total_slow = result.color_counts['CRITICAL'] + result.color_counts['RED']
+        total_slow = result.color_counts['💀'] + result.color_counts['🔴']
         if total_slow > 0:
             self.stream.write(f"\n[RECOMMENDATION] Focus on optimizing {total_slow} slow tests for better performance.\n")
-        elif result.color_counts['YELLOW'] > 0:
-            self.stream.write(f"\n[GOOD] No slow tests! Consider optimizing {result.color_counts['YELLOW']} medium tests.\n")
+        elif result.color_counts['🟡'] > 0:
+            self.stream.write(f"\n[GOOD] No slow tests! Consider optimizing {result.color_counts['🟡']} medium tests.\n")
         else:
             self.stream.write("\n[EXCELLENT] All tests are fast! Great job optimizing your test suite!\n")
 
@@ -442,7 +442,7 @@ def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_t
         ]
     )
     
-    print("[SEARCH] Starting tests with coverage analysis...")
+    print("🔍 Starting tests with coverage analysis...")
     cov.start()
     
     try:
@@ -455,7 +455,7 @@ def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_t
         
         # Generate coverage report
         print("\n" + "="*60)
-        print("[STATS] COVERAGE REPORT")
+        print("📊 COVERAGE REPORT")
         print("="*60)
         
         # Console report
@@ -464,7 +464,7 @@ def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_t
         # HTML report
         html_dir = BACKEND_ROOT / "performance_testing" / "htmlcov"
         cov.html_report(directory=str(html_dir))
-        print(f"\n[FILE] HTML coverage report generated in: {html_dir}")
+        print(f"\n📄 HTML coverage report generated in: {html_dir}")
         
         # Check for 100% coverage
         total_coverage = cov.report(show_missing=False)
@@ -487,7 +487,7 @@ def run_tests_with_coverage(test_modules: List[str], verbose: bool = False, no_t
 
 def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, no_timing: bool = False) -> bool:
     """Run tests without coverage."""
-    print("[TEST] Running unit tests...")
+    print("🧪 Running unit tests...")
     
     # Create test suite
     loader = unittest.TestLoader()
@@ -541,7 +541,7 @@ def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, n
     success = len(result.failures) == 0 and len(result.errors) == 0
     
     if success:
-        print("\n[SUCCESS] All tests passed!")
+        print("\n🎉 All tests passed!")
     else:
         print("\n❌ Some tests failed!")
     
@@ -571,7 +571,7 @@ def run_c_integration_tests(verbose: bool = False) -> bool:
     
     if missing_libs:
         print(f"⚠️  Missing C libraries: {', '.join(missing_libs)}")
-        print("[TIP] Run 'make all' in the c_core directory to build them")
+        print("💡 Run 'make all' in the c_core directory to build them")
         return False
     
     # Run the integration test
@@ -692,7 +692,7 @@ def main():
         # Setup environment
         setup_test_environment()
         
-        print("[START] Performance Testing Framework Test Runner")
+        print("🚀 Performance Testing Framework Test Runner")
         print("="*50)
         
         if args.list_modules:
@@ -721,11 +721,11 @@ def main():
             success = success and c_success
         
         if args.module:
-            print(f"[TARGET] Running tests for module: {args.module}")
+            print(f"🎯 Running tests for module: {args.module}")
             module_success = run_specific_module_tests(args.module, args.verbose, args.coverage, args.no_timing)
             success = success and module_success
         elif not args.c_tests or args.all:  # Run Python tests if not just C tests
-            print(f"[TEST] Running all tests ({len(test_modules)} modules)")
+            print(f"🧪 Running all tests ({len(test_modules)} modules)")
             if args.coverage:
                 python_success = run_tests_with_coverage(test_modules, args.verbose, args.no_timing)
             else:

@@ -332,11 +332,11 @@ class TestPerformanceBenchmarks(unittest.TestCase):
         
         # Log success for realistic scenarios
         if overhead < 1.0:
-            print(f"✅ Excellent: {overhead:.1%} overhead")
+            print(f"[EXCELLENT] {overhead:.1%} overhead")
         elif overhead < 2.0:
-            print(f"✅ Good: {overhead:.1%} overhead")
+            print(f"[GOOD] {overhead:.1%} overhead")
         else:
-            print(f"⚠️  Acceptable: {overhead:.1%} overhead for C monitoring")
+            print(f"[ACCEPTABLE] {overhead:.1%} overhead for C monitoring")
 
 
 class TestErrorHandling(unittest.TestCase):

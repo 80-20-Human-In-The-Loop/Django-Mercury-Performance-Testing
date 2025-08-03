@@ -252,8 +252,8 @@ before-build = [
 
 # Simple test that doesn't depend on Django configuration - just test basic imports
 test-command = [
-    "python -c \"import django_mercury; print(f'✅ django-mercury {django_mercury.__version__} imported successfully')\"",
-    "python -c \"from django_mercury.python_bindings.loader import get_implementation_info; print(f'📊 Implementation: {get_implementation_info()}')\""
+    "python -c \"import django_mercury; print(f'[PASS] django-mercury {django_mercury.__version__} imported successfully')\"",
+    "python -c \"from django_mercury.python_bindings.loader import get_implementation_info; print(f'[INFO] Implementation: {get_implementation_info()}')\""
 ]
 
 # Don't test on emulated architectures (too slow)
