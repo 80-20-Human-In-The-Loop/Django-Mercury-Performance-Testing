@@ -27,6 +27,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from django_mercury.python_bindings import c_bindings
 from django_mercury.python_bindings.monitor import EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python
 
+# Check if running in pure Python mode (define this first)
+PURE_PYTHON_MODE = os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '0') == '1'
+
+# Check if C extensions are available
+try:
+    C_EXTENSIONS_AVAILABLE = (
+        c_bindings.c_extensions.query_analyzer is not None or
+        c_bindings.c_extensions.metrics_engine is not None or
+        c_bindings.c_extensions.test_orchestrator is not None or
+        c_bindings.c_extensions.legacy_performance is not None
+    )
+except Exception:
+    # If we can't even check, assume not available
+    C_EXTENSIONS_AVAILABLE = False
+
 
 class TestCLibraryLoading(unittest.TestCase):
     """Test that all C libraries load correctly."""

@@ -98,7 +98,8 @@ int test_binary_configuration_format(void) {
     // Test 2: Create configuration with wrong magic
     fd = open(test_config_path, O_RDWR | O_TRUNC);
     header.magic = 0xDEADBEEF;  // Wrong magic
-    write(fd, &header, sizeof(header));
+    written = write(fd, &header, sizeof(header));
+    (void)written;  // Acknowledge write result
     close(fd);
     
     int load_wrong_magic = load_binary_configuration(test_config_path);
@@ -109,7 +110,8 @@ int test_binary_configuration_format(void) {
     fd = open(test_config_path, O_RDWR | O_TRUNC);
     header.magic = CONFIG_MAGIC;
     header.version = 999;  // Wrong version
-    write(fd, &header, sizeof(header));
+    written = write(fd, &header, sizeof(header));
+    (void)written;  // Acknowledge write result
     close(fd);
     
     int load_wrong_version = load_binary_configuration(test_config_path);
@@ -117,7 +119,8 @@ int test_binary_configuration_format(void) {
     
     // Test 4: Truncated configuration file
     fd = open(test_config_path, O_RDWR | O_TRUNC);
-    write(fd, &header, sizeof(header) / 2);  // Partial header
+    written = write(fd, &header, sizeof(header) / 2);  // Partial header
+    (void)written;  // Acknowledge write result
     close(fd);
     
     int load_truncated = load_binary_configuration(test_config_path);
@@ -454,7 +457,8 @@ int test_configuration_persistence_recovery(void) {
     // Truncate the configuration file to simulate corruption
     int corrupt_fd = open(config_path, O_WRONLY | O_TRUNC);
     if (corrupt_fd >= 0) {
-        write(corrupt_fd, "corrupted", 9);
+        ssize_t written = write(corrupt_fd, "corrupted", 9);
+        (void)written;  // Acknowledge write result
         close(corrupt_fd);
         
         int load_corrupt = load_binary_configuration(config_path);

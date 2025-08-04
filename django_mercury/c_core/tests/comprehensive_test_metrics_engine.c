@@ -96,9 +96,9 @@ int test_error_conditions(void) {
            "Should succeed with NULL operation type (uses default)");
     // Clean up the handle
     if (null_type_handle > 0) {
-        EnhancedPerformanceMetrics_t* metrics = stop_performance_monitoring_enhanced(null_type_handle);
+        MercuryMetrics* metrics = stop_performance_monitoring_enhanced(null_type_handle);
         if (metrics) {
-            free_metrics(metrics);
+            test_free_metrics(metrics);
         }
     }
     

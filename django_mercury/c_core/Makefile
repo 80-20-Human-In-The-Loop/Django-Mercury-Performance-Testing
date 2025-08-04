@@ -39,7 +39,8 @@ ifeq ($(UNAME_S),Darwin)
 endif
 
 # Base compiler flags
-CFLAGS := -std=c11 -fPIC -Wall -Wextra -Wno-unused-parameter
+# Include -I. to ensure headers in current directory are found (fixes CI builds)
+CFLAGS := -std=c11 -fPIC -Wall -Wextra -Wno-unused-parameter -I.
 CFLAGS += -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
 
 # Optimization flags
