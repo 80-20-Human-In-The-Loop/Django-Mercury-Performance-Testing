@@ -271,10 +271,6 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
         return -1;
     }
     
-    if (!operation_type) {
-        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation type cannot be NULL");
-        return -1;
-    }
     
     // Thread-safe slot allocation
     pthread_mutex_lock(&slot_mutex);
