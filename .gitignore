@@ -156,6 +156,7 @@ django_mercury/c_core/*.o
 django_mercury/c_core/*.d
 django_mercury/c_core/test_*
 !django_mercury/c_core/test_*.c
+!django_mercury/c_core/test_*.h
 django_mercury/c_core/coverage/
 django_mercury/c_core/logs/
 logs/
