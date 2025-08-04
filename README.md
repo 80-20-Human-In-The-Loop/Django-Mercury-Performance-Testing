@@ -1,4 +1,4 @@
-[warning] I am in the process of getting the CI/CD to build a proper Windows version, for now windows uses python fallbacks which are 900x slower.
+[warning] I am in the process of getting the CI/CD to build a proper Windows version, for now Windows uses python fallbacks which are 900x slower.
 
 # Django Mercury 🚀
 
