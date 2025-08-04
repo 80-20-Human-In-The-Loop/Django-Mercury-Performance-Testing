@@ -90,9 +90,17 @@ int test_error_conditions(void) {
     ASSERT(start_performance_monitoring_enhanced(NULL, "test") == -1, 
            "Should fail with NULL operation name");
     
-    // Test NULL operation type
-    ASSERT(start_performance_monitoring_enhanced("test", NULL) == -1,
-           "Should fail with NULL operation type");
+    // Test NULL operation type (should succeed with default)
+    int64_t null_type_handle = start_performance_monitoring_enhanced("test", NULL);
+    ASSERT(null_type_handle > 0,
+           "Should succeed with NULL operation type (uses default)");
+    // Clean up the handle
+    if (null_type_handle > 0) {
+        EnhancedPerformanceMetrics_t* metrics = stop_performance_monitoring_enhanced(null_type_handle);
+        if (metrics) {
+            free_metrics(metrics);
+        }
+    }
     
     // Test invalid session ID
     ASSERT(stop_performance_monitoring_enhanced(-1) == NULL,

@@ -541,11 +541,17 @@ int test_monitor_edge_cases(void) {
     EnhancedPerformanceMetrics_t* null_metrics2 = stop_performance_monitoring_enhanced(0);
     ASSERT(null_metrics2 == NULL, "Should return NULL for zero handle");
     
-    // Test operations with NULL operation type (should fail with defensive programming)
+    // Test operations with NULL operation type (should succeed with default value)
     int64_t handle3 = start_performance_monitoring_enhanced("NullType", NULL);
-    ASSERT(handle3 < 0, "Should fail with NULL operation type");
+    ASSERT(handle3 > 0, "Should succeed with NULL operation type (uses default)");
     
-    // Since handle3 is invalid, we don't try to stop monitoring or get metrics
+    // Clean up handle3 since it's now valid
+    if (handle3 > 0) {
+        EnhancedPerformanceMetrics_t* metrics3 = stop_performance_monitoring_enhanced(handle3);
+        if (metrics3) {
+            free_metrics(metrics3);
+        }
+    }
     
     return 1;
 }

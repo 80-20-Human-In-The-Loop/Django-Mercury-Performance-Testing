@@ -209,9 +209,17 @@ int test_null_parameter_handling(void) {
     int64_t handle1 = start_performance_monitoring_enhanced(NULL, "view");
     ASSERT(handle1 < 0, "Should fail with NULL operation name");
     
-    // Test 2: Start monitoring with NULL operation type
+    // Test 2: Start monitoring with NULL operation type (should use default)
     int64_t handle2 = start_performance_monitoring_enhanced("TestOp", NULL);
-    ASSERT(handle2 < 0, "Should fail with NULL operation type");
+    ASSERT(handle2 > 0, "Should succeed with NULL operation type (uses default)");
+    
+    // Clean up the valid handle from test 2
+    if (handle2 > 0) {
+        EnhancedPerformanceMetrics_t* metrics2 = stop_performance_monitoring_enhanced(handle2);
+        if (metrics2) {
+            free_metrics(metrics2);
+        }
+    }
     
     // Test 3: Stop monitoring with invalid handle
     EnhancedPerformanceMetrics_t* null_metrics = stop_performance_monitoring_enhanced(-1);
