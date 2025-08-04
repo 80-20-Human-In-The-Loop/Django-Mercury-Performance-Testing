@@ -1,6 +1,7 @@
 The Community Wiki is Living Documentation:
 
 [Contributing - Python Standards](https://github.com/80-20-Human-In-The-Loop/Django-Mercury-Performance-Testing/wiki/Contributing-Python-Standards)
+
 [Contributing - C Standards](https://github.com/80-20-Human-In-The-Loop/Django-Mercury-Performance-Testing/wiki/Contributing-C-Standards)
 
 # Contributing to Django Mercury Performance Testing
