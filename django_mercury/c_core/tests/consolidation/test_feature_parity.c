@@ -156,7 +156,7 @@ int test_thread_specific_sessions(void) {
 }
 
 /**
- * @brief Create mock metrics with specified query count
+ * @brief Create mock metrics with specified query count!
  */
 MercuryMetrics* create_mock_metrics(uint32_t query_count, double response_time) {
     MercuryMetrics* metrics = (MercuryMetrics*)calloc(1, sizeof(MercuryMetrics));
