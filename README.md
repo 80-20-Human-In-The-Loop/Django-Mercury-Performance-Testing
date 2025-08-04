@@ -417,6 +417,11 @@ int main() {
 - **C compilation errors?** Run `./c_test_runner.sh clean` then `build`
 - **Still stuck?** Open an issue with your test output
 
+### 📚 Documentation
+
+- **[GitHub Actions Deployment Guide](docs/GitHub-Actions-Deployment.md)** - How our CI/CD works (for beginners, experts, and AI agents)
+- **More docs coming soon!**
+
 ## 🎯 Real Results at EduLite
 
 Before Mercury:
