@@ -113,82 +113,83 @@ class EnhancedPerformanceMetrics(ctypes.Structure):
     ]
 
 
-try:
-    # C function signatures
-    lib.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-    lib.start_performance_monitoring_enhanced.restype = ctypes.c_int64
+if not isinstance(lib, MockLib):
+    try:
+        # C function signatures - only configure for real C libraries
+        lib.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib.start_performance_monitoring_enhanced.restype = ctypes.c_int64
 
-    lib.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
-    lib.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(EnhancedPerformanceMetrics)
+        lib.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
+        lib.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(EnhancedPerformanceMetrics)
 
-    lib.get_elapsed_time_ms.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_elapsed_time_ms.restype = ctypes.c_double
+        lib.get_elapsed_time_ms.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_elapsed_time_ms.restype = ctypes.c_double
 
-    lib.get_memory_usage_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_memory_usage_mb.restype = ctypes.c_double
+        lib.get_memory_usage_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_memory_usage_mb.restype = ctypes.c_double
 
-    lib.get_memory_delta_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_memory_delta_mb.restype = ctypes.c_double
+        lib.get_memory_delta_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_memory_delta_mb.restype = ctypes.c_double
 
-    lib.get_query_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_query_count.restype = ctypes.c_uint32
+        lib.get_query_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_query_count.restype = ctypes.c_uint32
 
-    lib.get_cache_hit_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_cache_hit_count.restype = ctypes.c_uint32
+        lib.get_cache_hit_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_cache_hit_count.restype = ctypes.c_uint32
 
-    lib.get_cache_miss_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_cache_miss_count.restype = ctypes.c_uint32
+        lib.get_cache_miss_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_cache_miss_count.restype = ctypes.c_uint32
 
-    lib.get_cache_hit_ratio.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_cache_hit_ratio.restype = ctypes.c_double
+        lib.get_cache_hit_ratio.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_cache_hit_ratio.restype = ctypes.c_double
 
-    lib.has_n_plus_one_pattern.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.has_n_plus_one_pattern.restype = ctypes.c_int
+        lib.has_n_plus_one_pattern.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.has_n_plus_one_pattern.restype = ctypes.c_int
 
-    lib.detect_n_plus_one_severe.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.detect_n_plus_one_severe.restype = ctypes.c_int
+        lib.detect_n_plus_one_severe.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.detect_n_plus_one_severe.restype = ctypes.c_int
 
-    lib.detect_n_plus_one_moderate.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.detect_n_plus_one_moderate.restype = ctypes.c_int
+        lib.detect_n_plus_one_moderate.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.detect_n_plus_one_moderate.restype = ctypes.c_int
 
-    lib.detect_n_plus_one_pattern_by_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.detect_n_plus_one_pattern_by_count.restype = ctypes.c_int
+        lib.detect_n_plus_one_pattern_by_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.detect_n_plus_one_pattern_by_count.restype = ctypes.c_int
 
-    lib.calculate_n_plus_one_severity.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.calculate_n_plus_one_severity.restype = ctypes.c_int
+        lib.calculate_n_plus_one_severity.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.calculate_n_plus_one_severity.restype = ctypes.c_int
 
-    lib.estimate_n_plus_one_cause.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.estimate_n_plus_one_cause.restype = ctypes.c_int
+        lib.estimate_n_plus_one_cause.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.estimate_n_plus_one_cause.restype = ctypes.c_int
 
-    lib.get_n_plus_one_fix_suggestion.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.get_n_plus_one_fix_suggestion.restype = ctypes.c_char_p
+        lib.get_n_plus_one_fix_suggestion.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.get_n_plus_one_fix_suggestion.restype = ctypes.c_char_p
 
-    lib.is_memory_intensive.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.is_memory_intensive.restype = ctypes.c_int
+        lib.is_memory_intensive.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.is_memory_intensive.restype = ctypes.c_int
 
-    lib.has_poor_cache_performance.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.has_poor_cache_performance.restype = ctypes.c_int
+        lib.has_poor_cache_performance.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.has_poor_cache_performance.restype = ctypes.c_int
 
-    # Django hook functions
-    lib.increment_query_count.argtypes = []
-    lib.increment_query_count.restype = None
+        # Django hook functions
+        lib.increment_query_count.argtypes = []
+        lib.increment_query_count.restype = None
 
-    lib.increment_cache_hits.argtypes = []
-    lib.increment_cache_hits.restype = None
+        lib.increment_cache_hits.argtypes = []
+        lib.increment_cache_hits.restype = None
 
-    lib.increment_cache_misses.argtypes = []
-    lib.increment_cache_misses.restype = None
+        lib.increment_cache_misses.argtypes = []
+        lib.increment_cache_misses.restype = None
 
-    lib.reset_global_counters.argtypes = []
-    lib.reset_global_counters.restype = None
+        lib.reset_global_counters.argtypes = []
+        lib.reset_global_counters.restype = None
 
-    # Define free_metrics function signature - CRITICAL for preventing segfaults
-    lib.free_metrics.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-    lib.free_metrics.restype = None
+        # Define free_metrics function signature - CRITICAL for preventing segfaults
+        lib.free_metrics.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib.free_metrics.restype = None
 
-except AttributeError as e:
-    # Functions not available in C library - provide fallbacks
-    logger.warning(f"Enhanced performance monitoring functions not available in C library: {e}")
+    except AttributeError as e:
+        # Functions not available in C library - provide fallbacks
+        logger.warning(f"Enhanced performance monitoring functions not available in C library: {e}")
 
 
 # --- Performance Analysis Data Classes ---

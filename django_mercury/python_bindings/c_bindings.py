@@ -139,6 +139,21 @@ def get_library_paths() -> List[Path]:
     # C core directory (build location)
     c_core_dir = current_dir.parent / "c_core"
     paths.append(c_core_dir)
+    
+    # Check if we're in a CI environment - libraries might be in different locations
+    if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+        # In CI, also check workspace and runner paths
+        workspace_root = Path.cwd()
+        ci_paths = [
+            workspace_root / 'django_mercury' / 'python_bindings',
+            workspace_root / 'django_mercury' / 'c_core',
+            Path('/home/runner/work') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'python_bindings',
+            Path('/home/runner/work') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'c_core',
+        ]
+        for path in ci_paths:
+            if path.exists() and path not in paths:
+                paths.append(path)
+                logger.debug(f"Added CI path: {path}")
 
     # System paths (for installed libraries)
     if platform.system() == "Linux":
@@ -161,6 +176,12 @@ def get_library_paths() -> List[Path]:
             paths.append(Path(site_dir) / "mercury_performance")
     except Exception:
         pass
+    
+    # Debug output if requested
+    if os.environ.get('DEBUG_C_LOADING'):
+        logger.info(f"Searching for C libraries in {len(paths)} paths:")
+        for i, path in enumerate(paths, 1):
+            logger.info(f"  {i}. {path}")
 
     return paths
 
@@ -724,6 +745,32 @@ class CExtensionLoader:
 
 # Create global instance and initialize
 c_extensions = CExtensionLoader()
+
+# Export availability flags for easy checking
+def are_c_extensions_available() -> bool:
+    """Check if any C extensions are available.
+    
+    Returns:
+        True if at least one C extension is loaded, False otherwise.
+    """
+    return (
+        c_extensions.query_analyzer is not None or
+        c_extensions.metrics_engine is not None or
+        c_extensions.test_orchestrator is not None or
+        c_extensions.legacy_performance is not None
+    )
+
+
+def is_pure_python_mode() -> bool:
+    """Check if running in pure Python mode.
+    
+    Returns:
+        True if DJANGO_MERCURY_PURE_PYTHON=1 or no C extensions available.
+    """
+    return (
+        os.environ.get("DJANGO_MERCURY_PURE_PYTHON", "0") == "1" or
+        not are_c_extensions_available()
+    )
 
 
 def initialize_c_extensions() -> bool:

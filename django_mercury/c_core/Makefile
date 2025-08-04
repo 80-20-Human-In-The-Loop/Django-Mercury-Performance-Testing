@@ -230,11 +230,32 @@ benchmark: $(TARGETS)
 
 # === INSTALLATION ===
 
+# Special target for CI builds - ensures libraries are in the right place
+ci: clean all
+	@echo "🚀 CI Build Complete"
+	@echo "📋 Libraries in c_core/:"
+	@ls -la *.so 2>/dev/null || echo "   No .so files in c_core/"
+	@echo "📋 Libraries in python_bindings/:"
+	@ls -la ../python_bindings/*.so 2>/dev/null || echo "   No .so files in python_bindings/"
+
 install: $(TARGETS)
 	@echo "📦 Installing performance libraries..."
 	@mkdir -p ../python_bindings
-	@cp $(TARGETS) ../python_bindings/
-	@echo "✅ Libraries installed to ../python_bindings/"
+	@for lib in $(TARGETS); do \
+		if [ -f "$$lib" ]; then \
+			cp -v "$$lib" ../python_bindings/ && \
+			echo "   ✓ Installed $$lib"; \
+		else \
+			echo "   ⚠️  Warning: $$lib not found"; \
+		fi; \
+	done
+	@echo "📋 Verifying installation:"
+	@if ls ../python_bindings/*.so 2>/dev/null; then \
+		echo "✅ Libraries successfully installed to ../python_bindings/"; \
+	else \
+		echo "❌ ERROR: No libraries found in ../python_bindings/"; \
+		exit 1; \
+	fi
 
 # === PROFILING ===
 

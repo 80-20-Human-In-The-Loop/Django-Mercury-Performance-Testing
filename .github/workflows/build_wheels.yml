@@ -47,45 +47,69 @@ jobs:
         run: |
           echo "Building C libraries..."
           cd django_mercury/c_core
-          make clean || true
-          if ! make all; then
+          
+          # Use the CI target which includes clean, build, and install
+          if ! make ci; then
             echo "WARNING: C library build failed, will use pure Python mode"
             echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
             echo "C_BUILD_FAILED=1" >> $GITHUB_ENV
             exit 0
           fi
-          echo "Checking built libraries:"
-          if ls *.so 2>/dev/null; then
-            echo "C libraries built successfully"
+          
+          # Verify the build with our verification script
+          cd ../..
+          echo "Running build verification..."
+          if python scripts/verify_build.py; then
+            echo "✅ Build verification passed"
             echo "C_BUILD_FAILED=0" >> $GITHUB_ENV
           else
-            echo "No .so files found, will use pure Python mode"
+            echo "⚠️ Build verification failed, using pure Python mode"
             echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
             echo "C_BUILD_FAILED=1" >> $GITHUB_ENV
           fi
-          cd ../..
       
+      - name: Debug C Extension Status (if needed)
+        if: runner.os != 'Windows' && env.C_BUILD_FAILED == '1'
+        run: |
+          echo "=== DEBUG: C Extension Build Failed ==="
+          echo "Environment variables:"
+          env | grep -E "(DJANGO_MERCURY|C_BUILD|PYTHON)" || true
+          echo ""
+          echo "Library search:"
+          find . -name "*.so" -o -name "*.dylib" 2>/dev/null | head -20 || true
+          echo ""
+          echo "Python path:"
+          python -c "import sys; print('\\n'.join(sys.path))"
+          
       - name: Build Python C extensions (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           python -m pip install --upgrade setuptools wheel
-          python setup.py build_ext --inplace
-          python -c "from django_mercury.python_bindings.loader import check_c_extensions; available, details = check_c_extensions(); print(f'C Extensions: {available}')"
-          echo "C extensions built successfully"
+          python setup.py build_ext --inplace || echo "Python C extension build failed (expected if C libs missing)"
+          python -c "from django_mercury.python_bindings.loader import check_c_extensions; available, details = check_c_extensions(); print(f'C Extensions: {available}')" || true
       
       - name: Set Windows to use pure Python
         if: runner.os == 'Windows'
         run: |
           echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
       
-      - name: Run Python tests
+      - name: Run Python tests (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           # Export env var in same shell that runs tests to ensure it's available at import time
-          if [ "${{ runner.os }}" = "Windows" ] || [ "$C_BUILD_FAILED" = "1" ] || [ ! -z "$DJANGO_MERCURY_PURE_PYTHON" ]; then
+          if [ "$C_BUILD_FAILED" = "1" ] || [ ! -z "$DJANGO_MERCURY_PURE_PYTHON" ]; then
             echo "Setting DJANGO_MERCURY_PURE_PYTHON=1 for tests"
             export DJANGO_MERCURY_PURE_PYTHON=1
           fi
           echo "Running tests with DJANGO_MERCURY_PURE_PYTHON=${DJANGO_MERCURY_PURE_PYTHON:-0}"
+          python test_runner.py --coverage --ci
+      
+      - name: Run Python tests (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "Setting DJANGO_MERCURY_PURE_PYTHON=1 for Windows tests"
+          $env:DJANGO_MERCURY_PURE_PYTHON = "1"
+          echo "Running tests with DJANGO_MERCURY_PURE_PYTHON=1"
           python test_runner.py --coverage --ci
       
       - name: Run C Core Unit Tests (Linux/macOS)

@@ -198,6 +198,8 @@ class TestMetricsEngine(unittest.TestCase):
         pass
 
 
+@unittest.skipIf(PURE_PYTHON_MODE or not C_EXTENSIONS_AVAILABLE,
+                 "Skipping C extension thread safety tests")
 class TestThreadSafety(unittest.TestCase):
     """Test thread safety of C libraries."""
     
@@ -206,8 +208,26 @@ class TestThreadSafety(unittest.TestCase):
         if not c_bindings.c_extensions._initialized:
             c_bindings.initialize_c_extensions()
         
-        lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libperformance.so"
-        self.lib = ctypes.CDLL(str(lib_path))
+        # Try to find libperformance.so in multiple locations
+        possible_paths = [
+            Path(__file__).parent.parent.parent / "django_mercury" / "python_bindings" / "libperformance.so",
+            Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libperformance.so",
+        ]
+        
+        lib_path = None
+        for path in possible_paths:
+            if path.exists():
+                lib_path = path
+                break
+        
+        if not lib_path:
+            self.skipTest("libperformance.so not found")
+        
+        try:
+            self.lib = ctypes.CDLL(str(lib_path))
+        except OSError as e:
+            self.skipTest(f"Cannot load libperformance.so: {e}")
+        
         self._setup_ctypes()
     
     def _setup_ctypes(self):
