@@ -94,10 +94,11 @@ jobs:
           python setup.py build_ext --inplace || echo "Python C extension build failed (expected if C libs missing)"
           python -c "from django_mercury.python_bindings.loader import check_c_extensions; available, details = check_c_extensions(); print(f'C Extensions: {available}')" || true
       
-      - name: Set Windows to use pure Python
+      - name: Set Windows to use pure Python and UTF-8
         if: runner.os == 'Windows'
         run: |
           echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+          echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
       
       - name: Run Python tests (Linux/macOS)
         if: runner.os != 'Windows'
@@ -113,9 +114,11 @@ jobs:
       - name: Run Python tests (Windows)
         if: runner.os == 'Windows'
         run: |
-          echo "Setting DJANGO_MERCURY_PURE_PYTHON=1 for Windows tests"
+          echo "Setting UTF-8 encoding and pure Python mode for Windows"
+          $env:PYTHONIOENCODING = "utf-8"
           $env:DJANGO_MERCURY_PURE_PYTHON = "1"
-          echo "Running tests with DJANGO_MERCURY_PURE_PYTHON=1"
+          chcp 65001 > $null  # Set console to UTF-8
+          echo "Running tests with PYTHONIOENCODING=utf-8 and DJANGO_MERCURY_PURE_PYTHON=1"
           python test_runner.py --coverage --ci
       
       - name: Run C Core Unit Tests (Linux/macOS)

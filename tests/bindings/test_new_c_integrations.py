@@ -13,6 +13,7 @@ Tests cover:
 import unittest
 import ctypes
 import os
+import platform
 import time
 import threading
 import tempfile
@@ -43,6 +44,7 @@ except Exception:
     C_EXTENSIONS_AVAILABLE = False
 
 
+@unittest.skipIf(platform.system() == 'Windows', "C extensions not supported on Windows")
 class TestCLibraryLoading(unittest.TestCase):
     """Test that all C libraries load correctly."""
     
@@ -72,6 +74,7 @@ class TestCLibraryLoading(unittest.TestCase):
         self.assertTrue(hasattr(c_bindings.c_extensions.test_orchestrator, 'create_test_context'))
 
 
+@unittest.skipIf(platform.system() == 'Windows', "C extensions not supported on Windows")
 class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
     """Test memory management in performance monitoring."""
     
@@ -412,6 +415,7 @@ class TestPerformanceBenchmarks(unittest.TestCase):
             print(f"[ACCEPTABLE] {overhead:.1%} overhead for C monitoring")
 
 
+@unittest.skipIf(platform.system() == 'Windows', "C extensions not supported on Windows")
 class TestErrorHandling(unittest.TestCase):
     """Test error handling in C libraries."""
     
