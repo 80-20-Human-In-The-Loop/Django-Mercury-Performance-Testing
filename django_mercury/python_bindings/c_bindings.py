@@ -86,12 +86,6 @@ LIBRARY_CONFIG = {
         "required": False,
         "description": "Test Orchestration Engine",
     },
-    "legacy_performance": {
-        "name": "libperformance.so",
-        "fallback_name": "libperformance.dylib",
-        "required": False,
-        "description": "Legacy Performance Library (compatibility)",
-    },
 }
 
 # Platform-specific library extensions
@@ -251,7 +245,6 @@ class CExtensionLoader:
         self.query_analyzer: Optional[ctypes.CDLL] = None
         self.metrics_engine: Optional[ctypes.CDLL] = None
         self.test_orchestrator: Optional[ctypes.CDLL] = None
-        self.legacy_performance: Optional[ctypes.CDLL] = None
 
     def initialize(self) -> bool:
         """Initialize all C extensions."""
@@ -396,8 +389,6 @@ class CExtensionLoader:
                 function_count += self._configure_metrics_engine(handle)
             elif lib_key == "test_orchestrator":
                 function_count += self._configure_test_orchestrator(handle)
-            elif lib_key == "legacy_performance":
-                function_count += self._configure_legacy_performance(handle)
 
         except Exception as e:
             if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
@@ -614,30 +605,6 @@ class CExtensionLoader:
 
         return functions_configured
 
-    def _configure_legacy_performance(self, lib: ctypes.CDLL) -> int:
-        """Configure legacy performance library function signatures."""
-        functions_configured = 0
-
-        try:
-            # Legacy functions for backward compatibility
-            # These would match the existing libperformance.so interface
-
-            if hasattr(lib, "start_performance_monitoring"):
-                lib.start_performance_monitoring.argtypes = [ctypes.c_char_p]
-                lib.start_performance_monitoring.restype = ctypes.c_int64
-                functions_configured += 1
-
-            if hasattr(lib, "stop_performance_monitoring"):
-                lib.stop_performance_monitoring.argtypes = [ctypes.c_int64]
-                lib.stop_performance_monitoring.restype = ctypes.c_void_p
-                functions_configured += 1
-
-        except AttributeError as e:
-            if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
-                logger.debug(f"Legacy performance functions not available: {e}")
-
-        return functions_configured
-
     @contextmanager
     def performance_session(self, operation_name: str, operation_type: str = "general") -> Any:
         """Context manager for performance monitoring sessions.
@@ -726,7 +693,6 @@ class CExtensionLoader:
             self.query_analyzer = None
             self.metrics_engine = None
             self.test_orchestrator = None
-            self.legacy_performance = None
 
             # Clear library info (handles are automatically cleaned up by Python)
             self._libraries.clear()
@@ -756,8 +722,7 @@ def are_c_extensions_available() -> bool:
     return (
         c_extensions.query_analyzer is not None or
         c_extensions.metrics_engine is not None or
-        c_extensions.test_orchestrator is not None or
-        c_extensions.legacy_performance is not None
+        c_extensions.test_orchestrator is not None
     )
 
 

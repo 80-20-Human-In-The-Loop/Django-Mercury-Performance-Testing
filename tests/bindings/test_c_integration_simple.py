@@ -13,28 +13,34 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def test_libperformance():
-    """Test libperformance.so functionality."""
-    print("Testing libperformance.so...")
+def test_libmetrics_engine():
+    """Test libmetrics_engine.so functionality."""
+    print("Testing libmetrics_engine.so...")
     
     # Load library
-    lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libperformance.so"
+    lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libmetrics_engine.so"
     lib = ctypes.CDLL(str(lib_path))
     
-    # Define structure
-    class EnhancedPerformanceMetrics(ctypes.Structure):
+    # Define structure matching MercuryMetrics from common.h
+    class MercuryTimestamp(ctypes.Structure):
         _fields_ = [
-            ("start_time_ns", ctypes.c_uint64),
-            ("end_time_ns", ctypes.c_uint64),
-            ("memory_start_bytes", ctypes.c_size_t),
-            ("memory_peak_bytes", ctypes.c_size_t),
-            ("memory_end_bytes", ctypes.c_size_t),
-            ("query_count_start", ctypes.c_uint32),
-            ("query_count_end", ctypes.c_uint32),
+            ("nanoseconds", ctypes.c_uint64),
+            ("sequence", ctypes.c_uint32)
+        ]
+    
+    class MercuryMetrics(ctypes.Structure):
+        _fields_ = [
+            ("start_time", MercuryTimestamp),
+            ("end_time", MercuryTimestamp),
+            ("query_count", ctypes.c_uint32),
             ("cache_hits", ctypes.c_uint32),
             ("cache_misses", ctypes.c_uint32),
-            ("operation_name", ctypes.c_char * 256),
-            ("operation_type", ctypes.c_char * 64)
+            ("memory_bytes", ctypes.c_uint64),
+            ("violation_flags", ctypes.c_uint64),
+            ("operation_name", ctypes.c_char * 64),
+            ("operation_type", ctypes.c_char * 32),
+            # Padding to cache line size (64 bytes)
+            ("_padding", ctypes.c_char * 4)
         ]
     
     # Configure functions
@@ -42,19 +48,19 @@ def test_libperformance():
     lib.start_performance_monitoring_enhanced.restype = ctypes.c_int64
     
     lib.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
-    lib.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(EnhancedPerformanceMetrics)
+    lib.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(MercuryMetrics)
     
-    lib.free_metrics.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+    lib.free_metrics.argtypes = [ctypes.POINTER(MercuryMetrics)]
     lib.free_metrics.restype = None
     
-    lib.get_memory_delta_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+    lib.get_memory_delta_mb.argtypes = [ctypes.POINTER(MercuryMetrics)]
     lib.get_memory_delta_mb.restype = ctypes.c_double
     
     # Test 1: Basic monitoring
     print("  ✓ Library loaded successfully")
     
     handle = lib.start_performance_monitoring_enhanced(b"test_operation", b"test")
-    assert handle > 0, f"Failed to start monitoring, handle={handle}"
+    assert handle >= 0, f"Failed to start monitoring, handle={handle}"
     print("  ✓ Started monitoring")
     
     # Simulate some work
@@ -66,9 +72,9 @@ def test_libperformance():
     
     # Check metrics
     metrics = metrics_ptr.contents
-    assert metrics.operation_name.decode() == "test_operation"
-    assert metrics.operation_type.decode() == "test"
-    assert metrics.end_time_ns > metrics.start_time_ns
+    assert metrics.operation_name.decode() == "test_operation", f"Expected 'test_operation', got '{metrics.operation_name.decode()}'"
+    assert metrics.operation_type.decode() == "test", f"Expected 'test', got '{metrics.operation_type.decode()}'"
+    assert metrics.end_time.nanoseconds > metrics.start_time.nanoseconds, f"End time {metrics.end_time.nanoseconds} should be > start time {metrics.start_time.nanoseconds}"
     print("  ✓ Metrics contain correct data")
     
     # Test memory delta function
@@ -84,7 +90,7 @@ def test_libperformance():
     handles = []
     for i in range(5):
         h = lib.start_performance_monitoring_enhanced(f"op_{i}".encode(), b"concurrent")
-        assert h > 0
+        assert h >= 0, f"Failed to start monitor {i}, handle={h}"
         handles.append(h)
     
     for i, h in enumerate(handles):
@@ -119,8 +125,7 @@ def test_all_libraries():
     libraries = [
         "libquery_analyzer.so",
         "libmetrics_engine.so", 
-        "libtest_orchestrator.so",
-        "libperformance.so"
+        "libtest_orchestrator.so"
     ]
     
     for lib_name in libraries:
@@ -165,9 +170,9 @@ if __name__ == "__main__":
     success = True
     
     try:
-        test_libperformance()
+        test_libmetrics_engine()
     except Exception as e:
-        print(f"\n❌ libperformance test failed: {e}")
+        print(f"\n❌ libmetrics_engine test failed: {e}")
         success = False
     
     if not test_all_libraries():

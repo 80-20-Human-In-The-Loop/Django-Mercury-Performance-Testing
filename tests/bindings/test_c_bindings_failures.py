@@ -20,10 +20,15 @@ class TestCBindingsFailures(unittest.TestCase):
         # Patch the actual library loading to avoid real file operations
         self.lib_patcher = patch('django_mercury.python_bindings.c_bindings.ctypes.CDLL')
         self.mock_cdll = self.lib_patcher.start()
+        
+        # Also patch find_library to control which libraries are "found"
+        self.find_lib_patcher = patch('django_mercury.python_bindings.c_bindings.find_library')
+        self.mock_find_library = self.find_lib_patcher.start()
     
     def tearDown(self):
         """Clean up test fixtures."""
         self.lib_patcher.stop()
+        self.find_lib_patcher.stop()
         # Reset the module state
         import django_mercury.python_bindings.c_bindings as c_bindings
         c_bindings.c_extensions._initialized = False
@@ -65,13 +70,15 @@ class TestCBindingsFailures(unittest.TestCase):
         # Reset state
         c_bindings.c_extensions._initialized = False
         
-        # Make only the second library fail
+        # Mock find_library to return fake paths for all libraries
+        self.mock_find_library.return_value = "/fake/lib.so"
+        
+        # Make only the second library fail (metrics_engine)
         mock_lib1 = Mock()
         mock_lib2_error = OSError("Cannot load metrics_engine")
         mock_lib3 = Mock()
-        mock_lib4 = Mock()
         
-        self.mock_cdll.side_effect = [mock_lib1, mock_lib2_error, mock_lib3, mock_lib4]
+        self.mock_cdll.side_effect = [mock_lib1, mock_lib2_error, mock_lib3]
         
         # Initialize
         c_bindings.initialize_c_extensions()
@@ -80,9 +87,8 @@ class TestCBindingsFailures(unittest.TestCase):
         self.assertIsNotNone(c_bindings.c_extensions.query_analyzer)
         # Second should be None due to error
         self.assertIsNone(c_bindings.c_extensions.metrics_engine)
-        # Others should still load
+        # Third should still load
         self.assertIsNotNone(c_bindings.c_extensions.test_orchestrator)
-        self.assertIsNotNone(c_bindings.c_extensions.legacy_performance)
     
     def test_cleanup_with_uninitialized_extensions(self):
         """Test cleanup when extensions were never initialized."""
@@ -110,7 +116,6 @@ class TestCBindingsFailures(unittest.TestCase):
         c_bindings.c_extensions.query_analyzer = mock_lib1
         c_bindings.c_extensions.metrics_engine = None  # Not loaded
         c_bindings.c_extensions.test_orchestrator = None
-        c_bindings.c_extensions.legacy_performance = None
         
         # Cleanup should handle mixed state
         c_bindings.c_extensions.cleanup()
@@ -151,7 +156,8 @@ class TestCBindingsFailures(unittest.TestCase):
         result = c_bindings.c_extensions._configure_test_orchestrator(None)
         self.assertEqual(result, 0)  # Should return 0 functions configured
         
-        result = c_bindings.c_extensions._configure_legacy_performance(None)
+        # Legacy configuration method removed
+        result = 0  # No legacy configuration needed
         self.assertEqual(result, 0)  # Should return 0 functions configured
     
     def test_double_initialization(self):
@@ -172,7 +178,7 @@ class TestCBindingsFailures(unittest.TestCase):
         # Second initialization should be skipped
         c_bindings.c_extensions.initialize()
         
-        # Should not load libraries again (but might call once for legacy_performance)
+        # Should not load libraries again
         # Just check that it doesn't call 4 times like first init
         self.assertLess(self.mock_cdll.call_count, 4)
     

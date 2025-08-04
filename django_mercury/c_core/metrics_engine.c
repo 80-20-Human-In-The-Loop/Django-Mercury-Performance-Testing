@@ -748,6 +748,182 @@ void get_engine_statistics(uint64_t* total_sessions, uint64_t* violations_detect
     if (active_monitors) *active_monitors = g_engine->monitor_count;
 }
 
+// === MISSING FUNCTIONS FROM PERFORMANCE_MONITOR.C ===
+
+// Thread-specific storage for current session ID (for compatibility)
+static pthread_key_t session_id_key;
+static pthread_once_t session_key_once = PTHREAD_ONCE_INIT;
+
+/**
+ * @brief Cleanup function for thread-specific session ID storage
+ */
+static void cleanup_session_id(void* ptr) {
+    if (ptr) {
+        free(ptr);
+    }
+}
+
+/**
+ * @brief Initialize thread-specific storage key (called once)
+ */
+static void init_session_key(void) {
+    pthread_key_create(&session_id_key, cleanup_session_id);
+}
+
+/**
+ * @brief Set the current session ID for this thread
+ * @param session_id The session ID to set as current for this thread
+ * @warning Not thread-safe during initialization - call pthread_once first
+ */
+void set_current_session_id(int64_t session_id) {
+    pthread_once(&session_key_once, init_session_key);
+    int64_t* stored_id = malloc(sizeof(int64_t));
+    if (stored_id) {
+        *stored_id = session_id;
+        pthread_setspecific(session_id_key, stored_id);
+    }
+}
+
+/**
+ * @brief Get the current session ID for this thread
+ * @return Current session ID, 0 if none set
+ * @warning Returns 0 if thread-specific storage not initialized
+ */
+int64_t get_current_session_id(void) {
+    pthread_once(&session_key_once, init_session_key);
+    int64_t* stored_id = (int64_t*)pthread_getspecific(session_id_key);
+    return stored_id ? *stored_id : 0;
+}
+
+/**
+ * @brief Calculate N+1 severity level with realistic thresholds
+ * 
+ * Returns severity level from 0-5 based on query count, adjusted for
+ * Django applications with complex user models and relationships.
+ * 
+ * @param metrics Pointer to performance metrics structure
+ * @return Severity level (0=none, 1=mild, 2=moderate, 3=high, 4=severe, 5=critical)
+ * @warning Returns 0 if metrics is NULL
+ */
+int calculate_n_plus_one_severity(const MercuryMetrics* metrics) {
+    if (!metrics) return 0;
+    
+    uint32_t query_count = get_query_count(metrics);
+    
+    // No N+1 issues for 0 queries (static/cached responses)
+    if (query_count == 0) return 0;
+    
+    // Adjusted thresholds to align with realistic Django app needs
+    if (query_count >= 50) return 5;  // CRITICAL - extreme N+1 
+    if (query_count >= 35) return 4;  // SEVERE - very high query count
+    if (query_count >= 25) return 3;  // HIGH - high query count 
+    if (query_count >= 18) return 2;  // MODERATE - moderate N+1 issue
+    if (query_count >= 12) return 1;  // MILD - potential N+1, investigate
+    
+    return 0;  // NONE - acceptable for Django apps with profiles/permissions
+}
+
+/**
+ * @brief Detect N+1 pattern by analyzing query count patterns
+ * 
+ * @param metrics Pointer to performance metrics structure
+ * @return 1 if N+1 pattern detected, 0 otherwise
+ * @warning Returns 0 if metrics is NULL
+ */
+int detect_n_plus_one_pattern_by_count(const MercuryMetrics* metrics) {
+    if (!metrics) return 0;
+    
+    uint32_t query_count = get_query_count(metrics);
+    
+    // Debug logging for false positives
+    if (query_count == 0) {
+        fprintf(stderr, "DEBUG: detect_n_plus_one_pattern_by_count called with 0 queries\n");
+        return 0;  // No N+1 possible with 0 queries
+    }
+    
+    // Pattern detection for list views with individual queries
+    if (query_count >= 21 && query_count <= 101) {
+        // Likely pattern: 1 query for list + N queries for related data
+        // Common in paginated views: 1 + 10, 1 + 20, 1 + 50, etc.
+        if ((query_count - 1) % 10 == 0 || 
+            (query_count - 1) % 20 == 0 ||
+            (query_count - 1) % 25 == 0) {
+            return 1;
+        }
+    }
+    
+    // Realistic N+1 detection: Django user apps with profiles/permissions typically need 4-8 queries
+    // Only flag as N+1 if significantly above normal Django patterns
+    if (query_count >= 12) return 1;  // Raised from 3 to 12 for realistic Django apps
+    
+    return 0;
+}
+
+/**
+ * @brief Estimate the likely cause of N+1 queries
+ * 
+ * Analyzes query patterns to determine the most probable cause of N+1 issues.
+ * 
+ * @param metrics Pointer to performance metrics structure
+ * @return Cause code (0=none, 1=serializer, 2=related_model, 3=foreign_key, 4=complex)
+ * @warning Returns 0 if metrics is NULL
+ */
+int estimate_n_plus_one_cause(const MercuryMetrics* metrics) {
+    if (!metrics) return 0;
+    
+    uint32_t query_count = get_query_count(metrics);
+    double response_time = get_elapsed_time_ms(metrics);
+    
+    // Cause classification:
+    // 0 = No N+1
+    // 1 = Serializer N+1 (many quick queries)
+    // 2 = Related model N+1 (moderate queries)
+    // 3 = Foreign key N+1 (many queries, slow)
+    // 4 = Complex relationship N+1 (very many queries)
+    
+    // No N+1 issues for 0 queries (static/cached responses) or low query counts
+    if (query_count == 0 || query_count < 12) return 0;
+    
+    double avg_query_time = response_time / query_count;
+    
+    if (query_count >= 50) return 4;  // Complex relationship N+1
+    if (query_count >= 30 && avg_query_time > 2.0) return 3;  // Foreign key N+1
+    if (query_count >= 20 && avg_query_time < 2.0) return 1;  // Serializer N+1
+    if (query_count >= 12) return 2;   // Related model N+1
+    
+    return 0;
+}
+
+/**
+ * @brief Get suggested fix for detected N+1 pattern
+ * 
+ * Returns human-readable suggestion based on estimated cause of N+1 queries.
+ * 
+ * @param metrics Pointer to performance metrics structure
+ * @return String with optimization suggestion
+ * @warning Returns "No metrics available" if metrics is NULL - pointer remains valid
+ */
+const char* get_n_plus_one_fix_suggestion(const MercuryMetrics* metrics) {
+    if (!metrics) return "No metrics available";
+    
+    int cause = estimate_n_plus_one_cause(metrics);
+    
+    switch (cause) {
+        case 0:
+            return "No N+1 detected";
+        case 1:
+            return "Serializer N+1: Check SerializerMethodField usage, use prefetch_related()";
+        case 2:
+            return "Related model N+1: Add select_related() for ForeignKey fields";
+        case 3:
+            return "Foreign key N+1: Use select_related() and check for nested relationship access";
+        case 4:
+            return "Complex N+1: Review QuerySet optimization, consider using raw SQL or database views";
+        default:
+            return "Add select_related() and prefetch_related() to your QuerySet";
+    }
+}
+
 // === LIBRARY INITIALIZATION ===
 
 // Library constructor

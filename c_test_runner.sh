@@ -164,7 +164,41 @@ case "$COMMAND" in
     test|tests)
         print_info "Running simple C tests..."
         check_requirements || exit 1
-        run_c_tests "test" "Simple tests"
+        
+        # Capture test output to count total tests
+        cd "$C_CORE_DIR" || exit 1
+        
+        echo -e "${CYAN}🔧 Running all tests${NC}"
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        
+        # Run tests and capture output
+        TEST_OUTPUT=$(make test 2>&1)
+        echo "$TEST_OUTPUT"
+        
+        # Count total tests from all "Total:" lines
+        TOTAL_COUNT=0
+        while IFS= read -r line; do
+            if [[ $line =~ Total:\ ([0-9]+) ]]; then
+                COUNT="${BASH_REMATCH[1]}"
+                TOTAL_COUNT=$((TOTAL_COUNT + COUNT))
+            fi
+        done <<< "$TEST_OUTPUT"
+        
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${GREEN}📊 Test Summary:${NC}"
+        echo -e "${GREEN}   Total tests executed: ${BOLD}$TOTAL_COUNT${NC}"
+        
+        # Check if make succeeded
+        if make test > /dev/null 2>&1; then
+            print_success "All tests completed successfully!"
+        else
+            print_error "Some tests failed!"
+            cd "$ORIGINAL_DIR"
+            exit 1
+        fi
+        
+        cd "$ORIGINAL_DIR"
         ;;
         
     coverage)

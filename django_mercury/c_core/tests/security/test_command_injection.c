@@ -58,7 +58,7 @@ static void test_path_traversal_prevention(void) {
     // Test path traversal attempts
     const char* traversal_attempts[] = {
         "../../../etc/passwd",
-        "..\\..\\..\\windows\\system32\\config\\sam",
+        "..\\..\\..\\sensitive\\system\\file",
         "test/../../../etc/shadow",
         "/etc/passwd",
         NULL
