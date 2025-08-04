@@ -130,7 +130,7 @@ endif
 .PHONY: all clean test install benchmark profile help info debug release simple_test debug-test debug-coverage debug-single
 
 # Default target
-all: info $(TARGETS)
+all: info $(TARGETS) install
 
 # Display build information
 info:

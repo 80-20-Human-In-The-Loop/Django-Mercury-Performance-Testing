@@ -664,6 +664,13 @@ int detect_n_plus_one_moderate(const MercuryMetrics* metrics) {
     return (metrics->query_count > 20 && metrics->query_count <= 50) ? 1 : 0;
 }
 
+// Get memory delta in megabytes
+double get_memory_delta_mb(const MercuryMetrics* metrics) {
+    // MercuryMetrics only stores peak memory, not start/end
+    // So we can't calculate a true delta - return 0 for compatibility
+    return 0.0;
+}
+
 // Free metrics memory
 void free_metrics(MercuryMetrics* metrics) {
     if (metrics) {
