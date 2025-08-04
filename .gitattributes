@@ -1,0 +1,9 @@
+# Handle test files that might contain sensitive-looking paths
+django_mercury/c_core/tests/security/* text eol=lf
+
+# Ensure C files use consistent line endings
+*.c text eol=lf
+*.h text eol=lf
+
+# Mark security test files as non-exportable
+django_mercury/c_core/tests/security/test_command_injection.c export-ignore

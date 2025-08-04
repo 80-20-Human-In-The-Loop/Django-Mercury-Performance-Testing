@@ -30,6 +30,12 @@ jobs:
         python-version: ['3.8', '3.10', '3.12']
     
     steps:
+      - name: Configure Git for Windows paths
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.protectNTFS false
+          git config --global core.longpaths true
+          
       - uses: actions/checkout@v4
       
       - uses: actions/setup-python@v4
@@ -140,6 +146,12 @@ jobs:
     # No dependency on tests - build immediately
     
     steps:
+      - name: Configure Git for Windows paths
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.protectNTFS false
+          git config --global core.longpaths true
+          
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for version detection
@@ -201,6 +213,12 @@ jobs:
             build-name: windows-amd64
     
     steps:
+      - name: Configure Git for Windows paths
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.protectNTFS false
+          git config --global core.longpaths true
+          
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -238,6 +256,12 @@ jobs:
         python: ['3.8', '3.9', '3.10', '3.11', '3.12']
     
     steps:
+      - name: Configure Git for Windows paths
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.protectNTFS false
+          git config --global core.longpaths true
+          
       - uses: actions/checkout@v4
       
       - uses: actions/setup-python@v4

@@ -10,6 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Configure Git for Windows paths
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.protectNTFS false
+          git config --global core.longpaths true
+          
       - uses: actions/checkout@v4
       
       - uses: actions/setup-python@v4
