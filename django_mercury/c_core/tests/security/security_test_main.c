@@ -13,6 +13,8 @@
 void run_command_injection_tests(void);
 void run_buffer_overflow_tests(void);
 void run_input_validation_tests(void);
+void run_memory_security_tests(void);
+void run_format_and_bounds_tests(void);
 
 // Import test statistics from test_framework
 extern int total_tests;
@@ -20,6 +22,10 @@ extern int passed_tests;
 extern int failed_tests;
 
 int main(int argc, char* argv[]) {
+    // Suppress unused parameter warnings
+    (void)argc;
+    (void)argv;
+    
     printf("\n");
     printf("╔════════════════════════════════════════════════════════════╗\n");
     printf("║           🔒 MERCURY SECURITY TEST SUITE 🔒               ║\n");
@@ -29,6 +35,9 @@ int main(int argc, char* argv[]) {
     printf("║  • Buffer overflows                                       ║\n");
     printf("║  • Input validation                                       ║\n");
     printf("║  • Memory safety                                          ║\n");
+    printf("║  • Format string vulnerabilities                          ║\n");
+    printf("║  • Integer overflow/underflow                             ║\n");
+    printf("║  • Race conditions                                        ║\n");
     printf("╚════════════════════════════════════════════════════════════╝\n");
     printf("\n");
     
@@ -41,6 +50,8 @@ int main(int argc, char* argv[]) {
     run_command_injection_tests();
     run_buffer_overflow_tests();
     run_input_validation_tests();
+    run_memory_security_tests();
+    run_format_and_bounds_tests();
     
     // Print summary
     printf("\n");
@@ -73,11 +84,14 @@ int main(int argc, char* argv[]) {
         printf("║                                                            ║\n");
         printf("║     No security vulnerabilities detected!                 ║\n");
         printf("║                                                            ║\n");
-        printf("║     Fixed vulnerabilities:                                ║\n");
-        printf("║     • Command injection via system() calls                ║\n");
-        printf("║     • Buffer overflow via unsafe string operations        ║\n");
-        printf("║     • Memory mapping error handling                       ║\n");
+        printf("║     Comprehensive security validation complete:           ║\n");
+        printf("║     • Command injection prevention                        ║\n");
+        printf("║     • Buffer overflow protection                          ║\n");
         printf("║     • Input validation and sanitization                   ║\n");
+        printf("║     • Memory safety (NULL ptr, use-after-free)            ║\n");
+        printf("║     • Format string vulnerability prevention              ║\n");
+        printf("║     • Integer overflow/underflow protection               ║\n");
+        printf("║     • Race condition and bounds checking                  ║\n");
         printf("╚════════════════════════════════════════════════════════════╝\n");
         printf("\033[0m\n");
         return 0;

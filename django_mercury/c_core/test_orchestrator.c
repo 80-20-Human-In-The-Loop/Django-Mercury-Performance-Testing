@@ -22,6 +22,7 @@
  */
 
 #include "common.h"
+#include "test_orchestrator.h"
 #include <sys/stat.h>
 #include <inttypes.h>
 #include <errno.h>
@@ -61,16 +62,7 @@ typedef struct MERCURY_PACKED {
     uint32_t checksum;
 } ConfigHeader;
 
-// Test configuration entry
-typedef struct MERCURY_PACKED {
-    char test_class[128];
-    char test_method[128];
-    double response_time_threshold;
-    double memory_threshold_mb;
-    uint32_t query_count_threshold;
-    double cache_hit_ratio_threshold;
-    uint32_t flags;
-} TestConfig;
+// TestConfig - using anonymous struct from TestContext in header
 
 // History entry for memory-mapped storage
 typedef struct MERCURY_PACKED {
@@ -99,35 +91,8 @@ typedef struct MERCURY_PACKED {
     // HistoryEntry entries follow
 } HistoryHeader;
 
-// Test context for session management
-typedef struct MERCURY_ALIGNED(64) {
-    int64_t context_id;
-    char test_class[128];
-    char test_method[128];
-    MercuryTimestamp start_time;
-    
-    // Configuration
-    TestConfig config;
-    
-    // Metrics collection
-    double response_time_ms;
-    double memory_usage_mb;
-    uint32_t query_count;
-    double cache_hit_ratio;
-    double performance_score;
-    char grade[4];
-    
-    // Status
-    bool is_active;
-    bool has_violations;
-    uint64_t violation_flags;
-    
-    // N+1 analysis
-    bool has_n_plus_one;
-    int severity_level;
-    char optimization_suggestion[256];
-    
-} TestContext;
+// TestContext is defined in test_orchestrator.h
+// We use the public API version for consistency
 
 // Main orchestrator structure
 typedef struct {
@@ -137,7 +102,7 @@ typedef struct {
     size_t max_contexts;
     
     // Configuration management
-    TestConfig* default_configs;
+    void* default_configs;  // Reserved for future use
     size_t config_count;
     
     // Memory-mapped history
@@ -384,8 +349,8 @@ static void cleanup_orchestrator_internal(void) {
 
 // Create new test context
 void* create_test_context(const char* test_class, const char* test_method) {
+    // Validate inputs - reject NULL parameters for security
     if (!test_class || !test_method) {
-        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Test class and method cannot be NULL");
         return NULL;
     }
     
@@ -413,19 +378,31 @@ void* create_test_context(const char* test_class, const char* test_method) {
     
     // Initialize context
     context->context_id = atomic_fetch_add(&g_orchestrator->next_context_id, 1);
-    context->start_time = mercury_get_timestamp();
+    context->start_time = mercury_get_timestamp().nanoseconds;
+    context->end_time = 0;  // Initialize end_time
     
-    strncpy(context->test_class, test_class, sizeof(context->test_class) - 1);
-    context->test_class[sizeof(context->test_class) - 1] = '\0';
-    strncpy(context->test_method, test_method, sizeof(context->test_method) - 1);
-    context->test_method[sizeof(context->test_method) - 1] = '\0';
+    // Safe string copy with bounds checking
+    size_t class_len = strlen(test_class);
+    size_t method_len = strlen(test_method);
     
-    // Set default configuration
+    // Ensure we don't overflow the buffers
+    if (class_len >= sizeof(context->test_class)) {
+        class_len = sizeof(context->test_class) - 1;
+    }
+    if (method_len >= sizeof(context->test_method)) {
+        method_len = sizeof(context->test_method) - 1;
+    }
+    
+    memcpy(context->test_class, test_class, class_len);
+    context->test_class[class_len] = '\0';
+    memcpy(context->test_method, test_method, method_len);
+    context->test_method[method_len] = '\0';
+    
+    // Set default configuration using anonymous struct
     context->config.response_time_threshold = 1000.0;  // 1 second
     context->config.memory_threshold_mb = 200.0;       // 200MB
-    context->config.query_count_threshold = 50;        // 50 queries
-    context->config.cache_hit_ratio_threshold = 0.7;   // 70%
-    context->config.flags = 0;
+    context->config.max_queries = 50;                  // 50 queries
+    context->config.min_cache_hit_ratio = 0.7;         // 70%
     
     // Initialize metrics
     context->response_time_ms = 0.0;
@@ -466,7 +443,20 @@ int update_test_context(void* context_ptr, double response_time_ms, double memor
         return -1;
     }
     
-    // Update metrics
+    // Validate and clamp metrics to prevent overflow
+    if (response_time_ms < 0) response_time_ms = 0;
+    if (response_time_ms > 1e9) response_time_ms = 1e9;  // Cap at 1 million seconds
+    
+    if (memory_usage_mb < 0) memory_usage_mb = 0;
+    if (memory_usage_mb > 1e9) memory_usage_mb = 1e9;  // Cap at 1 million GB
+    
+    if (cache_hit_ratio < 0) cache_hit_ratio = 0;
+    if (cache_hit_ratio > 1) cache_hit_ratio = 1;
+    
+    if (performance_score < 0) performance_score = 0;
+    if (performance_score > 100) performance_score = 100;
+    
+    // Update metrics with validated values
     context->response_time_ms = response_time_ms;
     context->memory_usage_mb = memory_usage_mb;
     context->query_count = query_count;
@@ -474,8 +464,15 @@ int update_test_context(void* context_ptr, double response_time_ms, double memor
     context->performance_score = performance_score;
     
     if (grade) {
-        strncpy(context->grade, grade, sizeof(context->grade) - 1);
-        context->grade[sizeof(context->grade) - 1] = '\0';
+        // Grade field is 4 bytes, limit to 3 characters + null terminator
+        size_t grade_len = strlen(grade);
+        if (grade_len > 3) {
+            grade_len = 3;
+        }
+        memcpy(context->grade, grade, grade_len);
+        context->grade[grade_len] = '\0';
+    } else {
+        strcpy(context->grade, "N/A");
     }
     
     // Check for violations
@@ -492,12 +489,12 @@ int update_test_context(void* context_ptr, double response_time_ms, double memor
         context->violation_flags |= VIOLATION_MEMORY_USAGE;
     }
     
-    if (query_count > context->config.query_count_threshold) {
+    if (query_count > context->config.max_queries) {
         context->has_violations = true;
         context->violation_flags |= VIOLATION_QUERY_COUNT;
     }
     
-    if (cache_hit_ratio < context->config.cache_hit_ratio_threshold) {
+    if (cache_hit_ratio < context->config.min_cache_hit_ratio) {
         context->has_violations = true;
         context->violation_flags |= VIOLATION_CACHE_RATIO;
     }
@@ -527,9 +524,16 @@ int update_n_plus_one_analysis(void* context_ptr, int has_n_plus_one, int severi
     context->severity_level = severity_level;
     
     if (optimization_suggestion) {
-        strncpy(context->optimization_suggestion, optimization_suggestion, 
-                sizeof(context->optimization_suggestion) - 1);
-        context->optimization_suggestion[sizeof(context->optimization_suggestion) - 1] = '\0';
+        // Safe copy that treats format strings as literal strings
+        size_t suggestion_len = strlen(optimization_suggestion);
+        if (suggestion_len >= sizeof(context->optimization_suggestion)) {
+            suggestion_len = sizeof(context->optimization_suggestion) - 1;
+        }
+        // Use memcpy to avoid any format string interpretation
+        memcpy(context->optimization_suggestion, optimization_suggestion, suggestion_len);
+        context->optimization_suggestion[suggestion_len] = '\0';
+    } else {
+        strcpy(context->optimization_suggestion, "No suggestion");
     }
     
     if (context->has_n_plus_one) {
@@ -584,10 +588,21 @@ void get_orchestrator_statistics(uint64_t* total_tests, uint64_t* total_violatio
     if (total_tests) *total_tests = atomic_load(&g_orchestrator->total_tests_executed);
     if (total_violations) *total_violations = atomic_load(&g_orchestrator->total_violations);
     if (total_n_plus_one) *total_n_plus_one = atomic_load(&g_orchestrator->total_n_plus_one_detected);
-    if (active_contexts) *active_contexts = g_orchestrator->context_count;
+    
+    // Count active contexts
+    if (active_contexts) {
+        size_t active_count = 0;
+        for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+            if (g_orchestrator->contexts[i].is_active) {
+                active_count++;
+            }
+        }
+        *active_contexts = active_count;
+    }
+    
+    // Get history entries count
     if (history_entries) {
-        *history_entries = g_orchestrator->history_header ? 
-                          g_orchestrator->history_header->entry_count : 0;
+        *history_entries = 0; // TODO: Implement history entries counting if needed
     }
 }
 
@@ -650,14 +665,7 @@ int initialize_test_orchestrator(const char* history_file_path) {
 
 // Public cleanup function for testing
 void cleanup_test_orchestrator(void) {
-    if (g_orchestrator) {
-        cleanup_history_file();
-        if (g_orchestrator->contexts) {
-            free(g_orchestrator->contexts);
-        }
-        free(g_orchestrator);
-        g_orchestrator = NULL;
-    }
+    cleanup_orchestrator_internal();
 }
 
 // Alias for update_test_context for compatibility

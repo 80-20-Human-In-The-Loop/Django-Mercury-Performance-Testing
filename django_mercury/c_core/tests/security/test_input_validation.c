@@ -25,14 +25,12 @@ static void test_null_input_handling(void) {
     ASSERT_EQ(load_binary_configuration(NULL), -1, 
               "NULL path should be rejected");
     
-    // Test NULL context creation
+    // Test NULL context creation - should be rejected for security
     void* context = create_test_context(NULL, "method");
-    ASSERT_NEQ(context, NULL, "Should handle NULL class name");
-    destroy_test_context(context);
+    ASSERT_EQ(context, NULL, "Should reject NULL class name");
     
     context = create_test_context("class", NULL);
-    ASSERT_NEQ(context, NULL, "Should handle NULL method name");
-    destroy_test_context(context);
+    ASSERT_EQ(context, NULL, "Should reject NULL method name");
     
     // Test NULL in update functions
     context = create_test_context("class", "method");
@@ -86,8 +84,8 @@ static void test_empty_string_handling(void) {
     ASSERT_EQ(initialize_test_orchestrator("/tmp/test_sec.bin"), 0, 
               "Failed to initialize orchestrator");
     
-    // Test empty string paths
-    int result = save_binary_configuration("");
+    // Test empty string paths - should handle gracefully
+    save_binary_configuration("");
     // Empty path might be valid (current directory)
     
     // Test empty class/method names

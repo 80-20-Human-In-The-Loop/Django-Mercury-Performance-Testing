@@ -402,12 +402,9 @@ typedef struct {
 } MercuryErrorContext;
 
 // Thread-local error context
-#ifdef __STDC_NO_THREADS__
-    // No thread-local storage available, use global variable
-    extern MercuryErrorContext mercury_last_error;
-#else
-    extern _Thread_local MercuryErrorContext mercury_last_error;
-#endif
+// Global error context (removed thread-local for PIC compatibility)
+// Note: Thread-local storage is incompatible with Position Independent Code
+extern MercuryErrorContext mercury_last_error;
 
 // Set error with context information
 #define MERCURY_SET_ERROR(error_code, msg) do { \

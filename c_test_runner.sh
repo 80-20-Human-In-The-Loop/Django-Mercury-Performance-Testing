@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
             SPECIFIC_TEST="$2"
             shift 2
             ;;
-        test|tests|coverage|all|clean|build|benchmark|memcheck|help|--help|-h|enhanced)
+        test|tests|coverage|all|clean|build|benchmark|memcheck|help|--help|-h|enhanced|security|--security)
             COMMAND="$1"
             shift
             ;;
@@ -197,6 +197,39 @@ case "$COMMAND" in
         run_c_tests "all" "Build libraries"
         ;;
         
+    security|--security)
+        print_info "Running security vulnerability tests..."
+        check_requirements || exit 1
+        
+        echo -e "${YELLOW}"
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║           🔒 SECURITY VULNERABILITY TESTING 🔒            ║"
+        echo "║                                                            ║"
+        echo "║  Testing for:                                              ║"
+        echo "║  • Command injection vulnerabilities                      ║"
+        echo "║  • Buffer overflow protections                            ║"
+        echo "║  • Input validation                                       ║"
+        echo "║  • Memory safety                                          ║"
+        echo "╚════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        
+        run_c_tests "sec_test" "Security tests"
+        
+        # Check exit code
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}"
+            echo "✅ All security tests passed!"
+            echo "No critical vulnerabilities detected."
+            echo -e "${NC}"
+        else
+            echo -e "${RED}"
+            echo "⚠️  SECURITY VULNERABILITIES DETECTED!"
+            echo "Review the failed tests above and fix all issues before deployment."
+            echo -e "${NC}"
+            exit 1
+        fi
+        ;;
+        
     benchmark)
         print_info "Running performance benchmarks..."
         check_requirements || exit 1
@@ -280,6 +313,7 @@ case "$COMMAND" in
         echo "  test       Run simple C tests (default)"
         echo "  coverage   Run tests with coverage analysis"
         echo "  enhanced   Run tests with enhanced debugging features"
+        echo "  security   Run security vulnerability tests 🔒"
         echo "  all        Run all tests and coverage"
         echo "  clean      Clean test artifacts"
         echo "  build      Build C libraries only"

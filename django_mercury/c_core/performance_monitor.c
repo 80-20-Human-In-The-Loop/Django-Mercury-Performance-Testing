@@ -10,6 +10,31 @@
  * - Realistic N+1 detection (12+ queries before flagging as N+1)
  * - Comprehensive performance metrics collection
  * - Django-specific query and cache tracking
+ * 
+ * ## Thread Safety Guarantees
+ * 
+ * **Thread-Safe Functions:**
+ * - start_performance_monitoring_enhanced() - Protected by slot_mutex
+ * - stop_performance_monitoring_enhanced() - Protected by slot_mutex  
+ * - increment_*() functions - Per-session mutex protection
+ * - All get_*() accessor functions - Read-only after stop_performance_monitoring_enhanced()
+ * 
+ * **Not Thread-Safe Functions:**
+ * - reset_global_counters() - Call only when no other threads are active
+ * - free_metrics() - Do not call concurrently with same metrics pointer
+ * 
+ * **Global Counter Limitations:**
+ * Global counters (global_query_count, global_cache_hits, global_cache_misses) 
+ * are updated without atomic operations for performance. Use session-specific 
+ * counters for accurate concurrent tracking.
+ * 
+ * **Session Isolation:**
+ * Each monitoring session maintains isolated per-session counters protected by
+ * individual mutexes, ensuring accurate metrics even under concurrent access.
+ * 
+ * @author Django Mercury Team
+ * @date 2024
+ * @version 2.0.0
  */
 
 #include "common.h"
@@ -91,6 +116,7 @@ static size_t get_memory_usage_bytes(void) {
 
 /**
  * @brief Reset global counters (called between tests)
+ * @warning Not thread-safe - call only when no other threads are active
  */
 void reset_global_counters(void) {
     global_query_count = 0;
@@ -98,23 +124,49 @@ void reset_global_counters(void) {
     global_cache_misses = 0;
 }
 
-// Thread-local storage for current session ID
-static __thread int64_t current_session_id = 0;
+// Thread-specific storage for current session ID (PIC-compatible)
+static pthread_key_t session_id_key;
+static pthread_once_t session_key_once = PTHREAD_ONCE_INIT;
+
+/**
+ * @brief Cleanup function for thread-specific session ID storage
+ */
+static void cleanup_session_id(void* ptr) {
+    if (ptr) {
+        free(ptr);
+    }
+}
+
+/**
+ * @brief Initialize thread-specific storage key (called once)
+ */
+static void init_session_key(void) {
+    pthread_key_create(&session_id_key, cleanup_session_id);
+}
 
 /**
  * @brief Set the current session ID for this thread
  * @param session_id The session ID to set as current for this thread
+ * @warning Not thread-safe during initialization - call pthread_once first
  */
 void set_current_session_id(int64_t session_id) {
-    current_session_id = session_id;
+    pthread_once(&session_key_once, init_session_key);
+    int64_t* stored_id = malloc(sizeof(int64_t));
+    if (stored_id) {
+        *stored_id = session_id;
+        pthread_setspecific(session_id_key, stored_id);
+    }
 }
 
 /**
  * @brief Get the current session ID for this thread
  * @return Current session ID, 0 if none set
+ * @warning Returns 0 if thread-specific storage not initialized
  */
 int64_t get_current_session_id(void) {
-    return current_session_id;
+    pthread_once(&session_key_once, init_session_key);
+    int64_t* stored_id = (int64_t*)pthread_getspecific(session_id_key);
+    return stored_id ? *stored_id : 0;
 }
 
 /**
@@ -139,15 +191,16 @@ static EnhancedPerformanceMetrics_t* find_session_by_id(int64_t session_id) {
 }
 
 /**
- * @brief Find active session for current thread using thread-local session ID
+ * @brief Find active session for current thread using thread-specific session ID
  * @return Pointer to active session metrics, NULL if none found
  */
 static EnhancedPerformanceMetrics_t* find_current_session(void) {
-    return find_session_by_id(current_session_id);
+    return find_session_by_id(get_current_session_id());
 }
 
 /**
  * @brief Increment query counter for current active session (called from Django hooks)
+ * @warning Thread-safe for session counters, but global counter updates are not atomic
  */
 void increment_query_count(void) {
     // Update global counter for backward compatibility
@@ -164,6 +217,7 @@ void increment_query_count(void) {
 
 /**
  * @brief Increment cache hits counter for current active session (called from Django hooks)
+ * @warning Thread-safe for session counters, but global counter updates are not atomic
  */
 void increment_cache_hits(void) {
     // Update global counter for backward compatibility
@@ -180,6 +234,7 @@ void increment_cache_hits(void) {
 
 /**
  * @brief Increment cache misses counter for current active session (called from Django hooks)
+ * @warning Thread-safe for session counters, but global counter updates are not atomic
  */
 void increment_cache_misses(void) {
     // Update global counter for backward compatibility  
@@ -205,10 +260,19 @@ void increment_cache_misses(void) {
  * @param operation_name Name of the operation being monitored
  * @param operation_type Type of operation (view, model, serializer, query)
  * @return Handle for the monitoring session, -1 on error
+ * 
+ * @warning Thread-safe but limited to 2048 concurrent sessions
+ * @warning Returns -1 if no slots available or memory allocation fails
+ * @warning Caller must call stop_performance_monitoring_enhanced() to free resources
  */
 int64_t start_performance_monitoring_enhanced(const char* operation_name, const char* operation_type) {
     if (!operation_name) {
         MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation name cannot be NULL");
+        return -1;
+    }
+    
+    if (!operation_type) {
+        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation type cannot be NULL");
         return -1;
     }
     
@@ -294,6 +358,10 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
  * 
  * @param handle Handle returned by start_performance_monitoring_enhanced
  * @return Pointer to metrics structure, NULL on error
+ * 
+ * @warning Thread-safe but caller must free returned metrics with free_metrics()
+ * @warning Returns NULL for invalid handles or already-stopped sessions
+ * @warning Metrics pointer becomes invalid after free_metrics() call
  */
 EnhancedPerformanceMetrics_t* stop_performance_monitoring_enhanced(int64_t handle) {
     if (handle <= 0) return NULL;
@@ -340,6 +408,8 @@ EnhancedPerformanceMetrics_t* stop_performance_monitoring_enhanced(int64_t handl
 /**
  * @brief Free metrics structure memory
  * @param metrics Pointer to metrics structure allocated by stop_performance_monitoring_enhanced
+ * @warning Not thread-safe - do not call concurrently with same metrics pointer
+ * @warning Pointer becomes invalid after this call - do not use after freeing
  */
 void free_metrics(EnhancedPerformanceMetrics_t* metrics) {
     if (metrics) {
@@ -352,9 +422,10 @@ void free_metrics(EnhancedPerformanceMetrics_t* metrics) {
 // --- Performance Metric Accessors ---
 
 /**
- * @brief Get elapsed time in milliseconds
+ * @brief Get elapsed time in milliseconds  
  * @param metrics Pointer to performance metrics structure
  * @return Elapsed time in milliseconds, -1.0 on error
+ * @warning Returns -1.0 if metrics is NULL or monitoring not yet stopped
  */
 double get_elapsed_time_ms(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics || metrics->end_time_ns == 0) return -1.0;
@@ -365,8 +436,9 @@ double get_elapsed_time_ms(EnhancedPerformanceMetrics_t* metrics) {
 
 /**
  * @brief Get peak memory usage in megabytes
- * @param metrics Pointer to performance metrics structure
+ * @param metrics Pointer to performance metrics structure  
  * @return Peak memory usage in MB, -1.0 on error
+ * @warning Returns -1.0 if metrics is NULL
  */
 double get_memory_usage_mb(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return -1.0;
@@ -377,6 +449,7 @@ double get_memory_usage_mb(EnhancedPerformanceMetrics_t* metrics) {
  * @brief Get memory usage delta in megabytes
  * @param metrics Pointer to performance metrics structure
  * @return Memory delta in MB (end - start), can be negative
+ * @warning Returns -1.0 if metrics is NULL
  */
 double get_memory_delta_mb(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return -1.0;
@@ -388,6 +461,7 @@ double get_memory_delta_mb(EnhancedPerformanceMetrics_t* metrics) {
  * @brief Get number of database queries executed during operation
  * @param metrics Pointer to performance metrics structure
  * @return Number of queries, 0 on error
+ * @warning Returns 0 if metrics is NULL (cannot distinguish from legitimate 0 queries)
  */
 uint32_t get_query_count(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -399,6 +473,7 @@ uint32_t get_query_count(EnhancedPerformanceMetrics_t* metrics) {
  * @brief Get number of cache hits during operation
  * @param metrics Pointer to performance metrics structure
  * @return Number of cache hits, 0 on error
+ * @warning Returns 0 if metrics is NULL (cannot distinguish from legitimate 0 hits)
  */
 uint32_t get_cache_hit_count(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -410,6 +485,7 @@ uint32_t get_cache_hit_count(EnhancedPerformanceMetrics_t* metrics) {
  * @brief Get number of cache misses during operation
  * @param metrics Pointer to performance metrics structure
  * @return Number of cache misses, 0 on error
+ * @warning Returns 0 if metrics is NULL (cannot distinguish from legitimate 0 misses)
  */
 uint32_t get_cache_miss_count(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -421,6 +497,7 @@ uint32_t get_cache_miss_count(EnhancedPerformanceMetrics_t* metrics) {
  * @brief Get cache hit ratio for the operation
  * @param metrics Pointer to performance metrics structure
  * @return Cache hit ratio (0.0-1.0), -1.0 on error, 0.0 if no cache ops
+ * @warning Returns -1.0 if metrics is NULL, 0.0 if no cache operations occurred
  */
 double get_cache_hit_ratio(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return -1.0;
@@ -441,6 +518,7 @@ double get_cache_hit_ratio(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return 1 if N+1 pattern detected, 0 otherwise
+ * @warning Returns 0 if metrics is NULL or query count < 3
  */
 int has_n_plus_one_pattern(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -462,6 +540,7 @@ int has_n_plus_one_pattern(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return 1 if severe N+1 detected, 0 otherwise
+ * @warning Returns 0 if metrics is NULL or query count is 0
  */
 int detect_n_plus_one_severe(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -493,6 +572,7 @@ int detect_n_plus_one_severe(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return 1 if moderate N+1 detected, 0 otherwise
+ * @warning Returns 0 if metrics is NULL
  */
 int detect_n_plus_one_moderate(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -518,6 +598,7 @@ int detect_n_plus_one_moderate(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return 1 if N+1 pattern detected by count, 0 otherwise
+ * @warning Returns 0 if metrics is NULL or query count is 0
  */
 int detect_n_plus_one_pattern_by_count(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -556,6 +637,7 @@ int detect_n_plus_one_pattern_by_count(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return Severity level (0=none, 1=mild, 2=moderate, 3=high, 4=severe, 5=critical)
+ * @warning Returns 0 if metrics is NULL
  */
 int calculate_n_plus_one_severity(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -582,6 +664,7 @@ int calculate_n_plus_one_severity(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return Cause code (0=none, 1=serializer, 2=related_model, 3=foreign_key, 4=complex)
+ * @warning Returns 0 if metrics is NULL
  */
 int estimate_n_plus_one_cause(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -616,6 +699,7 @@ int estimate_n_plus_one_cause(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return String with optimization suggestion
+ * @warning Returns "No metrics available" if metrics is NULL - pointer remains valid
  */
 const char* get_n_plus_one_fix_suggestion(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return "No metrics available";
@@ -645,6 +729,7 @@ const char* get_n_plus_one_fix_suggestion(EnhancedPerformanceMetrics_t* metrics)
  * 
  * @param metrics Pointer to performance metrics structure
  * @return 1 if memory intensive, 0 otherwise
+ * @warning Returns 0 if metrics is NULL
  */
 int is_memory_intensive(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;
@@ -663,6 +748,7 @@ int is_memory_intensive(EnhancedPerformanceMetrics_t* metrics) {
  * 
  * @param metrics Pointer to performance metrics structure
  * @return 1 if poor cache performance, 0 otherwise
+ * @warning Returns 0 if metrics is NULL
  */
 int has_poor_cache_performance(EnhancedPerformanceMetrics_t* metrics) {
     if (!metrics) return 0;

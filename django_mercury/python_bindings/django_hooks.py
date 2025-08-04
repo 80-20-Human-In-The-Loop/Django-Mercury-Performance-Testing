@@ -18,6 +18,7 @@ try:
     from django.db.backends.utils import CursorWrapper
     from django.test.utils import override_settings
     import django.db.backends.utils
+
     DJANGO_AVAILABLE = True
 except ImportError:
     DJANGO_AVAILABLE = False
@@ -25,38 +26,42 @@ except ImportError:
 # --- C Extension Integration ---
 try:
     from .c_bindings import c_extensions
+
     C_EXTENSIONS_AVAILABLE = c_extensions.query_analyzer is not None
 except ImportError:
     C_EXTENSIONS_AVAILABLE = False
 
 # --- Data Classes ---
 
+
 @dataclass
 class QueryInfo:
     """
-Holds information about a single database query.
+    Holds information about a single database query.
 
-    Attributes:
-        sql (str): The SQL query string.
-        time (float): The execution time of the query in seconds.
-        params (Optional[tuple]): The parameters used in the query.
-        alias (str): The database alias used for the query.
+        Attributes:
+            sql (str): The SQL query string.
+            time (float): The execution time of the query in seconds.
+            params (Optional[tuple]): The parameters used in the query.
+            alias (str): The database alias used for the query.
     """
+
     sql: str
     time: float
     params: Optional[Tuple[Any, ...]] = None
-    alias: str = 'default'
+    alias: str = "default"
 
 
 # --- Query Tracking ---
 
+
 class DjangoQueryTracker:
     """
-Tracks and analyzes Django ORM queries for performance monitoring.
+    Tracks and analyzes Django ORM queries for performance monitoring.
 
-    This class patches Django's database cursor to intercept and record all
-    SQL queries executed during its active period. It provides methods to
-    detect common performance issues like N+1 query patterns and slow queries.
+        This class patches Django's database cursor to intercept and record all
+        SQL queries executed during its active period. It provides methods to
+        detect common performance issues like N+1 query patterns and slow queries.
     """
 
     def __init__(self) -> None:
@@ -71,23 +76,22 @@ Tracks and analyzes Django ORM queries for performance monitoring.
     def start(self) -> None:
         """
         Starts tracking Django queries by patching the cursor's execute methods.
-        
+
         This method monkey-patches Django's CursorWrapper to intercept all SQL
         queries. It's safe to call multiple times - subsequent calls are no-ops
         if tracking is already active.
-        
+
         Raises:
             RuntimeError: If Django is not available.
         """
         if not DJANGO_AVAILABLE:
             return
 
-
         self.is_active = True
         self.queries.clear()
         self.query_count = 0
         self.total_time = 0.0
-        
+
         # Reset C extension query analyzer for fresh test state
         if C_EXTENSIONS_AVAILABLE:
             try:
@@ -95,17 +99,25 @@ Tracks and analyzes Django ORM queries for performance monitoring.
             except Exception:
                 pass  # Ignore reset errors
 
-        if not hasattr(django.db.backends.utils.CursorWrapper, '_original_execute'):
-            django.db.backends.utils.CursorWrapper._original_execute = django.db.backends.utils.CursorWrapper.execute
-            django.db.backends.utils.CursorWrapper._original_executemany = django.db.backends.utils.CursorWrapper.executemany
+        if not hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
+            django.db.backends.utils.CursorWrapper._original_execute = (
+                django.db.backends.utils.CursorWrapper.execute
+            )
+            django.db.backends.utils.CursorWrapper._original_executemany = (
+                django.db.backends.utils.CursorWrapper.executemany
+            )
 
         tracker = self
 
-        def tracked_execute(self_cursor: CursorWrapper, sql: str, params: Optional[Tuple[Any, ...]] = None) -> Any:
+        def tracked_execute(
+            self_cursor: CursorWrapper, sql: str, params: Optional[Tuple[Any, ...]] = None
+        ) -> Any:
             """Wrapper for CursorWrapper.execute to track query execution."""
             start_time = time.time()
             try:
-                result = django.db.backends.utils.CursorWrapper._original_execute(self_cursor, sql, params)
+                result = django.db.backends.utils.CursorWrapper._original_execute(
+                    self_cursor, sql, params
+                )
                 execution_time = time.time() - start_time
                 tracker.record_query(sql, params, execution_time, self_cursor.db.alias)
                 return result
@@ -114,17 +126,23 @@ Tracks and analyzes Django ORM queries for performance monitoring.
                 tracker.record_query(f"FAILED: {sql}", params, execution_time, self_cursor.db.alias)
                 raise
 
-        def tracked_executemany(self_cursor: CursorWrapper, sql: str, param_list: List[Tuple[Any, ...]]) -> Any:
+        def tracked_executemany(
+            self_cursor: CursorWrapper, sql: str, param_list: List[Tuple[Any, ...]]
+        ) -> Any:
             """Wrapper for CursorWrapper.executemany to track query execution."""
             start_time = time.time()
             try:
-                result = django.db.backends.utils.CursorWrapper._original_executemany(self_cursor, sql, param_list)
+                result = django.db.backends.utils.CursorWrapper._original_executemany(
+                    self_cursor, sql, param_list
+                )
                 execution_time = time.time() - start_time
                 tracker.record_query(f"MANY: {sql}", None, execution_time, self_cursor.db.alias)
                 return result
             except Exception as e:
                 execution_time = time.time() - start_time
-                tracker.record_query(f"FAILED MANY: {sql}", None, execution_time, self_cursor.db.alias)
+                tracker.record_query(
+                    f"FAILED MANY: {sql}", None, execution_time, self_cursor.db.alias
+                )
                 raise
 
         django.db.backends.utils.CursorWrapper.execute = tracked_execute
@@ -139,11 +157,17 @@ Tracks and analyzes Django ORM queries for performance monitoring.
 
         self.is_active = False
 
-        if hasattr(django.db.backends.utils.CursorWrapper, '_original_execute'):
-            django.db.backends.utils.CursorWrapper.execute = django.db.backends.utils.CursorWrapper._original_execute
-            django.db.backends.utils.CursorWrapper.executemany = django.db.backends.utils.CursorWrapper._original_executemany
+        if hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
+            django.db.backends.utils.CursorWrapper.execute = (
+                django.db.backends.utils.CursorWrapper._original_execute
+            )
+            django.db.backends.utils.CursorWrapper.executemany = (
+                django.db.backends.utils.CursorWrapper._original_executemany
+            )
 
-    def record_query(self, sql: str, params: Optional[Tuple[Any, ...]], time: float, alias: str = 'default') -> None:
+    def record_query(
+        self, sql: str, params: Optional[Tuple[Any, ...]], time: float, alias: str = "default"
+    ) -> None:
         """
         Records a single query execution and updates performance counters.
 
@@ -156,18 +180,18 @@ Tracks and analyzes Django ORM queries for performance monitoring.
         if not self.is_active:
             return
 
-
         # Use C extension for high-performance query analysis if available
         if C_EXTENSIONS_AVAILABLE:
             try:
                 # Send query to C extension for analysis (time in seconds)
-                c_extensions.query_analyzer.analyze_query(sql.encode('utf-8'), time)
+                c_extensions.query_analyzer.analyze_query(sql.encode("utf-8"), time)
                 # Increment the metrics engine counter
                 if c_extensions.metrics_engine:
                     c_extensions.metrics_engine.increment_query_count()
             except Exception as e:
                 # Log error but continue with Python fallback
                 import logging
+
                 logging.getLogger(__name__).debug(f"C extension query analysis failed: {e}")
         else:
             # Legacy C library support (for backward compatibility)
@@ -179,8 +203,8 @@ Tracks and analyzes Django ORM queries for performance monitoring.
                     lib.increment_query_count()
             except Exception:
                 pass  # Silently fail if C library is not available
-        
-        # Python fallback (always maintain for compatibility and debugging)  
+
+        # Python fallback (always maintain for compatibility and debugging)
         query_info = QueryInfo(sql=sql, time=time, params=params, alias=alias)
         self.queries.append(query_info)
         self.query_count += 1
@@ -213,9 +237,9 @@ Tracks and analyzes Django ORM queries for performance monitoring.
         Returns:
             str: The normalized SQL query.
         """
-        sql = re.sub(r'\b\d+\.?\d*\b', '?', sql)  # Handle decimal numbers
-        sql = re.sub(r"'[^']*'", '?', sql)
-        sql = re.sub(r'"[^"]*"', '?', sql)
+        sql = re.sub(r"\b\d+\.?\d*\b", "?", sql)  # Handle decimal numbers
+        sql = re.sub(r"'[^']*'", "?", sql)
+        sql = re.sub(r'"[^"]*"', "?", sql)
         return sql.strip()
 
     def detect_n_plus_one(self) -> List[str]:
@@ -233,16 +257,19 @@ Tracks and analyzes Django ORM queries for performance monitoring.
                 if has_n_plus_one:
                     severity = c_extensions.query_analyzer.get_n_plus_one_severity()
                     cause = c_extensions.query_analyzer.get_n_plus_one_cause()
-                    suggestion = c_extensions.query_analyzer.get_optimization_suggestion().decode('utf-8')
-                    
+                    suggestion = c_extensions.query_analyzer.get_optimization_suggestion().decode(
+                        "utf-8"
+                    )
+
                     severity_levels = ["NONE", "MILD", "MODERATE", "HIGH", "SEVERE", "CRITICAL"]
                     severity_text = severity_levels[min(severity, 5)]
-                    
+
                     return [f"N+1 Pattern Detected: {severity_text} severity - {suggestion}"]
             except Exception as e:
                 import logging
+
                 logging.getLogger(__name__).debug(f"C extension N+1 detection failed: {e}")
-        
+
         # Python fallback
         duplicates = self.get_duplicate_queries()
         n_plus_one_patterns = []
@@ -275,8 +302,12 @@ Tracks and analyzes Django ORM queries for performance monitoring.
         """
         if not self.queries:
             return {
-                'total_queries': 0, 'total_time': 0.0, 'avg_time': 0.0,
-                'slow_queries': 0, 'duplicate_groups': 0, 'n_plus_one_patterns': []
+                "total_queries": 0,
+                "total_time": 0.0,
+                "avg_time": 0.0,
+                "slow_queries": 0,
+                "duplicate_groups": 0,
+                "n_plus_one_patterns": [],
             }
 
         query_times = [q.time for q in self.queries]
@@ -285,18 +316,19 @@ Tracks and analyzes Django ORM queries for performance monitoring.
         n_plus_one = self.detect_n_plus_one()
 
         return {
-            'total_queries': len(self.queries),
-            'total_time': sum(query_times),
-            'avg_time': sum(query_times) / len(query_times),
-            'max_time': max(query_times),
-            'min_time': min(query_times),
-            'slow_queries': len(slow_queries),
-            'duplicate_groups': len(duplicates),
-            'n_plus_one_patterns': n_plus_one
+            "total_queries": len(self.queries),
+            "total_time": sum(query_times),
+            "avg_time": sum(query_times) / len(query_times),
+            "max_time": max(query_times),
+            "min_time": min(query_times),
+            "slow_queries": len(slow_queries),
+            "duplicate_groups": len(duplicates),
+            "n_plus_one_patterns": n_plus_one,
         }
 
 
 # --- Cache Tracking ---
+
 
 class DjangoCacheTracker:
     """
@@ -341,17 +373,17 @@ class DjangoCacheTracker:
         if not self.is_active:
             return
 
-        self.operations.append({'operation': operation, 'key': key, 'time': time})
-        
-        if operation == 'hit':
+        self.operations.append({"operation": operation, "key": key, "time": time})
+
+        if operation == "hit":
             self.hits += 1
-            self._update_c_counter('increment_cache_hits')
-        elif operation == 'miss':
+            self._update_c_counter("increment_cache_hits")
+        elif operation == "miss":
             self.misses += 1
-            self._update_c_counter('increment_cache_misses')
-        elif operation == 'set':
+            self._update_c_counter("increment_cache_misses")
+        elif operation == "set":
             self.sets += 1
-        elif operation == 'delete':
+        elif operation == "delete":
             self.deletes += 1
 
     def _update_c_counter(self, function_name: str) -> None:
@@ -376,17 +408,18 @@ class DjangoCacheTracker:
         hit_ratio = (self.hits / total_gets) if total_gets > 0 else 0.0
 
         return {
-            'total_operations': len(self.operations),
-            'hits': self.hits,
-            'misses': self.misses,
-            'sets': self.sets,
-            'deletes': self.deletes,
-            'hit_ratio': hit_ratio,
-            'total_gets': total_gets
+            "total_operations": len(self.operations),
+            "hits": self.hits,
+            "misses": self.misses,
+            "sets": self.sets,
+            "deletes": self.deletes,
+            "hit_ratio": hit_ratio,
+            "total_gets": total_gets,
         }
 
 
 # --- Performance Context Manager ---
+
 
 class PerformanceContextManager:
     """
@@ -411,7 +444,7 @@ class PerformanceContextManager:
         self._start_time: Optional[float] = None
         self._end_time: Optional[float] = None
 
-    def __enter__(self) -> 'PerformanceContextManager':
+    def __enter__(self) -> "PerformanceContextManager":
         """Starts the performance trackers."""
         self._start_time = time.time()
         self.query_tracker.start()
@@ -435,23 +468,25 @@ class PerformanceContextManager:
         cache_summary = self.cache_tracker.get_cache_summary()
         lines = []
 
-        if query_summary['total_queries'] == 0:
+        if query_summary["total_queries"] == 0:
             lines.append("ℹ️ No database queries detected (possible caching or static response).")
-        elif query_summary['n_plus_one_patterns']:
+        elif query_summary["n_plus_one_patterns"]:
             lines.append("🚨 N+1 Query Patterns Detected:")
-            for pattern in query_summary['n_plus_one_patterns']:
+            for pattern in query_summary["n_plus_one_patterns"]:
                 lines.append(f"   - {pattern}")
         else:
             lines.append(f"✅ {query_summary['total_queries']} queries executed efficiently.")
 
-        if cache_summary['total_gets'] > 0:
-            hit_ratio = cache_summary['hit_ratio']
+        if cache_summary["total_gets"] > 0:
+            hit_ratio = cache_summary["hit_ratio"]
             if hit_ratio < 0.7:
-                lines.append(f"⚠️ Low cache hit ratio: {hit_ratio:.1%} - consider optimizing cache usage.")
+                lines.append(
+                    f"⚠️ Low cache hit ratio: {hit_ratio:.1%} - consider optimizing cache usage."
+                )
             else:
                 lines.append(f"✅ Good cache hit ratio: {hit_ratio:.1%}.")
 
-        if query_summary['slow_queries'] > 0:
+        if query_summary["slow_queries"] > 0:
             lines.append(f"⚠️ {query_summary['slow_queries']} slow queries detected ( > 100ms).")
 
         return "\n".join(lines) if lines else "✅ No performance issues detected!"

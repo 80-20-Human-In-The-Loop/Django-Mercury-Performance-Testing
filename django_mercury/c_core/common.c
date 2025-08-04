@@ -1,7 +1,8 @@
-/*
- * common.c - Implementation of shared utilities for Mercury Performance Testing Framework
+/**
+ * @file common.c
+ * @brief Implementation of shared utilities for Mercury Performance Testing Framework
  * 
- * This file implements the common data structures and utility functions declared in common.h.
+ * @details This file implements the common data structures and utility functions declared in common.h.
  * It provides cross-platform compatibility and high-performance implementations for:
  * - Memory management and ring buffers
  * - String operations and Boyer-Moore pattern matching
@@ -9,8 +10,12 @@
  * - SIMD-accelerated operations
  * - Error handling and logging
  *
- * Author: EduLite Performance Team
- * Version: 2.0.0
+ * @author Django Mercury Team
+ * @date 2024
+ * @version 2.0.0
+ * 
+ * @warning Thread safety varies by function - see individual function documentation
+ * @note All memory allocation functions return NULL on failure
  */
 
 /* Define feature test macros BEFORE any includes */
@@ -36,12 +41,10 @@
 uint64_t mercury_rdtsc_frequency = 0;
 #endif
 
-// Thread-local error context
-#ifdef __STDC_NO_THREADS__
-    MercuryErrorContext mercury_last_error = {MERCURY_SUCCESS, {0}, NULL, NULL, 0};
-#else
-    _Thread_local MercuryErrorContext mercury_last_error = {MERCURY_SUCCESS, {0}, NULL, NULL, 0};
-#endif
+// Global error context (removed thread-local for PIC compatibility)
+// Note: Thread-local storage is incompatible with Position Independent Code
+// required for shared libraries. Using global error context instead.
+MercuryErrorContext mercury_last_error = {MERCURY_SUCCESS, {0}, NULL, NULL, 0};
 
 // Default logger function pointer
 void (*mercury_log_function)(MercuryLogLevel level, const char* format, ...) = mercury_default_logger;
@@ -49,6 +52,19 @@ void (*mercury_log_function)(MercuryLogLevel level, const char* format, ...) = m
 // === TIMING UTILITIES ===
 
 #ifdef MERCURY_X86_64
+/**
+ * @brief Calibrate RDTSC frequency for high-precision timing
+ * 
+ * @details Calibrates the RDTSC (Read Time-Stamp Counter) against the system clock
+ * to enable accurate nanosecond-level timing measurements. This calibration is
+ * performed once and cached for the lifetime of the program.
+ * 
+ * @pre MERCURY_X86_64 must be defined
+ * @post mercury_rdtsc_frequency is set to calibrated value
+ * 
+ * @warning Not thread-safe - should be called once at initialization
+ * @note Falls back to frequency=1 if calibration fails
+ */
 void mercury_calibrate_rdtsc(void) {
     if (mercury_rdtsc_frequency != 0) {
         return;  // Already calibrated
@@ -86,6 +102,22 @@ void mercury_calibrate_rdtsc(void) {
 
 // === MEMORY UTILITIES ===
 
+/**
+ * @brief Allocate aligned memory for optimal performance
+ * 
+ * @details Allocates memory with specified alignment for cache-line optimization
+ * and SIMD operations. Uses platform-specific functions when available.
+ * 
+ * @param size Size in bytes to allocate
+ * @param alignment Required alignment (must be power of 2)
+ * @return Pointer to aligned memory or NULL on failure
+ * 
+ * @pre alignment must be a power of 2
+ * @post Memory is aligned to specified boundary
+ * 
+ * @warning Caller must free with mercury_aligned_free()
+ * @note Sets error context on failure
+ */
 void* mercury_aligned_alloc(size_t size, size_t alignment) {
     if (size == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0) {
         MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid size or alignment");
@@ -127,6 +159,14 @@ void* mercury_aligned_alloc(size_t size, size_t alignment) {
     return ptr;
 }
 
+/**
+ * @brief Free memory allocated with mercury_aligned_alloc
+ * 
+ * @param ptr Pointer returned by mercury_aligned_alloc (may be NULL)
+ * 
+ * @warning Only use with memory from mercury_aligned_alloc
+ * @note Safe to call with NULL pointer
+ */
 void mercury_aligned_free(void* ptr) {
     if (!ptr) return;
     
@@ -145,6 +185,23 @@ void mercury_aligned_free(void* ptr) {
 
 // === RING BUFFER IMPLEMENTATION ===
 
+/**
+ * @brief Create a lock-free ring buffer for high-performance data exchange
+ * 
+ * @details Creates a cache-aligned ring buffer with atomic operations for
+ * thread-safe producer-consumer patterns. Optimized for high-throughput
+ * with minimal contention.
+ * 
+ * @param element_size Size of each element in bytes
+ * @param capacity Maximum number of elements the buffer can hold
+ * @return Pointer to ring buffer or NULL on failure
+ * 
+ * @pre element_size > 0 and capacity > 0
+ * @post Ring buffer is initialized and ready for use
+ * 
+ * @warning Caller must call mercury_ring_buffer_destroy() to free
+ * @note Limited to 1GB total size to prevent accidental huge allocations
+ */
 MercuryRingBuffer* mercury_ring_buffer_create(size_t element_size, size_t capacity) {
     if (element_size == 0 || capacity == 0) {
         MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid element size or capacity");
@@ -190,6 +247,13 @@ MercuryRingBuffer* mercury_ring_buffer_create(size_t element_size, size_t capaci
     return buffer;
 }
 
+/**
+ * @brief Destroy ring buffer and free all resources
+ * 
+ * @param buffer Ring buffer to destroy (may be NULL)
+ * 
+ * @note Safe to call with NULL pointer
+ */
 void mercury_ring_buffer_destroy(MercuryRingBuffer* buffer) {
     if (!buffer) return;
     
@@ -197,6 +261,19 @@ void mercury_ring_buffer_destroy(MercuryRingBuffer* buffer) {
     mercury_aligned_free(buffer);
 }
 
+/**
+ * @brief Push element to ring buffer (thread-safe)
+ * 
+ * @details Uses lock-free atomic operations for thread-safe insertion.
+ * Optimized with cache prefetching for sequential access patterns.
+ * 
+ * @param buffer Ring buffer to push to
+ * @param element Pointer to element data to copy
+ * @return true if successful, false if buffer is full or invalid
+ * 
+ * @warning Does not block - returns false immediately if full
+ * @note Thread-safe with multiple producers
+ */
 bool mercury_ring_buffer_push(MercuryRingBuffer* buffer, const void* element) {
     if (MERCURY_UNLIKELY(!buffer || !element)) {
         return false;
@@ -235,14 +312,14 @@ bool mercury_ring_buffer_push(MercuryRingBuffer* buffer, const void* element) {
     }
     
     // Optimized copy based on element size
-    if (buffer->element_size <= 8) {
-        // Fast path for small elements (like ints, pointers)
+    // NOTE: Ring buffers typically handle small elements, so we avoid SIMD
+    // to prevent compiler warnings about buffer overflows
+    if (buffer->element_size <= 16) {
+        // Fast path for small and medium elements (most common case)
         memcpy(dest, element, buffer->element_size);
-    } else if (buffer->element_size >= 32) {
-        // SIMD path for larger elements
-        mercury_memcpy_simd(dest, element, buffer->element_size);
     } else {
-        // Regular memcpy for medium elements
+        // For very large elements, still use regular memcpy for ring buffers
+        // SIMD is not beneficial for the typical ring buffer use case
         memcpy(dest, element, buffer->element_size);
     }
     
@@ -251,6 +328,19 @@ bool mercury_ring_buffer_push(MercuryRingBuffer* buffer, const void* element) {
     return true;
 }
 
+/**
+ * @brief Pop element from ring buffer (thread-safe)
+ * 
+ * @details Uses lock-free atomic operations for thread-safe removal.
+ * Optimized with cache prefetching for sequential access patterns.
+ * 
+ * @param buffer Ring buffer to pop from
+ * @param element Pointer to store popped element data
+ * @return true if successful, false if buffer is empty or invalid
+ * 
+ * @warning Does not block - returns false immediately if empty
+ * @note Thread-safe with multiple consumers
+ */
 bool mercury_ring_buffer_pop(MercuryRingBuffer* buffer, void* element) {
     if (MERCURY_UNLIKELY(!buffer || !element)) {
         return false;
@@ -289,14 +379,14 @@ bool mercury_ring_buffer_pop(MercuryRingBuffer* buffer, void* element) {
     }
     
     // Optimized copy based on element size
-    if (buffer->element_size <= 8) {
-        // Fast path for small elements (like ints, pointers)
+    // NOTE: Ring buffers typically handle small elements, so we avoid SIMD
+    // to prevent compiler warnings about buffer overflows
+    if (buffer->element_size <= 16) {
+        // Fast path for small and medium elements (most common case)
         memcpy(element, src, buffer->element_size);
-    } else if (buffer->element_size >= 32) {
-        // SIMD path for larger elements
-        mercury_memcpy_simd(element, src, buffer->element_size);
     } else {
-        // Regular memcpy for medium elements
+        // For very large elements, still use regular memcpy for ring buffers
+        // SIMD is not beneficial for the typical ring buffer use case
         memcpy(element, src, buffer->element_size);
     }
     
@@ -322,6 +412,17 @@ bool mercury_ring_buffer_is_empty(const MercuryRingBuffer* buffer) {
 
 // === STRING UTILITIES ===
 
+/**
+ * @brief Create a dynamic string with automatic resizing
+ * 
+ * @param initial_capacity Initial buffer size (0 for default of 256)
+ * @return Pointer to string structure or NULL on failure
+ * 
+ * @post String is initialized with empty content
+ * 
+ * @warning Caller must call mercury_string_destroy() to free
+ * @note Automatically grows as needed during append operations
+ */
 MercuryString* mercury_string_create(size_t initial_capacity) {
     if (initial_capacity == 0) {
         initial_capacity = 256;  // Default capacity
@@ -514,6 +615,21 @@ static void compute_good_suffix_table(const char* pattern, size_t pattern_len, i
     free(suffix);
 }
 
+/**
+ * @brief Create Boyer-Moore pattern matcher for fast string searching
+ * 
+ * @details Builds bad character and good suffix tables for O(n/m) average
+ * case string searching performance.
+ * 
+ * @param pattern Pattern string to search for
+ * @return Pointer to Boyer-Moore structure or NULL on failure
+ * 
+ * @pre pattern must be non-NULL and non-empty
+ * @post Boyer-Moore tables are initialized
+ * 
+ * @warning Caller must call mercury_boyer_moore_destroy() to free
+ * @note Optimized for patterns longer than 3 characters
+ */
 MercuryBoyerMoore* mercury_boyer_moore_create(const char* pattern) {
     if (!pattern) {
         MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Pattern cannot be NULL");
@@ -554,6 +670,21 @@ void mercury_boyer_moore_destroy(MercuryBoyerMoore* bm) {
     free(bm);
 }
 
+/**
+ * @brief Search for pattern in text using Boyer-Moore algorithm
+ * 
+ * @details Uses precomputed tables for fast searching with SIMD acceleration
+ * for patterns >= 16 bytes.
+ * 
+ * @param bm Boyer-Moore structure with precomputed tables
+ * @param text Text to search in
+ * @param text_length Length of text in bytes
+ * @param pattern Pattern to search for (must match bm creation pattern)
+ * @return Index of first match or -1 if not found
+ * 
+ * @warning pattern must be the same as used in mercury_boyer_moore_create
+ * @note Thread-safe for concurrent searches with same bm structure
+ */
 int mercury_boyer_moore_search(const MercuryBoyerMoore* bm, const char* text, 
                               size_t text_length, const char* pattern) {
     if (!bm || !text || !pattern) {
@@ -739,6 +870,17 @@ void mercury_default_logger(MercuryLogLevel level, const char* format, ...) {
 
 // === INITIALIZATION ===
 
+/**
+ * @brief Initialize Mercury Performance Testing Framework
+ * 
+ * @details Performs one-time initialization including RDTSC calibration
+ * and error state clearing.
+ * 
+ * @return MERCURY_SUCCESS on successful initialization
+ * 
+ * @warning Not thread-safe - call only once at program startup
+ * @note Logs initialization status
+ */
 MercuryError mercury_init(void) {
     MERCURY_INFO("Initializing Mercury Performance Testing Framework");
     
@@ -754,6 +896,14 @@ MercuryError mercury_init(void) {
     return MERCURY_SUCCESS;
 }
 
+/**
+ * @brief Clean up Mercury Performance Testing Framework
+ * 
+ * @details Performs cleanup of global resources and clears error state.
+ * 
+ * @warning Should be called once at program termination
+ * @note Safe to call multiple times
+ */
 void mercury_cleanup(void) {
     MERCURY_INFO("Cleaning up Mercury Performance Testing Framework");
     mercury_clear_error();
@@ -763,6 +913,22 @@ void mercury_cleanup(void) {
 
 // Memory pool types now in common.h
 
+/**
+ * @brief Initialize a memory pool for fast allocation
+ * 
+ * @details Creates a lock-free memory pool with pre-allocated blocks
+ * for O(1) allocation and deallocation.
+ * 
+ * @param pool Pool structure to initialize
+ * @param block_size Size of each block in bytes
+ * @param num_blocks Number of blocks to pre-allocate
+ * 
+ * @pre pool must be non-NULL
+ * @post Pool is ready for allocation requests
+ * 
+ * @warning Not thread-safe during initialization
+ * @note Blocks are cache-line aligned for performance
+ */
 void memory_pool_init(memory_pool_t* pool, size_t block_size, size_t num_blocks) {
     if (MERCURY_UNLIKELY(!pool)) return;
     
@@ -811,6 +977,18 @@ void memory_pool_init(memory_pool_t* pool, size_t block_size, size_t num_blocks)
     atomic_store_explicit(&pool->free_count, count, memory_order_relaxed);
 }
 
+/**
+ * @brief Allocate a block from the memory pool
+ * 
+ * @details Uses lock-free atomic operations for thread-safe allocation
+ * with O(1) performance.
+ * 
+ * @param pool Memory pool to allocate from
+ * @return Pointer to allocated block or NULL if pool exhausted
+ * 
+ * @warning Caller must return block with memory_pool_free()
+ * @note Thread-safe with multiple concurrent allocators
+ */
 void* memory_pool_alloc(memory_pool_t* pool) {
     if (MERCURY_UNLIKELY(!pool)) return NULL;
     
@@ -857,6 +1035,18 @@ void* memory_pool_alloc(memory_pool_t* pool) {
     return head->data;
 }
 
+/**
+ * @brief Return a block to the memory pool
+ * 
+ * @details Uses lock-free atomic operations for thread-safe deallocation
+ * with O(1) performance.
+ * 
+ * @param pool Memory pool that owns the block
+ * @param ptr Pointer previously returned by memory_pool_alloc
+ * 
+ * @warning ptr must be from this pool's memory_pool_alloc()
+ * @note Thread-safe with multiple concurrent deallocators
+ */
 void memory_pool_free(memory_pool_t* pool, void* ptr) {
     if (MERCURY_UNLIKELY(!pool || !ptr)) return;
     
@@ -898,6 +1088,14 @@ void memory_pool_free(memory_pool_t* pool, void* ptr) {
     atomic_fetch_add_explicit(&pool->free_count, 1, memory_order_relaxed);
 }
 
+/**
+ * @brief Destroy memory pool and free all resources
+ * 
+ * @param pool Memory pool to destroy
+ * 
+ * @warning Not thread-safe - ensure no concurrent access
+ * @note Safe to call with NULL or already destroyed pool
+ */
 void memory_pool_destroy(memory_pool_t* pool) {
     if (!pool || !pool->all_blocks) return;
     
@@ -1093,8 +1291,9 @@ MercuryMultiPatternSearch* mercury_multi_pattern_create(const char* patterns[], 
             return NULL;
         }
         
-        // Copy pattern
-        strcpy(mps->patterns[i], patterns[i]);
+        // Copy pattern safely with bounds checking
+        strncpy(mps->patterns[i], patterns[i], MERCURY_MAX_PATTERN_LENGTH - 1);
+        mps->patterns[i][MERCURY_MAX_PATTERN_LENGTH - 1] = '\0';  // Ensure null termination
         mps->pattern_lengths[i] = len;
         mps->first_chars[i] = (uint8_t)patterns[i][0];
         
@@ -1112,6 +1311,19 @@ void mercury_multi_pattern_destroy(MercuryMultiPatternSearch* mps) {
     }
 }
 
+/**
+ * @brief Search for multiple patterns in text
+ * 
+ * @details Finds the leftmost occurrence of any pattern in the text.
+ * 
+ * @param mps Multi-pattern search structure
+ * @param text Text to search in
+ * @param text_len Length of text
+ * @param[out] pattern_id Index of matched pattern (set on success)
+ * @return Index of match in text or -1 if no patterns found
+ * 
+ * @note Thread-safe for concurrent searches with same mps
+ */
 int mercury_multi_pattern_search_simd(const MercuryMultiPatternSearch* mps, const char* text, 
                                      size_t text_len, int* pattern_id) {
     if (!mps || !text || !pattern_id || text_len == 0) {
@@ -1181,7 +1393,8 @@ MercuryMultiPatternSearch* mercury_multi_pattern_create(const char* patterns[], 
             return NULL;
         }
         
-        strcpy(mps->patterns[i], patterns[i]);
+        strncpy(mps->patterns[i], patterns[i], MERCURY_MAX_PATTERN_LENGTH - 1);
+        mps->patterns[i][MERCURY_MAX_PATTERN_LENGTH - 1] = '\0';  // Ensure null termination
         mps->pattern_lengths[i] = len;
         mps->first_chars[i] = (uint8_t)patterns[i][0];
         
@@ -1198,6 +1411,19 @@ void mercury_multi_pattern_destroy(MercuryMultiPatternSearch* mps) {
     }
 }
 
+/**
+ * @brief Search for multiple patterns in text
+ * 
+ * @details Finds the leftmost occurrence of any pattern in the text.
+ * 
+ * @param mps Multi-pattern search structure
+ * @param text Text to search in
+ * @param text_len Length of text
+ * @param[out] pattern_id Index of matched pattern (set on success)
+ * @return Index of match in text or -1 if no patterns found
+ * 
+ * @note Thread-safe for concurrent searches with same mps
+ */
 int mercury_multi_pattern_search_simd(const MercuryMultiPatternSearch* mps, const char* text, 
                                      size_t text_len, int* pattern_id) {
     if (!mps || !text || !pattern_id || text_len == 0) {

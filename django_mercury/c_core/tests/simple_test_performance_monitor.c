@@ -138,8 +138,8 @@ int test_metrics_extraction(void) {
            query_count, cache_hits, cache_misses);
     
     ASSERT(query_count > 0, "Should have query count");
-    ASSERT(cache_hits >= 0, "Should have cache hits count");
-    ASSERT(cache_misses >= 0, "Should have cache misses count");
+    ASSERT(cache_hits != UINT32_MAX, "Should have valid cache hits count");
+    ASSERT(cache_misses != UINT32_MAX, "Should have valid cache misses count");
     
     free_metrics(metrics);
     return 1;

@@ -12,23 +12,31 @@ from rest_framework.test import APITestCase
 try:
     from .colors import EduLiteColorScheme, colors, get_status_icon
     from .monitor import (
-        EnhancedPerformanceMetrics_Python, EnhancedPerformanceMonitor,
-        monitor_django_model, monitor_django_view, monitor_serializer
+        EnhancedPerformanceMetrics_Python,
+        EnhancedPerformanceMonitor,
+        monitor_django_model,
+        monitor_django_view,
+        monitor_serializer,
     )
     from .logging_config import get_logger
 except ImportError:
     # Fallback for direct execution
     from colors import EduLiteColorScheme, colors, get_status_icon
     from monitor import (
-        EnhancedPerformanceMetrics_Python, EnhancedPerformanceMonitor,
-        monitor_django_model, monitor_django_view, monitor_serializer
+        EnhancedPerformanceMetrics_Python,
+        EnhancedPerformanceMonitor,
+        monitor_django_model,
+        monitor_django_view,
+        monitor_serializer,
     )
     import logging
+
     get_logger = lambda name: logging.getLogger(name)
 
-logger = get_logger('django_integration')
+logger = get_logger("django_integration")
 
 # --- Base Performance Test Case ---
+
 
 class DjangoPerformanceAPITestCase(APITestCase):
     """
@@ -48,7 +56,7 @@ class DjangoPerformanceAPITestCase(APITestCase):
         max_memory_mb: Optional[float] = None,
         max_queries: Optional[int] = None,
         min_cache_hit_ratio: Optional[float] = None,
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """
         Asserts that comprehensive performance metrics meet specified expectations.
@@ -74,21 +82,31 @@ class DjangoPerformanceAPITestCase(APITestCase):
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
         milliseconds: float,
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that the response time is less than a specified threshold."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
         if (actual := metrics.response_time) >= milliseconds:
-            self.fail(f"{msg or ''}: Response time {actual:.2f}ms is not less than {milliseconds}ms")
+            self.fail(
+                f"{msg or ''}: Response time {actual:.2f}ms is not less than {milliseconds}ms"
+            )
 
     def assertMemoryLess(
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
         megabytes: float,
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that memory usage is less than a specified threshold."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
         if (actual := metrics.memory_usage) >= megabytes:
             self.fail(f"{msg or ''}: Memory usage {actual:.2f}MB is not less than {megabytes}MB")
 
@@ -96,11 +114,15 @@ class DjangoPerformanceAPITestCase(APITestCase):
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
         count: int,
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that the database query count is less than a specified threshold."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
-        if (actual := getattr(metrics, 'query_count', 0)) >= count:
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
+        if (actual := getattr(metrics, "query_count", 0)) >= count:
             self.fail(f"{msg or ''}: Query count {actual} is not less than {count}")
 
     # -- Status-Based Assertions --
@@ -108,30 +130,42 @@ class DjangoPerformanceAPITestCase(APITestCase):
     def assertPerformanceFast(
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that performance is rated as 'fast' (typically < 100ms)."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
         if not metrics.is_fast:
             self.fail(f"{msg or ''}: Performance is not fast: {metrics.response_time:.2f}ms")
 
     def assertPerformanceNotSlow(
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that performance is not rated as 'slow' (typically >= 500ms)."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
         if metrics.is_slow:
             self.fail(f"{msg or ''}: Performance is slow: {metrics.response_time:.2f}ms")
 
     def assertMemoryEfficient(
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that memory usage is not considered intensive."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
         if metrics.is_memory_intensive:
             self.fail(f"{msg or ''}: Memory usage is intensive: {metrics.memory_usage:.2f}MB")
 
@@ -140,23 +174,33 @@ class DjangoPerformanceAPITestCase(APITestCase):
     def assertNoNPlusOne(
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that no N+1 query patterns were detected."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
-        if hasattr(metrics, 'django_issues') and metrics.django_issues.has_n_plus_one:
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
+        if hasattr(metrics, "django_issues") and metrics.django_issues.has_n_plus_one:
             self.fail(f"{msg or ''}: N+1 query pattern detected.")
 
     def assertGoodCachePerformance(
         self,
         metrics_or_monitor: Union[EnhancedPerformanceMonitor, EnhancedPerformanceMetrics_Python],
         min_hit_ratio: float = 0.7,
-        msg: Optional[str] = None
+        msg: Optional[str] = None,
     ) -> None:
         """Asserts that the cache hit ratio meets a minimum threshold."""
-        metrics = metrics_or_monitor.metrics if hasattr(metrics_or_monitor, 'metrics') else metrics_or_monitor
-        if hasattr(metrics, 'cache_hit_ratio') and metrics.cache_hit_ratio < min_hit_ratio:
-            self.fail(f"{msg or ''}: Cache hit ratio {metrics.cache_hit_ratio:.1%} is below {min_hit_ratio:.1%}")
+        metrics = (
+            metrics_or_monitor.metrics
+            if hasattr(metrics_or_monitor, "metrics")
+            else metrics_or_monitor
+        )
+        if hasattr(metrics, "cache_hit_ratio") and metrics.cache_hit_ratio < min_hit_ratio:
+            self.fail(
+                f"{msg or ''}: Cache hit ratio {metrics.cache_hit_ratio:.1%} is below {min_hit_ratio:.1%}"
+            )
 
     # --- Monitor Creation Methods ---
 
@@ -175,8 +219,13 @@ class DjangoPerformanceAPITestCase(APITestCase):
     # --- Measurement and Analysis ---
 
     def measure_django_view(
-        self, url: str, method: str = 'GET', data: Optional[Dict[str, Any]] = None,
-        format: Optional[str] = None, operation_name: Optional[str] = None, **kwargs
+        self,
+        url: str,
+        method: str = "GET",
+        data: Optional[Dict[str, Any]] = None,
+        format: Optional[str] = None,
+        operation_name: Optional[str] = None,
+        **kwargs,
     ) -> EnhancedPerformanceMetrics_Python:
         """
         Measures the performance of a Django view with comprehensive monitoring.
@@ -195,17 +244,31 @@ class DjangoPerformanceAPITestCase(APITestCase):
         op_name = operation_name or f"{method} {url}"
         with monitor_django_view(op_name) as monitor:
             client_method = getattr(self.client, method.lower())
-            response = client_method(url, data=data, format=format, **kwargs) if data else client_method(url, **kwargs)
+            response = (
+                client_method(url, data=data, format=format, **kwargs)
+                if data
+                else client_method(url, **kwargs)
+            )
         monitor.metrics._response = response
         return monitor.metrics
 
     def run_comprehensive_analysis(
-        self, operation_name: str, test_function: Callable, operation_type: str = "general",
-        expect_response_under: Optional[float] = None, expect_memory_under: Optional[float] = None,
-        expect_queries_under: Optional[int] = None, expect_cache_hit_ratio_above: Optional[float] = None,
-        print_analysis: bool = True, auto_detect_n_plus_one: bool = True, show_scoring: bool = True,
-        test_file: Optional[str] = None, test_line: Optional[int] = None, test_method: Optional[str] = None,
-        enable_educational_guidance: bool = False, operation_context: Optional[Dict[str, Any]] = None
+        self,
+        operation_name: str,
+        test_function: Callable,
+        operation_type: str = "general",
+        expect_response_under: Optional[float] = None,
+        expect_memory_under: Optional[float] = None,
+        expect_queries_under: Optional[int] = None,
+        expect_cache_hit_ratio_above: Optional[float] = None,
+        print_analysis: bool = True,
+        auto_detect_n_plus_one: bool = True,
+        show_scoring: bool = True,
+        test_file: Optional[str] = None,
+        test_line: Optional[int] = None,
+        test_method: Optional[str] = None,
+        enable_educational_guidance: bool = False,
+        operation_context: Optional[Dict[str, Any]] = None,
     ) -> EnhancedPerformanceMetrics_Python:
         """
         Runs a comprehensive, Django-aware performance analysis with a scoring system.
@@ -227,18 +290,26 @@ class DjangoPerformanceAPITestCase(APITestCase):
         """
         if print_analysis:
             logger.info(f"Starting enhanced analysis for operation: {operation_name}")
-            print(f"{get_status_icon('info')} {colors.colorize(f'🔍 Enhanced Analysis: {operation_name}', EduLiteColorScheme.INFO, bold=True)}")
+            print(
+                f"{get_status_icon('info')} {colors.colorize(f'🔍 Enhanced Analysis: {operation_name}', EduLiteColorScheme.INFO, bold=True)}"
+            )
 
-        monitor = monitor_django_view(f"{operation_name}.comprehensive", operation_type=operation_type)
-        if expect_response_under: monitor.expect_response_under(expect_response_under)
-        if expect_memory_under: monitor.expect_memory_under(expect_memory_under)
-        if expect_queries_under: monitor.expect_queries_under(expect_queries_under)
-        if expect_cache_hit_ratio_above: monitor.expect_cache_hit_ratio_above(expect_cache_hit_ratio_above)
-        
+        monitor = monitor_django_view(
+            f"{operation_name}.comprehensive", operation_type=operation_type
+        )
+        if expect_response_under:
+            monitor.expect_response_under(expect_response_under)
+        if expect_memory_under:
+            monitor.expect_memory_under(expect_memory_under)
+        if expect_queries_under:
+            monitor.expect_queries_under(expect_queries_under)
+        if expect_cache_hit_ratio_above:
+            monitor.expect_cache_hit_ratio_above(expect_cache_hit_ratio_above)
+
         # Set test context if provided
         if test_file and test_line and test_method:
             monitor.set_test_context(test_file, test_line, test_method)
-        
+
         # Enable educational guidance if requested
         if enable_educational_guidance:
             monitor.enable_educational_guidance(operation_context)
@@ -251,14 +322,30 @@ class DjangoPerformanceAPITestCase(APITestCase):
             analysis = metrics.django_issues.n_plus_one_analysis
             # Fix false positive: No N+1 possible with 0 queries
             if analysis.severity_level > 0 and analysis.query_count > 0:
-                logger.warning(f"N+1 query pattern detected: {analysis.severity_text} severity with {analysis.query_count} queries")
-                print(colors.colorize('🚨 POTENTIAL N+1 QUERY PROBLEM! 🚨', EduLiteColorScheme.CRITICAL, bold=True))
-                print(f"{colors.colorize(f'Severity: {analysis.severity_text} ({analysis.query_count} queries)', EduLiteColorScheme.CRITICAL, bold=True)}")
-                print(f"{colors.colorize(f'Cause: {analysis.cause_text}', EduLiteColorScheme.WARNING)}")
-                print(f"{colors.colorize(f'Fix: {analysis.fix_suggestion}', EduLiteColorScheme.OPTIMIZATION)}")
+                logger.warning(
+                    f"N+1 query pattern detected: {analysis.severity_text} severity with {analysis.query_count} queries"
+                )
+                print(
+                    colors.colorize(
+                        "🚨 POTENTIAL N+1 QUERY PROBLEM! 🚨", EduLiteColorScheme.CRITICAL, bold=True
+                    )
+                )
+                print(
+                    f"{colors.colorize(f'Severity: {analysis.severity_text} ({analysis.query_count} queries)', EduLiteColorScheme.CRITICAL, bold=True)}"
+                )
+                print(
+                    f"{colors.colorize(f'Cause: {analysis.cause_text}', EduLiteColorScheme.WARNING)}"
+                )
+                print(
+                    f"{colors.colorize(f'Fix: {analysis.fix_suggestion}', EduLiteColorScheme.OPTIMIZATION)}"
+                )
 
         if print_analysis:
-            print(metrics.get_performance_report_with_scoring() if show_scoring else metrics.detailed_report())
+            print(
+                metrics.get_performance_report_with_scoring()
+                if show_scoring
+                else metrics.detailed_report()
+            )
 
         metrics._test_result = result
         return metrics
@@ -266,13 +353,17 @@ class DjangoPerformanceAPITestCase(APITestCase):
     # --- Dashboard and Reporting ---
 
     def create_enhanced_performance_dashboard_with_scoring(
-        self, metrics: EnhancedPerformanceMetrics_Python, title: str = "Enhanced Performance Dashboard"
+        self,
+        metrics: EnhancedPerformanceMetrics_Python,
+        title: str = "Enhanced Performance Dashboard",
     ) -> None:
         """Creates and prints a performance dashboard that includes scoring."""
         print(metrics.get_performance_report_with_scoring())
 
     def create_enhanced_dashboard(
-        self, metrics: EnhancedPerformanceMetrics_Python, title: str = "Enhanced Performance Dashboard"
+        self,
+        metrics: EnhancedPerformanceMetrics_Python,
+        title: str = "Enhanced Performance Dashboard",
     ) -> None:
         """
         Creates and prints a comprehensive performance dashboard with Django-specific insights.
@@ -282,13 +373,17 @@ class DjangoPerformanceAPITestCase(APITestCase):
             title (str): The title for the dashboard.
         """
         response_info = "N/A"
-        if hasattr(metrics, '_test_result') and metrics._test_result:
+        if hasattr(metrics, "_test_result") and metrics._test_result:
             try:
-                response_data = getattr(metrics._test_result, 'data', {})
+                response_data = getattr(metrics._test_result, "data", {})
                 if response_data:
                     response_json = json.dumps(response_data)
-                    response_size_kb = len(response_json.encode('utf-8')) / 1024
-                    response_info = f"{response_size_kb:.1f}KB" if response_size_kb >= 1 else f"{len(response_json.encode('utf-8'))}B"
+                    response_size_kb = len(response_json.encode("utf-8")) / 1024
+                    response_info = (
+                        f"{response_size_kb:.1f}KB"
+                        if response_size_kb >= 1
+                        else f"{len(response_json.encode('utf-8'))}B"
+                    )
             except Exception:
                 pass
 
@@ -297,17 +392,33 @@ class DjangoPerformanceAPITestCase(APITestCase):
         text_color = EduLiteColorScheme.TEXT
 
         logger.debug(f"Creating performance dashboard: {title}")
-        print(colors.colorize(f'🎨 {title}', accent_color, bold=True))
-        print(colors.colorize('╭' + '─' * 61 + '╮', border_color))
-        print(f"{colors.colorize('│', border_color)} {colors.colorize('🚀 Performance Status:', text_color, bold=True)} {colors.format_performance_status(metrics.performance_status.value):<20}")
-        print(f"{colors.colorize('│', border_color)} {colors.colorize('📊 Response Time:', text_color)} {colors.format_metric_value(metrics.response_time, 'ms'):<25}")
-        print(f"{colors.colorize('│', border_color)} {colors.colorize('🧠 Memory Usage:', text_color)} {colors.format_metric_value(metrics.memory_usage, 'MB'):<25}")
-        print(f"{colors.colorize('│', border_color)} {colors.colorize('🗃️ Database Queries:', text_color)} {metrics.query_count:<25}")
-        print(f"{colors.colorize('│', border_color)} {colors.colorize('💾 Cache Hit Ratio:', text_color)} {f'{metrics.cache_hit_ratio:.1%}':<25}")
-        print(f"{colors.colorize('│', border_color)} {colors.colorize('📄 Response Size:', text_color)} {response_info:<25}")
-        print(colors.colorize('╰' + '─' * 61 + '╯', border_color))
+        print(colors.colorize(f"🎨 {title}", accent_color, bold=True))
+        print(colors.colorize("╭" + "─" * 61 + "╮", border_color))
+        print(
+            f"{colors.colorize('│', border_color)} {colors.colorize('🚀 Performance Status:', text_color, bold=True)} {colors.format_performance_status(metrics.performance_status.value):<20}"
+        )
+        print(
+            f"{colors.colorize('│', border_color)} {colors.colorize('📊 Response Time:', text_color)} {colors.format_metric_value(metrics.response_time, 'ms'):<25}"
+        )
+        print(
+            f"{colors.colorize('│', border_color)} {colors.colorize('🧠 Memory Usage:', text_color)} {colors.format_metric_value(metrics.memory_usage, 'MB'):<25}"
+        )
+        print(
+            f"{colors.colorize('│', border_color)} {colors.colorize('🗃️ Database Queries:', text_color)} {metrics.query_count:<25}"
+        )
+        print(
+            f"{colors.colorize('│', border_color)} {colors.colorize('💾 Cache Hit Ratio:', text_color)} {f'{metrics.cache_hit_ratio:.1%}':<25}"
+        )
+        print(
+            f"{colors.colorize('│', border_color)} {colors.colorize('📄 Response Size:', text_color)} {response_info:<25}"
+        )
+        print(colors.colorize("╰" + "─" * 61 + "╯", border_color))
 
         if metrics.django_issues.has_issues:
-            print(colors.colorize('🚨 Django Performance Issues:', EduLiteColorScheme.CRITICAL, bold=True))
+            print(
+                colors.colorize(
+                    "🚨 Django Performance Issues:", EduLiteColorScheme.CRITICAL, bold=True
+                )
+            )
             for issue in metrics.django_issues.get_issue_summary():
                 print(f"   • {colors.colorize(issue, EduLiteColorScheme.CRITICAL)}")

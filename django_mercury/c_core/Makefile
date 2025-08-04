@@ -394,6 +394,8 @@ SECURITY_TEST_DIR = tests/security
 SECURITY_TEST_SRCS = $(SECURITY_TEST_DIR)/test_command_injection.c \
                      $(SECURITY_TEST_DIR)/test_buffer_overflow.c \
                      $(SECURITY_TEST_DIR)/test_input_validation.c \
+                     $(SECURITY_TEST_DIR)/test_memory_security.c \
+                     $(SECURITY_TEST_DIR)/test_format_and_bounds.c \
                      $(SECURITY_TEST_DIR)/security_test_main.c
 
 SECURITY_TEST_BIN = $(SECURITY_TEST_DIR)/security_test

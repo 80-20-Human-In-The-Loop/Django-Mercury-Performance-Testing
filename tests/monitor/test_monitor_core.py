@@ -716,14 +716,17 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
     @patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
     @patch('django_mercury.python_bindings.monitor.lib')
     def test_context_manager_enter_failure(self, mock_lib):
-        """Test context manager __enter__ method failure."""
+        """Test context manager __enter__ method graceful degradation."""
         mock_lib.start_performance_monitoring_enhanced.return_value = -1
         
-        with self.assertRaises(RuntimeError) as context:
-            self.monitor.__enter__()
+        # Should NOT raise RuntimeError anymore, instead gracefully degrade
+        result = self.monitor.__enter__()
         
-        self.assertIn("Failed to start performance monitoring", str(context.exception))
-        self.assertIn("test_operation", str(context.exception))
+        # Should return self (successful context manager entry)
+        self.assertIs(result, self.monitor)
+        
+        # Should set handle to None for fallback mode
+        self.assertIsNone(self.monitor.handle)
 
     @patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
     @patch('django_mercury.python_bindings.monitor.lib')

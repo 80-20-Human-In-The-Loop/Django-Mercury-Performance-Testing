@@ -70,7 +70,6 @@ static void test_path_traversal_prevention(void) {
         // Should either fail or create in safe location
         if (result == 0) {
             // Verify it didn't actually write to system files
-            struct stat st;
             if (strcmp(traversal_attempts[i], "/etc/passwd") == 0) {
                 // This might exist but shouldn't be writable
                 FILE* fp = fopen("/etc/passwd", "a");
