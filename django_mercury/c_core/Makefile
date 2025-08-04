@@ -100,17 +100,15 @@ COMMON_SRC := common.c
 QUERY_ANALYZER_SRC := query_analyzer.c
 METRICS_ENGINE_SRC := metrics_engine.c
 TEST_ORCHESTRATOR_SRC := test_orchestrator.c
-PERFORMANCE_MONITOR_SRC := performance_monitor.c
 
 # Target libraries
-TARGETS := libquery_analyzer.so libmetrics_engine.so libtest_orchestrator.so libperformance.so
+TARGETS := libquery_analyzer.so libmetrics_engine.so libtest_orchestrator.so
 
 # Object files
 COMMON_OBJ := $(COMMON_SRC:.c=.o)
 QUERY_ANALYZER_OBJ := $(QUERY_ANALYZER_SRC:.c=.o)
 METRICS_ENGINE_OBJ := $(METRICS_ENGINE_SRC:.c=.o)
 TEST_ORCHESTRATOR_OBJ := $(TEST_ORCHESTRATOR_SRC:.c=.o)
-PERFORMANCE_MONITOR_OBJ := $(PERFORMANCE_MONITOR_SRC:.c=.o)
 
 # === DEBUG CONFIGURATION ===
 
@@ -175,15 +173,6 @@ $(TEST_ORCHESTRATOR_OBJ): $(TEST_ORCHESTRATOR_SRC) common.h
 	@echo "🔨 Compiling test orchestrator..."
 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
 
-# Build performance monitor library (legacy libperformance.so)
-libperformance.so: $(PERFORMANCE_MONITOR_OBJ) $(COMMON_OBJ)
-	@echo "🔗 Linking performance monitor library..."
-	$(CC) -shared $(CFLAGS) $(PYTHON_INCLUDES) -o $@ $^ $(LDFLAGS)
-
-$(PERFORMANCE_MONITOR_OBJ): $(PERFORMANCE_MONITOR_SRC)
-	@echo "🔨 Compiling performance monitor..."
-	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
-
 # === BUILD VARIANTS ===
 
 debug:
@@ -194,11 +183,26 @@ release:
 
 # === TESTING AND VALIDATION ===
 
-# Main test target - runs all simple tests
-test: simple_test
+# Main test target - runs all simple tests and consolidation tests
+test: simple_test consolidation_test
 
 # Alias for backward compatibility
 tests: test
+
+# Run consolidation tests
+consolidation_test: $(TARGETS)
+	@echo "🧪 Running consolidation tests..."
+	@if [ -d tests/consolidation ]; then \
+		cd tests/consolidation && $(MAKE) test 2>&1 | tail -20; \
+		if [ $$? -eq 0 ]; then \
+			echo "✅ Consolidation tests passed"; \
+		else \
+			echo "❌ Consolidation tests failed"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "⚠️  Consolidation tests not found, skipping"; \
+	fi
 
 # Memory safety validation (requires valgrind on Linux)
 memcheck: $(TARGETS)
@@ -311,12 +315,9 @@ simple_test: $(TARGETS)
 	@$(CC) $(CFLAGS) -o simple_test_query_analyzer tests/simple_test_query_analyzer.c query_analyzer.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) -o simple_test_metrics_engine tests/simple_test_metrics_engine.c metrics_engine.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) -o simple_test_test_orchestrator tests/simple_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) -o simple_test_performance_monitor tests/simple_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🧪 Building comprehensive and edge tests..."
 	@$(CC) $(CFLAGS) -o comprehensive_test_test_orchestrator tests/comprehensive_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) -o edge_test_test_orchestrator tests/edge_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) -o comprehensive_test_performance_monitor tests/comprehensive_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) -o edge_test_performance_monitor tests/edge_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🚀 Running simple tests..."
 	@echo "=== Common Tests ==="
 	@./simple_test_common
@@ -328,16 +329,23 @@ simple_test: $(TARGETS)
 	@./simple_test_metrics_engine
 	@echo "\n=== Test Orchestrator Tests ==="
 	@./simple_test_test_orchestrator
-	@echo "\n=== Performance Monitor Tests ==="
-	@./simple_test_performance_monitor
 	@echo "\n=== Comprehensive Test Orchestrator Tests ==="
 	@./comprehensive_test_test_orchestrator
 	@echo "\n=== Edge Test Orchestrator Tests ==="
 	@./edge_test_test_orchestrator
-	@echo "\n=== Comprehensive Performance Monitor Tests ==="
-	@./comprehensive_test_performance_monitor
-	@echo "\n=== Edge Performance Monitor Tests ==="
-	@./edge_test_performance_monitor
+	@echo "\n=== Consolidation Tests ==="
+	@if [ -d tests/consolidation ]; then \
+		echo "Building consolidation tests..."; \
+		(cd tests/consolidation && $(MAKE) all 2>/dev/null); \
+		echo "\n--- Feature Parity Test ---"; \
+		(cd tests/consolidation && ./test_feature_parity); \
+		echo "\n--- API Compatibility Test ---"; \
+		(cd tests/consolidation && ./test_api_compatibility); \
+		echo "\n--- Migration Safety Test ---"; \
+		(cd tests/consolidation && ./test_migration_safety); \
+	else \
+		echo "Consolidation tests not found, skipping"; \
+	fi
 
 # === Test Coverage ===
 
@@ -358,12 +366,9 @@ coverage: clean-coverage
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_metrics_engine tests/simple_test_metrics_engine.c metrics_engine.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -D_GNU_SOURCE -o $(COVERAGE_DIR)/test_metrics_engine_comprehensive tests/comprehensive_test_metrics_engine.c metrics_engine.c common.c -lm -pthread -lunwind
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator tests/simple_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor tests/simple_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🔨 Building new comprehensive and edge tests..."
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator_comprehensive tests/comprehensive_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator_edge tests/edge_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor_comprehensive tests/comprehensive_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_performance_monitor_edge tests/edge_test_performance_monitor.c performance_monitor.c common.c -lm -pthread
 	@echo "🚀 Running tests for coverage..."
 	@cd $(COVERAGE_DIR) && ./test_common > test_common.log 2>&1 || (echo "❌ test_common failed with exit code $$?"; cat test_common.log; false)
 	@cd $(COVERAGE_DIR) && ./test_advanced > test_advanced.log 2>&1 || (echo "❌ test_advanced failed with exit code $$?"; cat test_advanced.log; false)
@@ -374,16 +379,13 @@ coverage: clean-coverage
 	@cd $(COVERAGE_DIR) && ./test_metrics_engine > test_metrics_engine.log 2>&1 || (echo "❌ test_metrics_engine failed with exit code $$?"; cat test_metrics_engine.log; false)
 	@cd $(COVERAGE_DIR) && ./test_metrics_engine_comprehensive > test_metrics_engine_comprehensive.log 2>&1 || (echo "❌ test_metrics_engine_comprehensive failed with exit code $$?"; cat test_metrics_engine_comprehensive.log; false)
 	@cd $(COVERAGE_DIR) && ./test_test_orchestrator > test_test_orchestrator.log 2>&1 || (echo "❌ test_test_orchestrator failed with exit code $$?"; cat test_test_orchestrator.log; false)
-	@cd $(COVERAGE_DIR) && ./test_performance_monitor > test_performance_monitor.log 2>&1 || (echo "❌ test_performance_monitor failed with exit code $$?"; cat test_performance_monitor.log; false)
 	@echo "🚀 Running new comprehensive and edge tests for coverage..."
 	@cd $(COVERAGE_DIR) && ./test_test_orchestrator_comprehensive > test_test_orchestrator_comprehensive.log 2>&1 || (echo "❌ test_test_orchestrator_comprehensive failed with exit code $$?"; cat test_test_orchestrator_comprehensive.log; false)
 	@cd $(COVERAGE_DIR) && ./test_test_orchestrator_edge > test_test_orchestrator_edge.log 2>&1 || (echo "❌ test_test_orchestrator_edge failed with exit code $$?"; cat test_test_orchestrator_edge.log; false)
-	@cd $(COVERAGE_DIR) && ./test_performance_monitor_comprehensive > test_performance_monitor_comprehensive.log 2>&1 || (echo "❌ test_performance_monitor_comprehensive failed with exit code $$?"; cat test_performance_monitor_comprehensive.log; false)
-	@cd $(COVERAGE_DIR) && ./test_performance_monitor_edge > test_performance_monitor_edge.log 2>&1 || (echo "❌ test_performance_monitor_edge failed with exit code $$?"; cat test_performance_monitor_edge.log; false)
 	@echo "📈 Generating coverage reports..."
-	@cp common.c common.h query_analyzer.c metrics_engine.c test_orchestrator.c performance_monitor.c $(COVERAGE_DIR)/
+	@cp common.c common.h query_analyzer.c metrics_engine.c test_orchestrator.c $(COVERAGE_DIR)/
 	@(cd $(COVERAGE_DIR) && gcov -b test_*-*.gcda 2>/dev/null | ../../tests/filter_gcov.sh | python3 ../../tests/colorize_gcov.py | tee coverage_summary.txt || true)
-	@rm -f $(COVERAGE_DIR)/common.c $(COVERAGE_DIR)/common.h $(COVERAGE_DIR)/query_analyzer.c $(COVERAGE_DIR)/metrics_engine.c $(COVERAGE_DIR)/test_orchestrator.c $(COVERAGE_DIR)/performance_monitor.c
+	@rm -f $(COVERAGE_DIR)/common.c $(COVERAGE_DIR)/common.h $(COVERAGE_DIR)/query_analyzer.c $(COVERAGE_DIR)/metrics_engine.c $(COVERAGE_DIR)/test_orchestrator.c
 	@echo ""
 	@echo "📊 Coverage Summary (Source Files Only):"
 	@echo "======================================="
@@ -448,8 +450,8 @@ clean:
 	@rm -f $(TEST_DIR)/*.o
 	@rm -f $(SECURITY_TEST_BIN)
 	@rm -rf pgo-profiles/
-	@rm -f simple_test_common simple_test_advanced simple_test_query_analyzer simple_test_metrics_engine simple_test_test_orchestrator simple_test_performance_monitor
-	@rm -f comprehensive_test_test_orchestrator edge_test_test_orchestrator comprehensive_test_performance_monitor edge_test_performance_monitor
+	@rm -f simple_test_common simple_test_advanced simple_test_query_analyzer simple_test_metrics_engine simple_test_test_orchestrator
+	@rm -f comprehensive_test_test_orchestrator edge_test_test_orchestrator
 	@rm -f *.gcda *.gcno *.gcov
 	@rm -rf $(COVERAGE_DIR)
 	@echo "✅ Clean completed"

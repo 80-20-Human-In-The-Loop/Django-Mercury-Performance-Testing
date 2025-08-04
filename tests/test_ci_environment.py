@@ -86,7 +86,6 @@ class TestCIEnvironment(unittest.TestCase):
             'query_analyzer': c_bindings.c_extensions.query_analyzer,
             'metrics_engine': c_bindings.c_extensions.metrics_engine,
             'test_orchestrator': c_bindings.c_extensions.test_orchestrator,
-            'legacy_performance': c_bindings.c_extensions.legacy_performance,
         }
         
         print("✓ Individual library status:")
@@ -123,7 +122,6 @@ class TestCIEnvironment(unittest.TestCase):
             'libquery_analyzer.so',
             'libmetrics_engine.so', 
             'libtest_orchestrator.so',
-            'libperformance.so'
         ]
         
         paths = c_bindings.get_library_paths()

@@ -16,7 +16,7 @@ try:
     from .colors import colors, get_status_icon, EduLiteColorScheme
     from .c_bindings import c_extensions
 
-    C_EXTENSIONS_AVAILABLE = True  # Re-enabled now that we use legacy_performance first
+    C_EXTENSIONS_AVAILABLE = True
 except ImportError:
     # Direct execution fallback
     from metrics import PerformanceMetrics, PerformanceStatus
@@ -53,16 +53,12 @@ lib = None
 
 try:
     if C_EXTENSIONS_AVAILABLE and c_extensions:
-        # Use the new unified c_bindings system
-        # Prefer legacy_performance (libperformance.so) as it has the correct implementation
-        if c_extensions.legacy_performance:
-            lib = c_extensions.legacy_performance
-            logger.debug("Using legacy C performance library")
-        elif c_extensions.metrics_engine:
+        # Use the unified metrics_engine library
+        if c_extensions.metrics_engine:
             lib = c_extensions.metrics_engine
-            logger.debug("Using unified C extensions for performance monitoring")
+            logger.debug("Using metrics engine C library for performance monitoring")
         else:
-            logger.info("C extensions loaded but no performance libraries available")
+            logger.info("C extensions loaded but metrics engine not available")
     else:
         logger.debug("C extensions not available, using fallback mode")
 except Exception as e:
@@ -70,7 +66,7 @@ except Exception as e:
     logger.warning("Performance monitoring will run in degraded mode without C optimizations")
 
 class MockLib:
-    """Mock C library for fallback when libperformance.so is not available."""
+    """Mock C library for fallback when C extensions are not available."""
 
     def __getattr__(self, name):
         def mock_function(*args, **kwargs):
@@ -320,7 +316,7 @@ class EnhancedPerformanceMetrics_Python:
         self.operation_name = operation_name
         self._query_tracker_ref = query_tracker
 
-        # Basic metrics from thread-safe libperformance.so
+        # Basic metrics from thread-safe metrics engine
         # Handle mocked lib functions properly - allow test Mocks but block our MockLib
         if lib and not isinstance(lib, MockLib):
             self.response_time = lib.get_elapsed_time_ms(c_metrics) if lib else 0.0
@@ -388,7 +384,7 @@ class EnhancedPerformanceMetrics_Python:
         # Memory breakdown (estimated)
         self.memory_breakdown: Dict[str, float] = self._estimate_memory_breakdown()
 
-        # Other metrics from thread-safe libperformance.so
+        # Other metrics from thread-safe metrics engine
         from unittest.mock import Mock, MagicMock
         
         if lib and not isinstance(lib, MockLib):
@@ -452,7 +448,7 @@ class EnhancedPerformanceMetrics_Python:
         if isinstance(self.cache_hit_ratio, MagicMock):
             self.cache_hit_ratio = 0.0
 
-        # Get operation type from libperformance.so
+        # Get operation type from metrics engine
         try:
             self.operation_type = c_metrics.contents.operation_type.decode("utf-8")
         except (AttributeError, UnicodeDecodeError) as e:
@@ -473,7 +469,7 @@ class EnhancedPerformanceMetrics_Python:
     ) -> DjangoPerformanceIssues:
         """Analyze Django-specific performance issues with enhanced N+1 detection."""
 
-        # Advanced N+1 analysis from thread-safe libperformance.so
+        # Advanced N+1 analysis from thread-safe metrics engine
         estimated_cause = (
             lib.estimate_n_plus_one_cause(c_metrics)
             if lib and hasattr(lib, "estimate_n_plus_one_cause")
@@ -495,7 +491,7 @@ class EnhancedPerformanceMetrics_Python:
             estimated_cause = 5  # CASCADE deletion cleanup
             fix_suggestion = "Consider database-level CASCADE constraints for better performance"
 
-        # N+1 detection flags from thread-safe libperformance.so
+        # N+1 detection flags from thread-safe metrics engine
         if self.query_count == 0:
             logger.debug(f"Checking N+1 with 0 queries - c_metrics pointer: {c_metrics}")
 
@@ -542,7 +538,7 @@ class EnhancedPerformanceMetrics_Python:
             query_count=self.query_count,
         )
 
-        # Other performance flags - using only libperformance.so to avoid struct incompatibility
+        # Other performance flags from metrics engine
         has_n_plus_one = bool(lib.has_n_plus_one_pattern(c_metrics)) if lib else False
         memory_intensive = bool(lib.is_memory_intensive(c_metrics)) if lib else False
         poor_cache_performance = bool(lib.has_poor_cache_performance(c_metrics)) if lib else False

@@ -161,6 +161,9 @@ django_mercury/c_core/coverage/
 django_mercury/c_core/logs/
 logs/
 
+# Legacy performance monitor artifacts (consolidated into metrics_engine)
+*performance_monitor*
+
 # Temporary files
 *.tmp
 *.bak
