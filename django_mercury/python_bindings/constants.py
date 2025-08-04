@@ -4,7 +4,7 @@ This module centralizes all magic numbers, thresholds, and configuration
 constants used throughout the performance testing framework.
 """
 
-from typing import Dict, Final
+from typing import Dict, Final, List
 
 # Response time thresholds (in milliseconds)
 RESPONSE_TIME_THRESHOLDS: Final[Dict[str, float]] = {
@@ -110,7 +110,7 @@ SCORING_PENALTIES: Final[Dict[str, float]] = {
 }
 
 # Operation type detection keywords
-OPERATION_KEYWORDS: Final[Dict[str, list[str]]] = {
+OPERATION_KEYWORDS: Final[Dict[str, List[str]]] = {
     'delete_view': ['delete', 'destroy', 'remove'],
     'list_view': ['list', 'get_all', 'index'],
     'detail_view': ['detail', 'retrieve', 'get_single'],

@@ -518,13 +518,13 @@ class TestThreadSafeOperation(unittest.TestCase):
         
         def holder():
             with lock:
-                time.sleep(0.1)  # Hold lock for 100ms
+                time.sleep(0.2)  # Hold lock for 200ms
         
         # Start thread that holds the lock
         holder_thread = threading.Thread(target=holder)
         holder_thread.start()
         
-        time.sleep(0.01)  # Ensure holder thread has acquired lock
+        time.sleep(0.05)  # Ensure holder thread has acquired lock
         
         # Try to acquire with short timeout
         with self.assertRaises(TimeoutError):

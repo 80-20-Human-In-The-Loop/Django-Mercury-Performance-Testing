@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock, call
 import threading
 import time
+import os
 from pathlib import Path
 from collections import defaultdict
 from typing import Dict, List, Any, Optional, Tuple
@@ -191,6 +192,10 @@ class TestDjangoQueryTracker(unittest.TestCase):
         
         mock_lib.increment_query_count.assert_called_once()
     
+    @unittest.skipIf(
+        os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'),
+        "Pure Python mode - C extensions not available"
+    )
     @patch('django_mercury.python_bindings.django_hooks.c_extensions')
     def test_record_query_with_new_c_extensions(self, mock_c_extensions):
         """Test recording query with new C extension integration."""
@@ -203,11 +208,9 @@ class TestDjangoQueryTracker(unittest.TestCase):
         self.tracker.is_active = True
         self.tracker.record_query("SELECT 1", None, 0.01)
         
-        # Only verify C extension calls if they're available
-        if mock_query_analyzer is not None:
-            mock_query_analyzer.analyze_query.assert_called_once()
-        if mock_metrics_engine is not None:
-            mock_metrics_engine.increment_query_count.assert_called_once()
+        # Verify C extension functions were called
+        mock_query_analyzer.analyze_query.assert_called_once()
+        mock_metrics_engine.increment_query_count.assert_called_once()
         
         # Verify Python fallback still works
         self.assertEqual(len(self.tracker.queries), 1)
