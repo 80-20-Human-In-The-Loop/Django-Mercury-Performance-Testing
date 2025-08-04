@@ -278,7 +278,7 @@ int test_atomic_operations_concurrency(void) {
            (unsigned long long)final_total_tests, (unsigned long long)final_total_violations,
            (unsigned long long)final_total_n_plus_one);
     
-    ASSERT(final_total_tests >= finalized_count, "Should account for all finalized tests");
+    ASSERT(final_total_tests >= (uint64_t)finalized_count, "Should account for all finalized tests");
     
     return 1;
 }

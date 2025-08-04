@@ -671,6 +671,31 @@ double get_memory_delta_mb(const MercuryMetrics* metrics) {
     return 0.0;
 }
 
+// Check if operation is memory intensive
+int is_memory_intensive(const MercuryMetrics* metrics) {
+    if (!metrics) return 0;
+    
+    // Check if peak memory usage exceeds 100MB
+    double memory_mb = (double)metrics->memory_bytes / (1024.0 * 1024.0);
+    
+    // Consider memory intensive if:
+    // - Peak memory > 100MB
+    return (memory_mb > 100.0) ? 1 : 0;
+}
+
+// Check for poor cache performance
+int has_poor_cache_performance(const MercuryMetrics* metrics) {
+    if (!metrics) return 0;
+    
+    uint32_t total = metrics->cache_hits + metrics->cache_misses;
+    if (total == 0) return 0;  // No cache operations, not poor performance
+    
+    double hit_ratio = (double)metrics->cache_hits / (double)total;
+    
+    // Poor cache performance if hit ratio < 70%
+    return (hit_ratio < 0.7) ? 1 : 0;
+}
+
 // Free metrics memory
 void free_metrics(MercuryMetrics* metrics) {
     if (metrics) {
