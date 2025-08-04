@@ -24,6 +24,7 @@
 #include "common.h"
 #include <sys/stat.h>
 #include <inttypes.h>
+#include <errno.h>
 
 #ifdef MERCURY_LINUX
 #include <sys/mman.h>
@@ -216,8 +217,12 @@ static MercuryError init_history_file(const char* history_path) {
     g_orchestrator->history_mapping = mmap(NULL, total_size, PROT_READ | PROT_WRITE, 
                                           MAP_SHARED, g_orchestrator->history_fd, 0);
     if (g_orchestrator->history_mapping == MAP_FAILED) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), "Failed to map history file: %s", strerror(errno));
+        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, error_msg);
         close(g_orchestrator->history_fd);
-        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to map history file");
+        g_orchestrator->history_fd = -1;
+        g_orchestrator->history_mapping = NULL;
         return MERCURY_ERROR_IO_ERROR;
     }
     
@@ -364,7 +369,7 @@ static MercuryError init_test_orchestrator(const char* history_path) {
     return MERCURY_SUCCESS;
 }
 
-static void cleanup_test_orchestrator(void) {
+static void cleanup_orchestrator_internal(void) {
     if (!g_orchestrator) return;
     
     cleanup_history_file();
@@ -428,7 +433,8 @@ void* create_test_context(const char* test_class, const char* test_method) {
     context->query_count = 0;
     context->cache_hit_ratio = 0.0;
     context->performance_score = 0.0;
-    strcpy(context->grade, "N/A");
+    strncpy(context->grade, "N/A", sizeof(context->grade) - 1);
+    context->grade[sizeof(context->grade) - 1] = '\0';
     
     // Initialize status
     context->is_active = true;
@@ -436,7 +442,9 @@ void* create_test_context(const char* test_class, const char* test_method) {
     context->violation_flags = 0;
     context->has_n_plus_one = false;
     context->severity_level = 0;
-    strcpy(context->optimization_suggestion, "No analysis available");
+    strncpy(context->optimization_suggestion, "No analysis available", 
+            sizeof(context->optimization_suggestion) - 1);
+    context->optimization_suggestion[sizeof(context->optimization_suggestion) - 1] = '\0';
     
     g_orchestrator->context_count++;
     
@@ -609,19 +617,67 @@ int save_binary_configuration(const char* config_path) {
         return -1;
     }
     
-    // Create a minimal dummy file for testing purposes using system touch
+    // Create a minimal dummy file for testing purposes - SAFE VERSION
     // This would implement binary configuration saving in a real implementation
-    char command[512];
-    snprintf(command, sizeof(command), "touch '%s'", config_path);
-    int result = system(command);
+    FILE* fp = fopen(config_path, "w");
+    if (!fp) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), "Failed to create configuration file: %s", strerror(errno));
+        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, error_msg);
+        return -1;
+    }
     
-    if (result != 0) {
-        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Failed to create configuration file");
+    // Write a minimal header to mark it as a valid config file
+    const char* header = "MERCURY_CONFIG_V1\n";
+    size_t written = fwrite(header, 1, strlen(header), fp);
+    fclose(fp);
+    
+    if (written != strlen(header)) {
+        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, 
+                         "Failed to write configuration header");
         return -1;
     }
     
     MERCURY_INFO("Binary configuration saving not yet implemented: %s", config_path);
     return 0;
+}
+
+// Public initialization function for testing
+int initialize_test_orchestrator(const char* history_file_path) {
+    const char* path = history_file_path ? history_file_path : "/tmp/test_history.bin";
+    return init_test_orchestrator(path) == MERCURY_SUCCESS ? 0 : -1;
+}
+
+// Public cleanup function for testing
+void cleanup_test_orchestrator(void) {
+    if (g_orchestrator) {
+        cleanup_history_file();
+        if (g_orchestrator->contexts) {
+            free(g_orchestrator->contexts);
+        }
+        free(g_orchestrator);
+        g_orchestrator = NULL;
+    }
+}
+
+// Alias for update_test_context for compatibility
+int update_test_metrics(void* context_ptr, double response_time_ms, double memory_usage_mb,
+                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+                       const char* grade) {
+    return update_test_context(context_ptr, response_time_ms, memory_usage_mb,
+                              query_count, cache_hit_ratio, performance_score, grade);
+}
+
+// Destroy a test context
+void destroy_test_context(void* context) {
+    if (!context) return;
+    
+    TestContext* ctx = (TestContext*)context;
+    ctx->is_active = false;
+    
+    if (g_orchestrator) {
+        g_orchestrator->context_count--;
+    }
 }
 
 // Query history entries

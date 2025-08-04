@@ -388,6 +388,33 @@ clean-tests:
 	@rm -f $(TEST_DIR)/*.o
 	@echo "✅ Test cleanup completed"
 
+# === SECURITY TESTING ===
+
+SECURITY_TEST_DIR = tests/security
+SECURITY_TEST_SRCS = $(SECURITY_TEST_DIR)/test_command_injection.c \
+                     $(SECURITY_TEST_DIR)/test_buffer_overflow.c \
+                     $(SECURITY_TEST_DIR)/test_input_validation.c \
+                     $(SECURITY_TEST_DIR)/security_test_main.c
+
+SECURITY_TEST_BIN = $(SECURITY_TEST_DIR)/security_test
+
+.PHONY: sec_test
+sec_test: $(LIBS) $(SECURITY_TEST_BIN)
+	@echo ""
+	@echo "🔒 Running security tests..."
+	@echo "================================"
+	@$(SECURITY_TEST_BIN)
+	@echo ""
+
+$(TEST_DIR)/test_framework.o: $(TEST_DIR)/test_framework.c $(TEST_DIR)/test_framework.h
+	@echo "🔨 Building test framework..."
+	$(CC) $(TEST_CFLAGS) -c -o $@ $(TEST_DIR)/test_framework.c
+
+$(SECURITY_TEST_BIN): $(SECURITY_TEST_SRCS) $(TEST_DIR)/test_framework.o test_orchestrator.o common.o
+	@echo "🔨 Building security test suite..."
+	$(CC) $(TEST_CFLAGS) -o $@ $^ $(TEST_LIBS)
+	@echo "✅ Security test suite built"
+
 # === CLEANUP ===
 
 clean:
@@ -395,6 +422,7 @@ clean:
 	@rm -f *.o *.so *.dylib *.dll
 	@rm -f perf.data*
 	@rm -f $(TEST_DIR)/*.o
+	@rm -f $(SECURITY_TEST_BIN)
 	@rm -rf pgo-profiles/
 	@rm -f simple_test_common simple_test_advanced simple_test_query_analyzer simple_test_metrics_engine simple_test_test_orchestrator simple_test_performance_monitor
 	@rm -f comprehensive_test_test_orchestrator edge_test_test_orchestrator comprehensive_test_performance_monitor edge_test_performance_monitor
