@@ -54,12 +54,12 @@ class TestCBindingsFailures(unittest.TestCase):
         self.assertIsNone(c_bindings.c_extensions.test_orchestrator)
         self.assertIsNone(c_bindings.c_extensions.performance)
     
-    @unittest.skipIf(
-        os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'),
-        "Pure Python mode - C extensions not available"
-    )
     def test_partial_library_load_failure(self):
         """Test when only some libraries fail to load."""
+        # Runtime check for pure Python mode
+        if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
+            self.skipTest("Pure Python mode - C extensions not available")
+        
         from django_mercury.python_bindings import c_bindings
         
         # Reset state
@@ -240,12 +240,12 @@ class TestCBindingsFunctionCalls(unittest.TestCase):
         import django_mercury.python_bindings.c_bindings as c_bindings
         c_bindings.c_extensions._initialized = False
     
-    @unittest.skipIf(
-        os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'),
-        "Pure Python mode - C extensions not available"
-    )
     def test_query_analyzer_function_configuration(self):
         """Test that query analyzer functions are properly configured."""
+        # Runtime check for pure Python mode
+        if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
+            self.skipTest("Pure Python mode - C extensions not available")
+        
         from django_mercury.python_bindings import c_bindings
         
         # Initialize
@@ -259,12 +259,12 @@ class TestCBindingsFunctionCalls(unittest.TestCase):
         # This tests the _configure_query_analyzer_functions function
         self.assertTrue(hasattr(self.mock_query_lib, 'analyze_query'))
     
-    @unittest.skipIf(
-        os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'),
-        "Pure Python mode - C extensions not available"
-    )
     def test_metrics_engine_function_configuration(self):
         """Test that metrics engine functions are properly configured."""
+        # Runtime check for pure Python mode
+        if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
+            self.skipTest("Pure Python mode - C extensions not available")
+        
         from django_mercury.python_bindings import c_bindings
         
         # Initialize

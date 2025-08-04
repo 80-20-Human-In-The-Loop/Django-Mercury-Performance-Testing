@@ -518,17 +518,17 @@ class TestThreadSafeOperation(unittest.TestCase):
         
         def holder():
             with lock:
-                time.sleep(0.2)  # Hold lock for 200ms
+                time.sleep(0.5)  # Hold lock for 500ms (increased for macOS)
         
         # Start thread that holds the lock
         holder_thread = threading.Thread(target=holder)
         holder_thread.start()
         
-        time.sleep(0.05)  # Ensure holder thread has acquired lock
+        time.sleep(0.1)  # Ensure holder thread has acquired lock (increased for macOS)
         
         # Try to acquire with short timeout
         with self.assertRaises(TimeoutError):
-            with thread_safe_operation(lock, timeout=0.05):
+            with thread_safe_operation(lock, timeout=0.1):  # Increased timeout for macOS
                 pass
         
         holder_thread.join()

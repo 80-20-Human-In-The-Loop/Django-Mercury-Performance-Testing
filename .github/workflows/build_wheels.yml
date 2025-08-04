@@ -48,17 +48,20 @@ jobs:
           echo "Building C libraries..."
           cd django_mercury/c_core
           make clean || true
-          make all || {
+          if ! make all; then
             echo "WARNING: C library build failed, will use pure Python mode"
             echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+            echo "C_BUILD_FAILED=1" >> $GITHUB_ENV
             exit 0
-          }
+          fi
           echo "Checking built libraries:"
           if ls *.so 2>/dev/null; then
             echo "C libraries built successfully"
+            echo "C_BUILD_FAILED=0" >> $GITHUB_ENV
           else
             echo "No .so files found, will use pure Python mode"
             echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+            echo "C_BUILD_FAILED=1" >> $GITHUB_ENV
           fi
           cd ../..
       
@@ -77,6 +80,12 @@ jobs:
       
       - name: Run Python tests
         run: |
+          # Export env var in same shell that runs tests to ensure it's available at import time
+          if [ "${{ runner.os }}" = "Windows" ] || [ "$C_BUILD_FAILED" = "1" ] || [ ! -z "$DJANGO_MERCURY_PURE_PYTHON" ]; then
+            echo "Setting DJANGO_MERCURY_PURE_PYTHON=1 for tests"
+            export DJANGO_MERCURY_PURE_PYTHON=1
+          fi
+          echo "Running tests with DJANGO_MERCURY_PURE_PYTHON=${DJANGO_MERCURY_PURE_PYTHON:-0}"
           python test_runner.py --coverage --ci
       
       - name: Run C Core Unit Tests (Linux/macOS)

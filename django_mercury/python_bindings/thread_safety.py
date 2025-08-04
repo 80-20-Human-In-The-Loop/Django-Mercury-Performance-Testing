@@ -6,7 +6,7 @@ the framework works correctly in multi-threaded environments.
 
 import threading
 from contextlib import contextmanager
-from typing import TypeVar, Generic, Optional, Callable, Any, List, Tuple
+from typing import TypeVar, Generic, Optional, Callable, Any, List, Tuple, Dict
 from functools import wraps
 
 from .logging_config import get_logger

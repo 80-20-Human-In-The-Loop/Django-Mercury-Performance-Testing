@@ -192,13 +192,13 @@ class TestDjangoQueryTracker(unittest.TestCase):
         
         mock_lib.increment_query_count.assert_called_once()
     
-    @unittest.skipIf(
-        os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'),
-        "Pure Python mode - C extensions not available"
-    )
     @patch('django_mercury.python_bindings.django_hooks.c_extensions')
     def test_record_query_with_new_c_extensions(self, mock_c_extensions):
         """Test recording query with new C extension integration."""
+        # Runtime check for pure Python mode
+        if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
+            self.skipTest("Pure Python mode - C extensions not available")
+        
         # Mock the C extension functions
         mock_query_analyzer = Mock()
         mock_metrics_engine = Mock()
