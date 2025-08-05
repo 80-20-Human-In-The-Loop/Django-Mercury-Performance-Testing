@@ -21,6 +21,11 @@
  * @date 2024
  */
 
+/* Suppress deprecation warnings on Windows */
+#ifdef _MSC_VER
+    #define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "common.h"
 #include "test_orchestrator.h"
 #include <sys/stat.h>
@@ -31,6 +36,49 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+#endif
+
+/* Windows compatibility for POSIX functions */
+#ifdef _WIN32
+    #include <windows.h>
+    #include <io.h>
+    
+    /* File access constants */
+    #ifndef F_OK
+        #define F_OK 0
+    #endif
+    #define access _access
+    
+    /* Memory mapping constants */
+    #ifndef MAP_FAILED
+        #define MAP_FAILED ((void*)-1)
+    #endif
+    #ifndef MS_SYNC
+        #define MS_SYNC 0
+        #define MS_ASYNC 0
+    #endif
+    
+    /* Stub functions for Windows - memory mapping not supported */
+    static inline int msync(void* addr, size_t len, int flags) {
+        (void)addr; (void)len; (void)flags;
+        return 0; /* No-op on Windows */
+    }
+    
+    static inline int munmap(void* addr, size_t len) {
+        (void)addr; (void)len;
+        return 0; /* No-op on Windows */
+    }
+    
+    /* mmap stub - not implemented on Windows */
+    static inline void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset) {
+        (void)addr; (void)length; (void)prot; (void)flags; (void)fd; (void)offset;
+        return MAP_FAILED; /* Always fail on Windows */
+    }
+    
+    /* Protection flags (unused on Windows) */
+    #define PROT_READ 0
+    #define PROT_WRITE 0
+    #define MAP_SHARED 0
 #endif
 
 // === CONSTANTS ===
@@ -112,12 +160,12 @@ typedef struct {
     HistoryHeader* history_header;
     
     // Statistics
-    _Atomic(uint64_t) total_tests_executed;
-    _Atomic(uint64_t) total_violations;
-    _Atomic(uint64_t) total_n_plus_one_detected;
+    MERCURY_ATOMIC(uint64_t) total_tests_executed;
+    MERCURY_ATOMIC(uint64_t) total_violations;
+    MERCURY_ATOMIC(uint64_t) total_n_plus_one_detected;
     
     // Lock-free context management
-    _Atomic(int64_t) next_context_id;
+    MERCURY_ATOMIC(int64_t) next_context_id;
     
 } TestOrchestrator;
 
@@ -146,6 +194,16 @@ static MercuryError init_history_file(const char* history_path) {
         MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "History path cannot be NULL");
         return MERCURY_ERROR_INVALID_ARGUMENT;
     }
+    
+#ifdef _WIN32
+    // Memory mapping not implemented on Windows
+    MERCURY_WARN("Memory-mapped history not available on Windows - using in-memory only");
+    g_orchestrator->history_mapping = NULL;
+    g_orchestrator->history_header = NULL;
+    g_orchestrator->history_fd = -1;
+    g_orchestrator->history_file_size = 0;
+    return MERCURY_SUCCESS;
+#else
     
     // Calculate required file size
     size_t header_size = sizeof(HistoryHeader);
@@ -213,10 +271,15 @@ static MercuryError init_history_file(const char* history_path) {
                  history_path, total_size, g_orchestrator->history_header->entry_count);
     
     return MERCURY_SUCCESS;
+#endif  // !_WIN32
 }
 
 // Cleanup memory-mapped history
 static void cleanup_history_file(void) {
+#ifdef _WIN32
+    // No-op on Windows - memory mapping not implemented
+    return;
+#else
     if (g_orchestrator->history_mapping && g_orchestrator->history_mapping != MAP_FAILED) {
         msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_SYNC);
         munmap(g_orchestrator->history_mapping, g_orchestrator->history_file_size);
@@ -227,11 +290,20 @@ static void cleanup_history_file(void) {
         close(g_orchestrator->history_fd);
         g_orchestrator->history_fd = -1;
     }
+#endif
 }
 
 // Store test result in memory-mapped history
 static MercuryError store_test_result(const TestContext* context) {
-    if (!context || !g_orchestrator->history_header) {
+    if (!context) {
+        return MERCURY_ERROR_INVALID_ARGUMENT;
+    }
+    
+#ifdef _WIN32
+    // History storage not implemented on Windows
+    return MERCURY_SUCCESS;
+#else
+    if (!g_orchestrator->history_header) {
         return MERCURY_ERROR_INVALID_ARGUMENT;
     }
     
@@ -277,6 +349,7 @@ static MercuryError store_test_result(const TestContext* context) {
     }
     
     return MERCURY_SUCCESS;
+#endif  // !_WIN32
 }
 
 // === ORCHESTRATOR INITIALIZATION ===
@@ -423,7 +496,9 @@ void* create_test_context(const char* test_class, const char* test_method) {
             sizeof(context->optimization_suggestion) - 1);
     context->optimization_suggestion[sizeof(context->optimization_suggestion) - 1] = '\0';
     
-    g_orchestrator->context_count++;
+    if (g_orchestrator) {
+        g_orchestrator->context_count++;
+    }
     
     return context;
 }
@@ -499,7 +574,7 @@ int update_test_context(void* context_ptr, double response_time_ms, double memor
         context->violation_flags |= VIOLATION_CACHE_RATIO;
     }
     
-    if (context->has_violations) {
+    if (context->has_violations && g_orchestrator) {
         atomic_fetch_add(&g_orchestrator->total_violations, 1);
     }
     
@@ -538,7 +613,9 @@ int update_n_plus_one_analysis(void* context_ptr, int has_n_plus_one, int severi
     
     if (context->has_n_plus_one) {
         context->violation_flags |= VIOLATION_N_PLUS_ONE;
-        atomic_fetch_add(&g_orchestrator->total_n_plus_one_detected, 1);
+        if (g_orchestrator) {
+            atomic_fetch_add(&g_orchestrator->total_n_plus_one_detected, 1);
+        }
     }
     
     return 0;
@@ -565,9 +642,10 @@ int finalize_test_context(void* context_ptr) {
     // Deactivate context
     context->is_active = false;
     context->context_id = -1;
-    g_orchestrator->context_count--;
-    
-    atomic_fetch_add(&g_orchestrator->total_tests_executed, 1);
+    if (g_orchestrator) {
+        g_orchestrator->context_count--;
+        atomic_fetch_add(&g_orchestrator->total_tests_executed, 1);
+    }
     
     return 0;
 }
