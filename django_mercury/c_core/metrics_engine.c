@@ -23,6 +23,9 @@
 #endif
 
 #include "common.h"
+#include <stdlib.h>  /* For malloc, free */
+#include <string.h>  /* For strcpy, strncpy, strlen */
+#include <math.h>    /* For sqrt, fabs */
 
 // Platform-specific includes
 #ifdef MERCURY_MACOS

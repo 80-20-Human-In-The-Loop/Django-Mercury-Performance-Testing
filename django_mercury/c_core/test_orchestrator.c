@@ -28,9 +28,17 @@
 
 #include "common.h"
 #include "test_orchestrator.h"
-#include <sys/stat.h>
+#include <stdlib.h>  /* For malloc, free */
+#include <string.h>  /* For strcpy, strncpy, memcpy, memmove */
 #include <inttypes.h>
 #include <errno.h>
+
+#ifdef _WIN32
+    #include <sys/types.h>
+    #include <sys/stat.h>
+#else
+    #include <sys/stat.h>
+#endif
 
 #ifdef MERCURY_LINUX
 #include <sys/mman.h>

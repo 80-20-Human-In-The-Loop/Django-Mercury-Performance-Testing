@@ -23,15 +23,22 @@
 #endif
 
 #include "common.h"
+#include <stdlib.h>  /* For malloc, free, realloc */
+#include <string.h>  /* For strcpy, strncpy, strlen, memcpy, memmove */
 #include <math.h>
 #include <ctype.h>
 
 /* Platform-specific string function includes */
 #ifdef _WIN32
-    #include <string.h>
+    #include <windows.h>  /* For Windows types */
     #define strncasecmp _strnicmp  /* Windows equivalent */
 #else
     #include <strings.h>  /* For strncasecmp on macOS/POSIX systems */
+#endif
+
+/* Ensure SIZE_MAX is defined */
+#ifndef SIZE_MAX
+    #define SIZE_MAX ((size_t)-1)
 #endif
 
 // === CONSTANTS ===
@@ -313,6 +320,9 @@ static MercuryError init_query_analyzer(void) {
         MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate query analyzer");
         return MERCURY_ERROR_OUT_OF_MEMORY;
     }
+    
+    // Zero-initialize the entire structure
+    memset(g_analyzer, 0, sizeof(QueryAnalyzer));
     
     // Initialize ring buffer for query history
     g_analyzer->query_history = mercury_ring_buffer_create(sizeof(MercuryQueryRecord), MAX_QUERY_HISTORY);
