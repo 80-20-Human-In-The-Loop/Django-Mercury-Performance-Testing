@@ -111,14 +111,21 @@ jobs:
           echo "Running tests with DJANGO_MERCURY_PURE_PYTHON=${DJANGO_MERCURY_PURE_PYTHON:-0}"
           python test_runner.py --coverage --ci
       
-      - name: Run Python tests (Windows)
+      - name: Test C Extensions (Windows)
         if: runner.os == 'Windows'
         run: |
-          echo "Setting UTF-8 encoding and pure Python mode for Windows"
+          echo "Testing C extension loading on Windows"
           $env:PYTHONIOENCODING = "utf-8"
-          $env:DJANGO_MERCURY_PURE_PYTHON = "1"
           chcp 65001 > $null  # Set console to UTF-8
-          echo "Running tests with PYTHONIOENCODING=utf-8 and DJANGO_MERCURY_PURE_PYTHON=1"
+          
+          # First try with C extensions
+          echo "Testing C extensions..."
+          $env:DJANGO_MERCURY_PURE_PYTHON = "0"
+          python test_windows_dll.py || echo "C extensions not available"
+          
+          # Then run tests with pure Python fallback
+          echo "Running test suite with pure Python mode..."
+          $env:DJANGO_MERCURY_PURE_PYTHON = "1"
           python test_runner.py --coverage --ci
       
       - name: Run C Core Unit Tests (Linux/macOS)
@@ -237,6 +244,8 @@ jobs:
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_ARCHS: ${{ matrix.archs }}
+          # Enable C extensions on Windows
+          CIBW_ENVIRONMENT_WINDOWS: DJANGO_MERCURY_PURE_PYTHON=0
       
       - uses: actions/upload-artifact@v4
         with:

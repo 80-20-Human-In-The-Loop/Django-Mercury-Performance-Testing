@@ -27,6 +27,9 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+/* Include Windows compatibility layer */
+#include "windows_compat.h"
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -211,11 +214,19 @@ static inline MercuryTimestamp mercury_get_timestamp(void) {
 
 // RDTSC timing for x86_64 (nanosecond precision)
 #ifdef MERCURY_X86_64
+#ifndef _WIN32
 MERCURY_INLINE uint64_t mercury_rdtsc(void) {
     uint32_t lo, hi;
     __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
     return ((uint64_t)hi << 32) | lo;
 }
+#else
+// Windows version using intrinsics
+#include <intrin.h>
+MERCURY_INLINE uint64_t mercury_rdtsc(void) {
+    return __rdtsc();
+}
+#endif
 
 // Calibrate RDTSC frequency (call once at startup)
 extern uint64_t mercury_rdtsc_frequency;
@@ -285,14 +296,14 @@ MERCURY_INLINE uint64_t mercury_hash_string(const char* str) {
  * @param alignment Required alignment (must be power of 2)
  * @return Pointer to aligned memory or NULL on failure
  */
-void* mercury_aligned_alloc(size_t size, size_t alignment);
+MERCURY_API void* mercury_aligned_alloc(size_t size, size_t alignment);
 
 /**
  * @brief Free memory allocated with mercury_aligned_alloc
  * 
  * @param ptr Pointer returned by mercury_aligned_alloc
  */
-void mercury_aligned_free(void* ptr);
+MERCURY_API void mercury_aligned_free(void* ptr);
 
 /**
  * @struct MercuryRingBuffer
@@ -334,13 +345,13 @@ typedef struct MERCURY_ALIGNED(MERCURY_CACHE_LINE_SIZE) {
 } MercuryRingBuffer;
 
 // Ring buffer operations
-MercuryRingBuffer* mercury_ring_buffer_create(size_t element_size, size_t capacity);
-void mercury_ring_buffer_destroy(MercuryRingBuffer* buffer);
-bool mercury_ring_buffer_push(MercuryRingBuffer* buffer, const void* element);
-bool mercury_ring_buffer_pop(MercuryRingBuffer* buffer, void* element);
-size_t mercury_ring_buffer_size(const MercuryRingBuffer* buffer);
-bool mercury_ring_buffer_is_full(const MercuryRingBuffer* buffer);
-bool mercury_ring_buffer_is_empty(const MercuryRingBuffer* buffer);
+MERCURY_API MercuryRingBuffer* mercury_ring_buffer_create(size_t element_size, size_t capacity);
+MERCURY_API void mercury_ring_buffer_destroy(MercuryRingBuffer* buffer);
+MERCURY_API bool mercury_ring_buffer_push(MercuryRingBuffer* buffer, const void* element);
+MERCURY_API bool mercury_ring_buffer_pop(MercuryRingBuffer* buffer, void* element);
+MERCURY_API size_t mercury_ring_buffer_size(const MercuryRingBuffer* buffer);
+MERCURY_API bool mercury_ring_buffer_is_full(const MercuryRingBuffer* buffer);
+MERCURY_API bool mercury_ring_buffer_is_empty(const MercuryRingBuffer* buffer);
 
 // === STRING UTILITIES ===
 
@@ -351,12 +362,12 @@ typedef struct {
     size_t capacity;
 } MercuryString;
 
-MercuryString* mercury_string_create(size_t initial_capacity);
-void mercury_string_destroy(MercuryString* str);
-MercuryError mercury_string_append(MercuryString* str, const char* text);
-MercuryError mercury_string_append_char(MercuryString* str, char c);
-void mercury_string_clear(MercuryString* str);
-const char* mercury_string_cstr(const MercuryString* str);
+MERCURY_API MercuryString* mercury_string_create(size_t initial_capacity);
+MERCURY_API void mercury_string_destroy(MercuryString* str);
+MERCURY_API MercuryError mercury_string_append(MercuryString* str, const char* text);
+MERCURY_API MercuryError mercury_string_append_char(MercuryString* str, char c);
+MERCURY_API void mercury_string_clear(MercuryString* str);
+MERCURY_API const char* mercury_string_cstr(const MercuryString* str);
 
 // Boyer-Moore string matching utilities
 typedef struct {
@@ -365,9 +376,9 @@ typedef struct {
     size_t pattern_length;
 } MercuryBoyerMoore;
 
-MercuryBoyerMoore* mercury_boyer_moore_create(const char* pattern);
-void mercury_boyer_moore_destroy(MercuryBoyerMoore* bm);
-int mercury_boyer_moore_search(const MercuryBoyerMoore* bm, const char* text, 
+MERCURY_API MercuryBoyerMoore* mercury_boyer_moore_create(const char* pattern);
+MERCURY_API void mercury_boyer_moore_destroy(MercuryBoyerMoore* bm);
+MERCURY_API int mercury_boyer_moore_search(const MercuryBoyerMoore* bm, const char* text, 
                               size_t text_length, const char* pattern);
 
 // === SAFE ARITHMETIC ===
@@ -416,8 +427,8 @@ extern MercuryErrorContext mercury_last_error;
 } while(0)
 
 // Get last error
-const MercuryErrorContext* mercury_get_last_error(void);
-void mercury_clear_error(void);
+MERCURY_API const MercuryErrorContext* mercury_get_last_error(void);
+MERCURY_API void mercury_clear_error(void);
 
 // === PERFORMANCE MONITORING STRUCTURES ===
 
@@ -480,9 +491,9 @@ typedef struct {
     uint32_t pattern_masks[256];  // Maps first char to pattern bitmask
 } MercuryMultiPatternSearch;
 
-MercuryMultiPatternSearch* mercury_multi_pattern_create(const char* patterns[], size_t count);
-void mercury_multi_pattern_destroy(MercuryMultiPatternSearch* mps);
-int mercury_multi_pattern_search_simd(const MercuryMultiPatternSearch* mps, const char* text, 
+MERCURY_API MercuryMultiPatternSearch* mercury_multi_pattern_create(const char* patterns[], size_t count);
+MERCURY_API void mercury_multi_pattern_destroy(MercuryMultiPatternSearch* mps);
+MERCURY_API int mercury_multi_pattern_search_simd(const MercuryMultiPatternSearch* mps, const char* text, 
                                      size_t text_len, int* pattern_id);
 
 // === LOGGING AND DEBUGGING ===
@@ -498,7 +509,7 @@ typedef enum {
 extern void (*mercury_log_function)(MercuryLogLevel level, const char* format, ...);
 
 // Default console logger
-void mercury_default_logger(MercuryLogLevel level, const char* format, ...);
+MERCURY_API void mercury_default_logger(MercuryLogLevel level, const char* format, ...);
 
 // Logging macros
 #define MERCURY_LOG(level, ...) do { \
@@ -545,10 +556,10 @@ typedef struct MERCURY_ALIGNED(MERCURY_CACHE_LINE_SIZE) {
 } memory_pool_t;
 
 // Memory pool functions
-void memory_pool_init(memory_pool_t* pool, size_t block_size, size_t num_blocks);
-void* memory_pool_alloc(memory_pool_t* pool);
-void memory_pool_free(memory_pool_t* pool, void* ptr);
-void memory_pool_destroy(memory_pool_t* pool);
+MERCURY_API void memory_pool_init(memory_pool_t* pool, size_t block_size, size_t num_blocks);
+MERCURY_API void* memory_pool_alloc(memory_pool_t* pool);
+MERCURY_API void memory_pool_free(memory_pool_t* pool, void* ptr);
+MERCURY_API void memory_pool_destroy(memory_pool_t* pool);
 
 // === ERROR CHAIN TYPES ===
 
@@ -564,9 +575,9 @@ typedef struct {
 } error_chain_t;
 
 // Error chain functions
-void error_chain_init(error_chain_t* chain);
-void error_chain_add(error_chain_t* chain, int code, const char* format, ...);
-void error_chain_destroy(error_chain_t* chain);
+MERCURY_API void error_chain_init(error_chain_t* chain);
+MERCURY_API void error_chain_add(error_chain_t* chain, int code, const char* format, ...);
+MERCURY_API void error_chain_destroy(error_chain_t* chain);
 
 // === INITIALIZATION AND CLEANUP ===
 
@@ -578,7 +589,7 @@ void error_chain_destroy(error_chain_t* chain);
  * 
  * @return MERCURY_SUCCESS on success, error code otherwise
  */
-MercuryError mercury_init(void);
+MERCURY_API MercuryError mercury_init(void);
 
 /**
  * @brief Cleanup Mercury common utilities
@@ -586,6 +597,6 @@ MercuryError mercury_init(void);
  * Should be called once per process when done using Mercury.
  * Releases any allocated resources.
  */
-void mercury_cleanup(void);
+MERCURY_API void mercury_cleanup(void);
 
 #endif // MERCURY_COMMON_H

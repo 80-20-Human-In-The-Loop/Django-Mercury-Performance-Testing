@@ -286,11 +286,20 @@ environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING=
 # Only build 64-bit
 archs = ["AMD64"]
 
-# Environment variables for Windows
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1"}
+# Environment variables for Windows - enable C extensions
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
 
-# Install delvewheel for wheel repair and ensure setuptools
-before-build = [
+# Install Visual Studio Build Tools components and dependencies
+before-all = [
     "python -m pip install --upgrade pip setuptools wheel",
-    "pip install delvewheel"
+    "pip install delvewheel",
 ]
+
+# Build C libraries before Python extension
+before-build = [
+    "python -m pip install --upgrade pip setuptools wheel delvewheel",
+    "python -c \"import sys; print(f'Building for Python {sys.version} on Windows')\"",
+]
+
+# Repair wheels to include dependencies
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"

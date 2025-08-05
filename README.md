@@ -419,7 +419,7 @@ int main() {
 
 ### 📚 Documentation
 
-- **[GitHub Actions Deployment Guide](docs/GitHub-Actions-Deployment.md)** - How our CI/CD works (for beginners, experts, and AI agents)
+- **[GitHub Actions Deployment Guide](https://github.com/80-20-Human-In-The-Loop/Django-Mercury-Performance-Testing/wiki/GitHub-Actions-Deployment-Guide)** - How our CI/CD works (for beginners, experts, and AI agents)
 - **More docs coming soon!**
 
 ## 🎯 Real Results at EduLite

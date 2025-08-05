@@ -36,6 +36,12 @@ endif
 CC := gcc
 ifeq ($(UNAME_S),Darwin)
     CC := clang
+else ifeq ($(UNAME_S),Windows_NT)
+    CC := cl
+else ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+    CC := gcc
+else ifeq ($(findstring MSYS,$(UNAME_S)),MSYS)
+    CC := gcc
 endif
 
 # Base compiler flags
@@ -74,10 +80,29 @@ ifeq ($(UNAME_S),Darwin)
     CFLAGS += -DMERCURY_MACOS=1
     LDFLAGS += -framework CoreFoundation -ldl -pthread
 endif
-ifeq ($(UNAME_S),CYGWIN_NT)
+ifeq ($(UNAME_S),Windows_NT)
+    # Native Windows with MSVC
+    CFLAGS := /std:c11 /D_CRT_SECURE_NO_WARNINGS /DMERCURY_WINDOWS=1 /DMERCURY_API=__declspec(dllexport)
+    LDFLAGS := /DLL kernel32.lib user32.lib
+    OPT_FLAGS := /O2 /GL
+    SO_EXT := .dll
+else ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+    # MinGW
+    CFLAGS += -DMERCURY_WINDOWS=1 -DMERCURY_API=__declspec(dllexport)
+    LDFLAGS += -lkernel32 -luser32 -pthread
+    SO_EXT := .dll
+else ifeq ($(findstring MSYS,$(UNAME_S)),MSYS)
+    # MSYS2
+    CFLAGS += -DMERCURY_WINDOWS=1 -DMERCURY_API=__declspec(dllexport)
+    LDFLAGS += -lkernel32 -luser32 -pthread
+    SO_EXT := .dll
+else ifeq ($(UNAME_S),CYGWIN_NT)
     CFLAGS += -DMERCURY_WINDOWS=1
     LDFLAGS += -lpsapi
 endif
+
+# Default shared object extension
+SO_EXT ?= .so
 
 # SIMD support
 ifeq ($(ARCH),x86_64)
@@ -102,7 +127,7 @@ METRICS_ENGINE_SRC := metrics_engine.c
 TEST_ORCHESTRATOR_SRC := test_orchestrator.c
 
 # Target libraries
-TARGETS := libquery_analyzer.so libmetrics_engine.so libtest_orchestrator.so
+TARGETS := libquery_analyzer$(SO_EXT) libmetrics_engine$(SO_EXT) libtest_orchestrator$(SO_EXT)
 
 # Object files
 COMMON_OBJ := $(COMMON_SRC:.c=.o)
@@ -146,8 +171,28 @@ $(COMMON_OBJ): $(COMMON_SRC) common.h
 	@echo "🔨 Compiling common utilities..."
 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
 
+# Build rules for Windows MSVC
+ifeq ($(UNAME_S),Windows_NT)
+
 # Build query analyzer library
-libquery_analyzer.so: $(QUERY_ANALYZER_OBJ) $(COMMON_OBJ)
+libquery_analyzer.dll: $(QUERY_ANALYZER_SRC) $(COMMON_SRC) common.h windows_compat.h
+	@echo "🔗 Linking query analyzer library (Windows)..."
+	cl $(CFLAGS) $(OPT_FLAGS) /Fe$@ $(QUERY_ANALYZER_SRC) $(COMMON_SRC) /link $(LDFLAGS)
+
+# Build metrics engine library  
+libmetrics_engine.dll: $(METRICS_ENGINE_SRC) $(COMMON_SRC) common.h windows_compat.h
+	@echo "🔗 Linking metrics engine library (Windows)..."
+	cl $(CFLAGS) $(OPT_FLAGS) /Fe$@ $(METRICS_ENGINE_SRC) $(COMMON_SRC) /link $(LDFLAGS)
+
+# Build test orchestrator library
+libtest_orchestrator.dll: $(TEST_ORCHESTRATOR_SRC) $(COMMON_SRC) common.h windows_compat.h
+	@echo "🔗 Linking test orchestrator library (Windows)..."
+	cl $(CFLAGS) $(OPT_FLAGS) /Fe$@ $(TEST_ORCHESTRATOR_SRC) $(COMMON_SRC) /link $(LDFLAGS)
+
+else
+
+# Build query analyzer library
+libquery_analyzer$(SO_EXT): $(QUERY_ANALYZER_OBJ) $(COMMON_OBJ)
 	@echo "🔗 Linking query analyzer library..."
 	$(CC) -shared $(CFLAGS) $(PYTHON_INCLUDES) -o $@ $^ $(LDFLAGS)
 
@@ -156,7 +201,7 @@ $(QUERY_ANALYZER_OBJ): $(QUERY_ANALYZER_SRC) common.h
 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
 
 # Build metrics engine library
-libmetrics_engine.so: $(METRICS_ENGINE_OBJ) $(COMMON_OBJ)
+libmetrics_engine$(SO_EXT): $(METRICS_ENGINE_OBJ) $(COMMON_OBJ)
 	@echo "🔗 Linking metrics engine library..."
 	$(CC) -shared $(CFLAGS) $(PYTHON_INCLUDES) -o $@ $^ $(LDFLAGS)
 
@@ -165,13 +210,15 @@ $(METRICS_ENGINE_OBJ): $(METRICS_ENGINE_SRC) common.h
 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
 
 # Build test orchestrator library
-libtest_orchestrator.so: $(TEST_ORCHESTRATOR_OBJ) $(COMMON_OBJ)
+libtest_orchestrator$(SO_EXT): $(TEST_ORCHESTRATOR_OBJ) $(COMMON_OBJ)
 	@echo "🔗 Linking test orchestrator library..."
 	$(CC) -shared $(CFLAGS) $(PYTHON_INCLUDES) -o $@ $^ $(LDFLAGS)
 
 $(TEST_ORCHESTRATOR_OBJ): $(TEST_ORCHESTRATOR_SRC) common.h
 	@echo "🔨 Compiling test orchestrator..."
 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c -o $@ $<
+
+endif
 
 # === BUILD VARIANTS ===
 
@@ -239,9 +286,9 @@ benchmark: $(TARGETS)
 ci: clean all
 	@echo "🚀 CI Build Complete"
 	@echo "📋 Libraries in c_core/:"
-	@ls -la *.so 2>/dev/null || echo "   No .so files in c_core/"
+	@ls -la *$(SO_EXT) 2>/dev/null || echo "   No $(SO_EXT) files in c_core/"
 	@echo "📋 Libraries in python_bindings/:"
-	@ls -la ../python_bindings/*.so 2>/dev/null || echo "   No .so files in python_bindings/"
+	@ls -la ../python_bindings/*$(SO_EXT) 2>/dev/null || echo "   No $(SO_EXT) files in python_bindings/"
 
 install: $(TARGETS)
 	@echo "📦 Installing performance libraries..."
@@ -255,7 +302,7 @@ install: $(TARGETS)
 		fi; \
 	done
 	@echo "📋 Verifying installation:"
-	@if ls ../python_bindings/*.so 2>/dev/null; then \
+	@if ls ../python_bindings/*$(SO_EXT) 2>/dev/null; then \
 		echo "✅ Libraries successfully installed to ../python_bindings/"; \
 	else \
 		echo "❌ ERROR: No libraries found in ../python_bindings/"; \
@@ -445,7 +492,7 @@ $(SECURITY_TEST_BIN): $(SECURITY_TEST_SRCS) $(TEST_DIR)/test_framework.o test_or
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
-	@rm -f *.o *.so *.dylib *.dll
+	@rm -f *.o *.so *.dylib *.dll *.obj *.lib *.exp *.pdb
 	@rm -f perf.data*
 	@rm -f $(TEST_DIR)/*.o
 	@rm -f $(SECURITY_TEST_BIN)

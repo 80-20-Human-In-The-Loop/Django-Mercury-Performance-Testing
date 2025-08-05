@@ -109,9 +109,9 @@ def get_c_extensions():
     # Platform-specific compilation flags  
     if sys.platform == 'win32':
         # Windows with MSVC
-        compile_args = ['/O2', '/W3', '/std:c11']  # Add C11 standard for atomics
-        link_args = []
-        libraries = []
+        compile_args = ['/O2', '/W3', '/std:c11', '/DMERCURY_API=__declspec(dllexport)']
+        link_args = ['/DLL']
+        libraries = ['kernel32', 'user32', 'advapi32']
     elif sys.platform == 'darwin':
         # macOS
         compile_args = [
@@ -144,48 +144,40 @@ def get_c_extensions():
     # Define extensions
     extensions = [
         Extension(
-            name='django_mercury._c_performance',
-            sources=[
-                'django_mercury/c_core/python_wrapper.c',  # Use Python wrapper
-            ] + common_sources,
-            include_dirs=include_dirs,
-            libraries=libraries,
-            extra_compile_args=compile_args,
-            extra_link_args=link_args,
-            language='c',
-        ),
-        Extension(
             name='django_mercury._c_metrics',
             sources=[
-                'django_mercury/c_core/metrics_wrapper.c',  # Use Python wrapper
+                'django_mercury/c_core/metrics_engine.c',  # Main consolidated source
             ] + common_sources,
             include_dirs=include_dirs,
             libraries=libraries,
             extra_compile_args=compile_args,
             extra_link_args=link_args,
             language='c',
+            define_macros=[('BUILDING_MERCURY_DLL', 1)] if sys.platform == 'win32' else [],
         ),
         Extension(
             name='django_mercury._c_analyzer',
             sources=[
-                'django_mercury/c_core/analyzer_wrapper.c',  # Use Python wrapper
+                'django_mercury/c_core/query_analyzer.c',  # Main source
             ] + common_sources,
             include_dirs=include_dirs,
             libraries=libraries,
             extra_compile_args=compile_args,
             extra_link_args=link_args,
             language='c',
+            define_macros=[('BUILDING_MERCURY_DLL', 1)] if sys.platform == 'win32' else [],
         ),
         Extension(
             name='django_mercury._c_orchestrator',
             sources=[
-                'django_mercury/c_core/orchestrator_wrapper.c',  # Use Python wrapper
+                'django_mercury/c_core/test_orchestrator.c',  # Main source
             ] + common_sources,
             include_dirs=include_dirs,
             libraries=libraries,
             extra_compile_args=compile_args,
             extra_link_args=link_args,
             language='c',
+            define_macros=[('BUILDING_MERCURY_DLL', 1)] if sys.platform == 'win32' else [],
         ),
     ]
     

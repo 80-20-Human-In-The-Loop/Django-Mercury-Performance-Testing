@@ -27,8 +27,15 @@ def _try_import_c_extensions():
         Tuple of (success, error_message)
     """
     try:
-        # Try importing all C extensions
-        import django_mercury._c_performance
+        # On Windows, ensure DLLs can be loaded
+        if sys.platform == 'win32':
+            import os
+            # Add the package directory to DLL search path
+            package_dir = os.path.dirname(os.path.dirname(__file__))
+            if hasattr(os, 'add_dll_directory'):
+                os.add_dll_directory(package_dir)
+        
+        # Try importing C extensions - we consolidated to metrics
         import django_mercury._c_metrics
         import django_mercury._c_analyzer
         import django_mercury._c_orchestrator
@@ -116,8 +123,14 @@ class ImplementationLoader:
     def _load_c_extensions(self):
         """Load C extension implementations."""
         try:
-            # Test that C extensions can be imported
-            import django_mercury._c_performance
+            # On Windows, ensure DLLs can be loaded
+            if sys.platform == 'win32':
+                import os
+                package_dir = os.path.dirname(os.path.dirname(__file__))
+                if hasattr(os, 'add_dll_directory'):
+                    os.add_dll_directory(package_dir)
+            
+            # Test that C extensions can be imported (consolidated to metrics)
             import django_mercury._c_metrics
             import django_mercury._c_analyzer
             import django_mercury._c_orchestrator
@@ -130,6 +143,7 @@ class ImplementationLoader:
                 CTestOrchestrator,
             )
 
+            # Performance monitor now uses metrics engine internally
             self._performance_monitor_class = CPerformanceMonitor
             self._metrics_engine_class = CMetricsEngine
             self._query_analyzer_class = CQueryAnalyzer
