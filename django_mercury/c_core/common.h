@@ -673,13 +673,15 @@ MERCURY_API void mercury_cleanup(void);
         static void func(void); \
         static int func##_wrapper(void) { func(); return 0; } \
         __pragma(section(".CRT$XCU",read)) \
-        __declspec(allocate(".CRT$XCU")) static int (*func##_)(void) = func##_wrapper;
+        __declspec(allocate(".CRT$XCU")) static int (*func##_)(void) = func##_wrapper; \
+        static void func(void)
 
     #define MERCURY_DESTRUCTOR(func) \
         static void func(void); \
         static int func##_destructor_wrapper(void) { func(); return 0; } \
         __pragma(section(".CRT$XPU",read)) \
-        __declspec(allocate(".CRT$XPU")) static int (*func##_)(void) = func##_destructor_wrapper;
+        __declspec(allocate(".CRT$XPU")) static int (*func##_)(void) = func##_destructor_wrapper; \
+        static void func(void)
 
 #elif defined(__GNUC__) || defined(__clang__)
     // GCC and Clang support __attribute__((constructor/destructor))
