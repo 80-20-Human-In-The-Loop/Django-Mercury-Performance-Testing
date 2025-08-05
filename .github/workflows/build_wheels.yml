@@ -198,7 +198,8 @@ jobs:
           echo "Current directory: $(pwd)"
           echo ""
           echo "Checking if libraries can be loaded with ctypes:"
-          cat > test_ctypes.py << 'EOF'
+          # Create debug script
+          cat > test_ctypes.py << 'PYTHON_EOF'
 import ctypes
 import os
 import sys
@@ -261,7 +262,7 @@ try:
 except Exception as e:
     print(f'Failed to test c_bindings: {type(e).__name__}: {e}')
     traceback.print_exc()
-EOF
+PYTHON_EOF
           python test_ctypes.py
           echo ""
           # C extensions MUST be available in CI
