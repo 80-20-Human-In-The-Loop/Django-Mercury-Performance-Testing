@@ -32,7 +32,16 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <stdbool.h>
+#ifndef _MSC_VER
+    #include <stdbool.h>
+#else
+    // MSVC doesn't have stdbool.h in C mode
+    #ifndef __cplusplus
+        typedef int bool;
+        #define true 1
+        #define false 0
+    #endif
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -71,16 +80,27 @@
     #endif
 #endif
 
-// Thread safety
-#ifdef __STDC_NO_ATOMICS__
+// Thread safety and atomic types
+#if defined(__STDC_NO_ATOMICS__) || defined(_MSC_VER)
+    // For MSVC and systems without atomics, define atomic types directly
+    #define MERCURY_ATOMIC(type) type
     #define _Atomic
+    
+    // Define atomic operations as regular operations (non-thread-safe fallback)
+    #define atomic_load(ptr) (*(ptr))
+    #define atomic_store(ptr, val) ((*(ptr)) = (val))
+    #define atomic_fetch_add(ptr, val) ((*(ptr)) += (val), (*(ptr)) - (val))
+    #define atomic_fetch_sub(ptr, val) ((*(ptr)) -= (val), (*(ptr)) + (val))
+    
     #ifdef _MSC_VER
         #pragma message("WARNING: Atomic operations not available, thread safety not guaranteed")
     #else
         #warning "Atomic operations not available, thread safety not guaranteed"
     #endif
 #else
+    // For systems with C11 atomics
     #include <stdatomic.h>
+    #define MERCURY_ATOMIC(type) _Atomic(type)
 #endif
 
 // Compiler attributes for optimization
@@ -97,6 +117,20 @@
     #define MERCURY_PREFETCH_WRITE(addr) __builtin_prefetch((addr), 1, 3)  // Write, high temporal locality
     #define MERCURY_PREFETCH_READ_LOW(addr) __builtin_prefetch((addr), 0, 1) // Read, low temporal locality
     #define MERCURY_PREFETCH_WRITE_LOW(addr) __builtin_prefetch((addr), 1, 1) // Write, low temporal locality
+#elif defined(_MSC_VER)
+    // MSVC-specific attributes
+    #define MERCURY_INLINE __forceinline
+    #define MERCURY_NOINLINE __declspec(noinline)
+    #define MERCURY_ALIGNED(x) __declspec(align(x))
+    #define MERCURY_PACKED
+    #define MERCURY_LIKELY(x) (x)
+    #define MERCURY_UNLIKELY(x) (x)
+    
+    // No-op prefetch for MSVC
+    #define MERCURY_PREFETCH_READ(addr) do {} while(0)
+    #define MERCURY_PREFETCH_WRITE(addr) do {} while(0)
+    #define MERCURY_PREFETCH_READ_LOW(addr) do {} while(0)
+    #define MERCURY_PREFETCH_WRITE_LOW(addr) do {} while(0)
 #else
     #define MERCURY_INLINE inline
     #define MERCURY_NOINLINE
@@ -105,7 +139,7 @@
     #define MERCURY_LIKELY(x) (x)
     #define MERCURY_UNLIKELY(x) (x)
     
-    // No-op prefetch for non-GCC compilers
+    // No-op prefetch for other compilers
     #define MERCURY_PREFETCH_READ(addr) do {} while(0)
     #define MERCURY_PREFETCH_WRITE(addr) do {} while(0)
     #define MERCURY_PREFETCH_READ_LOW(addr) do {} while(0)
@@ -338,14 +372,14 @@ typedef struct MERCURY_ALIGNED(MERCURY_CACHE_LINE_SIZE) {
     char padding1[MERCURY_CACHE_LINE_SIZE - (sizeof(void*) + 2*sizeof(size_t))];
     
     // Separate cache lines for atomic variables to prevent false sharing
-    _Atomic(size_t) head;
-    char padding2[MERCURY_CACHE_LINE_SIZE - sizeof(_Atomic(size_t))];
+    MERCURY_ATOMIC(size_t) head;
+    char padding2[MERCURY_CACHE_LINE_SIZE - sizeof(size_t)];
     
-    _Atomic(size_t) tail;
-    char padding3[MERCURY_CACHE_LINE_SIZE - sizeof(_Atomic(size_t))];
+    MERCURY_ATOMIC(size_t) tail;
+    char padding3[MERCURY_CACHE_LINE_SIZE - sizeof(size_t)];
     
-    _Atomic(size_t) count;
-    char padding4[MERCURY_CACHE_LINE_SIZE - sizeof(_Atomic(size_t))];
+    MERCURY_ATOMIC(size_t) count;
+    char padding4[MERCURY_CACHE_LINE_SIZE - sizeof(size_t)];
 } MercuryRingBuffer;
 
 // Ring buffer operations
@@ -547,12 +581,12 @@ typedef struct MERCURY_ALIGNED(MERCURY_CACHE_LINE_SIZE) {
     char padding1[MERCURY_CACHE_LINE_SIZE - 2*sizeof(size_t)];
     
     // Lock-free atomic stack for available blocks
-    _Atomic(memory_block_t*) free_stack;
-    char padding2[MERCURY_CACHE_LINE_SIZE - sizeof(_Atomic(memory_block_t*))];
+    MERCURY_ATOMIC(memory_block_t*) free_stack;
+    char padding2[MERCURY_CACHE_LINE_SIZE - sizeof(memory_block_t*)];
     
     // Atomic counter for statistics  
-    _Atomic(size_t) free_count;
-    char padding3[MERCURY_CACHE_LINE_SIZE - sizeof(_Atomic(size_t))];
+    MERCURY_ATOMIC(size_t) free_count;
+    char padding3[MERCURY_CACHE_LINE_SIZE - sizeof(size_t)];
     
     // Array of all blocks for cleanup (not used in hot path)
     memory_block_t* all_blocks;
