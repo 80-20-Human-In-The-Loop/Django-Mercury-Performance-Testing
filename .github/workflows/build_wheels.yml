@@ -48,6 +48,12 @@ jobs:
           pip install -e ".[dev]"
           pip install pytest-cov
       
+      - name: Set up MSVC compiler (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      
       - name: Build C libraries (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
@@ -94,11 +100,47 @@ jobs:
           python setup.py build_ext --inplace || echo "Python C extension build failed (expected if C libs missing)"
           python -c "from django_mercury.python_bindings.loader import check_c_extensions; available, details = check_c_extensions(); print(f'C Extensions: {available}')" || true
       
-      - name: Set Windows to use pure Python and UTF-8
+      - name: Build C Extensions (Windows)
         if: runner.os == 'Windows'
         run: |
-          echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+          echo "Building C extensions on Windows..."
           echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
+          
+          # Install build dependencies
+          python -m pip install --upgrade setuptools wheel
+          
+          # Show compiler information
+          echo "Checking for Visual Studio..."
+          where cl.exe || echo "cl.exe not in PATH"
+          
+          # Build C extensions
+          echo "Building C extensions with setup.py..."
+          python setup.py build_ext --inplace
+          
+          # List built extensions
+          echo ""
+          echo "Looking for built extensions (.pyd files):"
+          Get-ChildItem -Path . -Filter "*.pyd" -Recurse | Select-Object FullName
+          
+          # Also check for .dll files
+          echo ""
+          echo "Looking for DLL files:"
+          Get-ChildItem -Path django_mercury -Filter "*.dll" -Recurse | Select-Object FullName
+          
+          # Check if any C extensions were built
+          $pydCount = (Get-ChildItem -Path . -Filter "*.pyd" -Recurse).Count
+          if ($pydCount -eq 0) {
+              echo "WARNING: No .pyd files found - C extensions may not have built"
+              echo "C_EXTENSIONS_BUILT=0" >> $GITHUB_ENV
+          } else {
+              echo "SUCCESS: Found $pydCount .pyd files"
+              echo "C_EXTENSIONS_BUILT=1" >> $GITHUB_ENV
+          }
+          
+          # Run diagnostics
+          echo ""
+          echo "Running C extension diagnostics..."
+          python scripts/diagnose_c_extensions.py
       
       - name: Run Python tests (Linux/macOS)
         if: runner.os != 'Windows'
@@ -118,15 +160,32 @@ jobs:
           $env:PYTHONIOENCODING = "utf-8"
           chcp 65001 > $null  # Set console to UTF-8
           
-          # First try with C extensions
+          # Test C extensions without forcing pure Python
           echo "Testing C extensions..."
           $env:DJANGO_MERCURY_PURE_PYTHON = "0"
-          python test_windows_dll.py || echo "C extensions not available"
           
-          # Then run tests with pure Python fallback
-          echo "Running test suite with pure Python mode..."
-          $env:DJANGO_MERCURY_PURE_PYTHON = "1"
-          python test_runner.py --coverage --ci
+          # Run the test and capture exit code
+          python test_windows_dll.py
+          $testResult = $LASTEXITCODE
+          
+          if ($testResult -eq 0) {
+              echo "✅ C extensions loaded successfully!"
+              # Run tests with C extensions
+              echo "Running test suite with C extensions..."
+              python test_runner.py --coverage --ci
+          } else {
+              echo "❌ C extensions failed to load (exit code: $testResult)"
+              # Fall back to pure Python
+              echo "Falling back to pure Python mode..."
+              $env:DJANGO_MERCURY_PURE_PYTHON = "1"
+              python test_runner.py --coverage --ci
+              
+              # Still fail the job if we expected C extensions to work
+              if ($env:C_EXTENSIONS_BUILT -eq "1") {
+                  echo "ERROR: C extensions were built but failed to load!"
+                  exit 1
+              }
+          }
       
       - name: Run C Core Unit Tests (Linux/macOS)
         if: runner.os != 'Windows'
