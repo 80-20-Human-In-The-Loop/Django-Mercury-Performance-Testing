@@ -53,7 +53,8 @@ def main():
                 # Get version
                 version_result = subprocess.run(['gcc', '--version'], capture_output=True, text=True)
                 if version_result.returncode == 0:
-                    print(f"  GCC version: {version_result.stdout.split('\\n')[0]}")
+                    first_line = version_result.stdout.split('\n')[0]
+                    print(f"  GCC version: {first_line}")
         except Exception as e:
             print(f"  Error checking for GCC: {e}")
     print()

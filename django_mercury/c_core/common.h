@@ -74,7 +74,11 @@
 // Thread safety
 #ifdef __STDC_NO_ATOMICS__
     #define _Atomic
-    #warning "Atomic operations not available, thread safety not guaranteed"
+    #ifdef _MSC_VER
+        #pragma message("WARNING: Atomic operations not available, thread safety not guaranteed")
+    #else
+        #warning "Atomic operations not available, thread safety not guaranteed"
+    #endif
 #else
     #include <stdatomic.h>
 #endif

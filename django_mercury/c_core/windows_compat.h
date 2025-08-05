@@ -106,8 +106,8 @@ static inline void clock_gettime_monotonic(struct timespec *ts) {
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&counter);
     
-    ts->tv_sec = counter.QuadPart / frequency.QuadPart;
-    ts->tv_nsec = ((counter.QuadPart % frequency.QuadPart) * 1000000000) / frequency.QuadPart;
+    ts->tv_sec = (time_t)(counter.QuadPart / frequency.QuadPart);
+    ts->tv_nsec = (long)(((counter.QuadPart % frequency.QuadPart) * 1000000000) / frequency.QuadPart);
 }
 
 #define CLOCK_MONOTONIC 1
