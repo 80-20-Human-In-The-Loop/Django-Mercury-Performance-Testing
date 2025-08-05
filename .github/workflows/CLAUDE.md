@@ -105,6 +105,13 @@ Code Push → Build Test → Import Test → ✅ or ❌
 - When you create a version tag (v1.0.0)
 - Manual trigger for test releases
 
+**⚠️ CRITICAL: C Extensions are REQUIRED in CI**
+
+The CI will **FAIL** if C extensions cannot be built. This is intentional because:
+- Pure Python fallback is 10-100x slower
+- Performance tests will fail with pure Python
+- C extensions are the primary performance feature
+
 **Complete flow**:
 ```
          ┌─────────────┐
@@ -143,9 +150,11 @@ Code Push → Build Test → Import Test → ✅ or ❌
    - Why: Sometimes we need to ship fixes even if some tests fail
    - Human decides if failures are acceptable
 
-2. **C Extensions Are Optional**
-   - Why: Not all systems can build C code
-   - Falls back to pure Python automatically
+2. **C Extensions Are MANDATORY in CI**
+   - **Changed Policy**: C extensions MUST build in CI (no fallback)
+   - Why: Pure Python is 10-100x slower and fails performance tests
+   - User systems can still fall back to pure Python if needed
+   - CI ensures we always ship working C extensions
 
 3. **Multiple Python Versions**
    - Why: Users have different Python installations
@@ -273,16 +282,17 @@ strategy:
   if: runner.os != 'Windows'
   run: |
     if ! make ci; then
-      echo "WARNING: C library build failed, will use pure Python mode"
-      echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
-      exit 0  # Don't fail the build
+      echo "❌ ERROR: C library build failed!"
+      echo "C extensions are REQUIRED in CI - pure Python is too slow!"
+      exit 1  # FAIL the build - no fallback allowed
     fi
 ```
 
-**Design philosophy**:
-- Graceful degradation over hard failures
-- Performance optimization when possible
-- Universal compatibility as baseline
+**Updated Design Philosophy (as of August 2025)**:
+- **CI**: C extensions MUST build - no fallback to pure Python
+- **User systems**: Graceful fallback still allowed
+- **Rationale**: Pure Python is 10-100x slower, breaks performance tests
+- **Result**: We guarantee C extensions work for all releases
 
 #### 3. Publishing Configuration
 
@@ -465,6 +475,31 @@ echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
     echo "Environment variables:"
     env | sort
 ```
+
+### Issue 5: "C Extensions Build Failed in CI" (CRITICAL)
+
+**Error**: `❌ ERROR: C library build failed!`
+
+**Cause**: Missing build dependencies or compilation errors
+
+**Solution**: The CI now REQUIRES C extensions to build successfully. Common fixes:
+
+1. **Ubuntu**: Ensure build dependencies are installed
+   ```yaml
+   - name: Install C build dependencies (Ubuntu)
+     run: |
+       sudo apt-get update
+       sudo apt-get install -y build-essential python3-dev
+   ```
+
+2. **Check Makefile output**: Look for specific compilation errors
+   ```
+   gcc: error: unrecognized command line option '-mavx'
+   ```
+
+3. **Python headers missing**: Install python-dev package
+
+**IMPORTANT**: We do NOT fall back to pure Python in CI anymore. Fix the build error!
 
 ---
 

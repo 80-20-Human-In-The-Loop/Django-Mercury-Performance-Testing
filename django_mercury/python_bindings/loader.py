@@ -283,17 +283,18 @@ def check_c_extensions():
         Tuple of (available: bool, details: dict)
     """
     details = get_implementation_info()
+    
+    # First check if we're in a fallback mode
+    if details.get("type") in ["pure_python_fallback", "pure_python_forced"]:
+        details["functional"] = False
+        details["error"] = f"Running in {details['type']} mode"
+        return False, details
+    
     available = details["c_extensions_available"]
 
     # Try to test the extensions
     if available:
         try:
-            # Verify we're not in fallback mode
-            if details.get("type") == "pure_python_fallback":
-                details["functional"] = False
-                details["error"] = "Running in pure Python fallback mode"
-                return False, details
-                
             # Try to import the actual C modules
             import django_mercury._c_metrics
             import django_mercury._c_analyzer
@@ -318,6 +319,10 @@ def check_c_extensions():
             details["functional"] = False
             details["error"] = str(e)
             available = False
+    else:
+        details["functional"] = False
+        if "error" not in details:
+            details["error"] = "C extensions not available"
 
     return available, details
 

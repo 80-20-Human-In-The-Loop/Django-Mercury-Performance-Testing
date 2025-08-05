@@ -11,6 +11,7 @@
 
 #ifdef _WIN32
 
+#include <winsock2.h>  // For struct timeval
 #include <windows.h>
 #include <process.h>
 #include <stdint.h>
@@ -134,7 +135,6 @@ static inline int usleep(unsigned int microseconds) {
 }
 
 // Time structures and functions
-#include <winsock2.h>  // For struct timeval
 
 // Windows implementation of gettimeofday
 static inline int gettimeofday(struct timeval *tv, void *tz) {

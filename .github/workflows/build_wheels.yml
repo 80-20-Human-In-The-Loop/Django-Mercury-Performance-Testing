@@ -54,6 +54,12 @@ jobs:
         with:
           arch: x64
       
+      - name: Install C build dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev
+      
       - name: Build C libraries (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
@@ -62,10 +68,10 @@ jobs:
           
           # Use the CI target which includes clean, build, and install
           if ! make ci; then
-            echo "WARNING: C library build failed, will use pure Python mode"
-            echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
-            echo "C_BUILD_FAILED=1" >> $GITHUB_ENV
-            exit 0
+            echo "❌ ERROR: C library build failed!"
+            echo "C extensions are REQUIRED in CI - pure Python is too slow!"
+            echo "Check the build logs above for compilation errors."
+            exit 1
           fi
           
           # Verify the build with our verification script
@@ -73,26 +79,13 @@ jobs:
           echo "Running build verification..."
           if python scripts/verify_build.py; then
             echo "✅ Build verification passed"
-            echo "C_BUILD_FAILED=0" >> $GITHUB_ENV
+            echo "C_BUILD_SUCCESS=1" >> $GITHUB_ENV
           else
-            echo "⚠️ Build verification failed, using pure Python mode"
-            echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
-            echo "C_BUILD_FAILED=1" >> $GITHUB_ENV
+            echo "❌ ERROR: Build verification failed!"
+            echo "C extensions are REQUIRED in CI!"
+            exit 1
           fi
       
-      - name: Debug C Extension Status (if needed)
-        if: runner.os != 'Windows' && env.C_BUILD_FAILED == '1'
-        run: |
-          echo "=== DEBUG: C Extension Build Failed ==="
-          echo "Environment variables:"
-          env | grep -E "(DJANGO_MERCURY|C_BUILD|PYTHON)" || true
-          echo ""
-          echo "Library search:"
-          find . -name "*.so" -o -name "*.dylib" 2>/dev/null | head -20 || true
-          echo ""
-          echo "Python path:"
-          python -c "import sys; print('\\n'.join(sys.path))"
-          
       - name: Build Python C extensions (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
@@ -168,11 +161,11 @@ jobs:
           echo ""
           echo "Total .so files found: $SO_COUNT"
           
-          # If no libraries found, force pure Python mode
+          # C libraries are REQUIRED in CI
           if [ "$SO_COUNT" -eq 0 ]; then
-            echo "⚠️ No C libraries found - forcing pure Python mode"
-            echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
-            echo "C_EXTENSIONS_AVAILABLE=0" >> $GITHUB_ENV
+            echo "❌ ERROR: No C libraries found!"
+            echo "C extensions are REQUIRED in CI - pure Python is too slow!"
+            exit 1
           else
             echo "✅ Found $SO_COUNT C libraries"
             echo "C_EXTENSIONS_AVAILABLE=1" >> $GITHUB_ENV
@@ -181,12 +174,9 @@ jobs:
       - name: Run Python tests (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          # Export env var in same shell that runs tests to ensure it's available at import time
-          if [ "$C_BUILD_FAILED" = "1" ] || [ ! -z "$DJANGO_MERCURY_PURE_PYTHON" ] || [ "$C_EXTENSIONS_AVAILABLE" = "0" ]; then
-            echo "Setting DJANGO_MERCURY_PURE_PYTHON=1 for tests"
-            export DJANGO_MERCURY_PURE_PYTHON=1
-          fi
-          echo "Running tests with DJANGO_MERCURY_PURE_PYTHON=${DJANGO_MERCURY_PURE_PYTHON:-0}"
+          # C extensions MUST be available in CI
+          echo "Running tests with C extensions (DJANGO_MERCURY_PURE_PYTHON=0)"
+          export DJANGO_MERCURY_PURE_PYTHON=0
           python test_runner.py --coverage --ci
       
       - name: Test C Extensions (Windows)
