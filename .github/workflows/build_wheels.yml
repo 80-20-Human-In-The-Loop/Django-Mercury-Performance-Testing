@@ -198,7 +198,7 @@ jobs:
           echo "Current directory: $(pwd)"
           echo ""
           echo "Checking if libraries can be loaded with ctypes:"
-          python -c "
+          cat > test_ctypes.py << 'EOF'
 import ctypes
 import os
 import sys
@@ -211,7 +211,7 @@ print()
 
 libs = ['libquery_analyzer.so', 'libmetrics_engine.so', 'libtest_orchestrator.so']
 for lib in libs:
-    print(f'\\nTesting {lib}:')
+    print(f'\nTesting {lib}:')
     paths = [
         f'django_mercury/python_bindings/{lib}',
         f'django_mercury/c_core/{lib}',
@@ -244,7 +244,7 @@ for lib in libs:
         print(f'✗ {lib} could not be loaded from any path')
 
 # Also test the actual loading mechanism
-print('\\n=== TESTING ACTUAL C_BINDINGS LOADING ===')
+print('\n=== TESTING ACTUAL C_BINDINGS LOADING ===')
 try:
     os.environ['DEBUG_C_LOADING'] = '1'
     from django_mercury.python_bindings import c_bindings
@@ -261,7 +261,8 @@ try:
 except Exception as e:
     print(f'Failed to test c_bindings: {type(e).__name__}: {e}')
     traceback.print_exc()
-"
+EOF
+          python test_ctypes.py
           echo ""
           # C extensions MUST be available in CI
           echo "Running tests with C extensions (DJANGO_MERCURY_PURE_PYTHON=0)"
