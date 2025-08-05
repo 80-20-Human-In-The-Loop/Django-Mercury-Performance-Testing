@@ -103,13 +103,13 @@ jobs:
           echo "🔍 Debugging C extension loading..."
           export DEBUG_C_LOADING=1
           python -c "
-import os
-os.environ['DEBUG_C_LOADING'] = '1'
-from django_mercury.python_bindings.loader import check_c_extensions, get_implementation_info
-available, details = check_c_extensions()
-print(f'C Extensions Available: {available}')
-print(f'Implementation Details: {details}')
-" || echo "Failed to check C extensions"
+          import os
+          os.environ['DEBUG_C_LOADING'] = '1'
+          from django_mercury.python_bindings.loader import check_c_extensions, get_implementation_info
+          available, details = check_c_extensions()
+          print(f'C Extensions Available: {available}')
+          print(f'Implementation Details: {details}')
+          " || echo "Failed to check C extensions"
       
       - name: Build C Extensions (Windows)
         if: runner.os == 'Windows'
