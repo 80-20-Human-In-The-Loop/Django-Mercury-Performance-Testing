@@ -33,6 +33,11 @@
 #include <mach/mach_init.h>
 #endif
 
+#ifdef MERCURY_WINDOWS
+#include <windows.h>
+#include <psapi.h>  // For PROCESS_MEMORY_COUNTERS and GetProcessMemoryInfo
+#endif
+
 // Conditional includes for stack unwinding
 #ifdef MERCURY_LINUX
     // Check if libunwind is available
