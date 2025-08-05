@@ -171,3 +171,9 @@ logs/
 *~
 
 _long_haul_research/
+
+# Prevent files with directory traversal patterns
+**/../*
+**/..\\*
+*sensitive*
+**/sensitive/**
