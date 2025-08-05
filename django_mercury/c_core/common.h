@@ -657,4 +657,46 @@ MERCURY_API MercuryError mercury_init(void);
  */
 MERCURY_API void mercury_cleanup(void);
 
+// === PORTABLE CONSTRUCTOR/DESTRUCTOR MACROS ===
+
+/**
+ * @brief Portable constructor/destructor attributes
+ * 
+ * These macros provide cross-platform support for library initialization
+ * and cleanup functions that run automatically when a shared library is
+ * loaded or unloaded.
+ */
+#if defined(_MSC_VER)
+    // MSVC doesn't support __attribute__((constructor/destructor))
+    // Use pragma section and linker directives instead
+    #define MERCURY_CONSTRUCTOR(func) \
+        static void func(void); \
+        static int func##_wrapper(void) { func(); return 0; } \
+        __pragma(section(".CRT$XCU",read)) \
+        __declspec(allocate(".CRT$XCU")) static int (*func##_)(void) = func##_wrapper;
+
+    #define MERCURY_DESTRUCTOR(func) \
+        static void func(void); \
+        static int func##_destructor_wrapper(void) { func(); return 0; } \
+        __pragma(section(".CRT$XPU",read)) \
+        __declspec(allocate(".CRT$XPU")) static int (*func##_)(void) = func##_destructor_wrapper;
+
+#elif defined(__GNUC__) || defined(__clang__)
+    // GCC and Clang support __attribute__((constructor/destructor))
+    #define MERCURY_CONSTRUCTOR(func) \
+        __attribute__((constructor)) static void func(void)
+    
+    #define MERCURY_DESTRUCTOR(func) \
+        __attribute__((destructor)) static void func(void)
+
+#else
+    // Fallback: No automatic initialization/cleanup
+    #warning "Constructor/destructor attributes not supported on this compiler"
+    #define MERCURY_CONSTRUCTOR(func) \
+        static void func(void)
+    
+    #define MERCURY_DESTRUCTOR(func) \
+        static void func(void)
+#endif
+
 #endif // MERCURY_COMMON_H

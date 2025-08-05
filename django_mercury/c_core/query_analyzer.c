@@ -852,14 +852,12 @@ void reset_query_analyzer(void) {
 // === LIBRARY INITIALIZATION ===
 
 // Library constructor (called when .so is loaded)
-__attribute__((constructor))
-static void query_analyzer_init(void) {
+MERCURY_CONSTRUCTOR(query_analyzer_init) {
     // MERCURY_INFO("libquery_analyzer.so loaded");  // Too verbose
 }
 
 // Library destructor (called when .so is unloaded)
-__attribute__((destructor))
-static void query_analyzer_cleanup(void) {
+MERCURY_DESTRUCTOR(query_analyzer_cleanup) {
     cleanup_query_analyzer();
     // MERCURY_INFO("libquery_analyzer.so unloaded");  // Too verbose
 }

@@ -932,14 +932,12 @@ const char* get_n_plus_one_fix_suggestion(const MercuryMetrics* metrics) {
 // === LIBRARY INITIALIZATION ===
 
 // Library constructor
-__attribute__((constructor))
-static void metrics_engine_init(void) {
+MERCURY_CONSTRUCTOR(metrics_engine_init) {
     // MERCURY_INFO("libmetrics_engine.so loaded");  // Too verbose
 }
 
 // Library destructor
-__attribute__((destructor))
-static void metrics_engine_cleanup(void) {
+MERCURY_DESTRUCTOR(metrics_engine_cleanup) {
     cleanup_metrics_engine();
     // MERCURY_INFO("libmetrics_engine.so unloaded");  // Too verbose
 }

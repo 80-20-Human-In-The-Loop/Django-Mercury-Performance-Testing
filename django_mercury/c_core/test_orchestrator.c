@@ -794,14 +794,12 @@ int query_history_entries(const char* test_class_filter, const char* test_method
 // === LIBRARY INITIALIZATION ===
 
 // Library constructor
-__attribute__((constructor))
-static void test_orchestrator_init(void) {
+MERCURY_CONSTRUCTOR(test_orchestrator_init) {
     // MERCURY_INFO("libtest_orchestrator.so loaded");  // Too verbose
 }
 
 // Library destructor
-__attribute__((destructor))
-static void test_orchestrator_cleanup(void) {
+MERCURY_DESTRUCTOR(test_orchestrator_cleanup) {
     cleanup_test_orchestrator();
     // MERCURY_INFO("libtest_orchestrator.so unloaded");  // Too verbose
 }
