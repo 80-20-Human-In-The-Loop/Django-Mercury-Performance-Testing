@@ -94,10 +94,14 @@ def main():
         try:
             print(f"  Importing {full_name}...", end=" ")
             __import__(full_name)
-            print("✓ SUCCESS")
+            # Use ASCII characters for better Windows compatibility
+            success_marker = "OK" if sys.stdout.encoding and 'utf' not in sys.stdout.encoding.lower() else "✓"
+            print(f"{success_marker} SUCCESS")
             import_results.append((ext_name, True, None))
         except ImportError as e:
-            print(f"✗ FAILED: {e}")
+            # Use ASCII characters for better Windows compatibility
+            fail_marker = "FAILED" if sys.stdout.encoding and 'utf' not in sys.stdout.encoding.lower() else "✗"
+            print(f"{fail_marker}: {e}")
             import_results.append((ext_name, False, str(e)))
     print()
     

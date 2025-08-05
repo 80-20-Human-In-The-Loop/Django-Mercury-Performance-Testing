@@ -104,7 +104,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           echo "Building C extensions on Windows..."
-          echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
+          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
           
           # Install build dependencies
           python -m pip install --upgrade setuptools wheel
@@ -131,10 +131,10 @@ jobs:
           $pydCount = (Get-ChildItem -Path . -Filter "*.pyd" -Recurse).Count
           if ($pydCount -eq 0) {
               echo "WARNING: No .pyd files found - C extensions may not have built"
-              echo "C_EXTENSIONS_BUILT=0" >> $GITHUB_ENV
+              echo "C_EXTENSIONS_BUILT=0" >> $env:GITHUB_ENV
           } else {
               echo "SUCCESS: Found $pydCount .pyd files"
-              echo "C_EXTENSIONS_BUILT=1" >> $GITHUB_ENV
+              echo "C_EXTENSIONS_BUILT=1" >> $env:GITHUB_ENV
           }
           
           # Run diagnostics
