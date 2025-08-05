@@ -114,9 +114,9 @@ typedef struct {
     pthread_mutex_t history_mutex;  // Protects ring buffer access
     
     // Statistics
-    _Atomic(uint64_t) total_queries_analyzed;
-    _Atomic(uint64_t) n_plus_one_patterns_detected;
-    _Atomic(uint64_t) similar_queries_found;
+    uint64_t total_queries_analyzed;
+    uint64_t n_plus_one_patterns_detected;
+    uint64_t similar_queries_found;
     
     // Current analysis state
     NPlusOneSeverity current_severity;
@@ -409,9 +409,9 @@ static MercuryError init_query_analyzer(void) {
     }
     
     // Initialize statistics
-    atomic_store(&g_analyzer->total_queries_analyzed, 0);
-    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
-    atomic_store(&g_analyzer->similar_queries_found, 0);
+    g_analyzer->total_queries_analyzed = 0;
+    g_analyzer->n_plus_one_patterns_detected = 0;
+    g_analyzer->similar_queries_found = 0;
     
     g_analyzer->current_severity = N_PLUS_ONE_NONE;
     g_analyzer->estimated_cause = 0;
@@ -571,8 +571,12 @@ static QueryCluster* find_or_create_cluster(uint64_t pattern_hash, const char* q
 
 // Update N+1 analysis based on current clusters
 static void update_n_plus_one_analysis(void) {
+    if (!g_analyzer) {
+        return;
+    }
+    
     // If no queries analyzed in current session, reset severity to NONE
-    uint64_t total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
+    uint64_t total_queries = g_analyzer->total_queries_analyzed;
     if (total_queries == 0) {
         g_analyzer->current_severity = N_PLUS_ONE_NONE;
         g_analyzer->estimated_cause = 0;
@@ -583,8 +587,8 @@ static void update_n_plus_one_analysis(void) {
     int max_cluster_size = 0;
     double max_cluster_time = 0.0;
     
-    // Analyze all clusters
-    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+    // Analyze all clusters (with bounds checking)
+    for (size_t i = 0; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
         QueryCluster* cluster = &g_analyzer->clusters[i];
         if (cluster->query_count > 1) {
             if (cluster->query_count > max_cluster_size) {
@@ -624,7 +628,7 @@ static void update_n_plus_one_analysis(void) {
     }
     
     if (max_cluster_size >= 3) {
-        atomic_fetch_add(&g_analyzer->n_plus_one_patterns_detected, 1);
+        g_analyzer->n_plus_one_patterns_detected++;
     }
 }
 
@@ -651,7 +655,7 @@ int analyze_query(const char* query_text, double execution_time) {
         return -1;
     }
     
-    atomic_fetch_add(&g_analyzer->total_queries_analyzed, 1);
+    g_analyzer->total_queries_analyzed++;
     
     // Normalize query for pattern matching
     char normalized[1024];
@@ -699,7 +703,7 @@ int analyze_query(const char* query_text, double execution_time) {
         
         // Verify cluster is still valid (could have been evicted)
         bool cluster_valid = false;
-        for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+        for (size_t i = 0; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
             if (&g_analyzer->clusters[i] == cluster) {
                 cluster_valid = true;
                 break;
@@ -713,7 +717,7 @@ int analyze_query(const char* query_text, double execution_time) {
             cluster->last_seen = record.timestamp;
             
             if (cluster->query_count > 1) {
-                atomic_fetch_add(&g_analyzer->similar_queries_found, 1);
+                g_analyzer->similar_queries_found++;
             }
             
             // Update N+1 analysis (while holding mutex)
@@ -745,8 +749,8 @@ int get_duplicate_queries(char* result_buffer, size_t buffer_size) {
     
     int duplicate_groups = 0;
     
-    // Find clusters with duplicates
-    for (size_t i = 0; i < g_analyzer->cluster_count; i++) {
+    // Find clusters with duplicates (with bounds checking)
+    for (size_t i = 0; i < g_analyzer->cluster_count && i < g_analyzer->max_clusters; i++) {
         QueryCluster* cluster = &g_analyzer->clusters[i];
         if (cluster->query_count > 1) {
             char cluster_info[256];
@@ -826,9 +830,9 @@ void get_query_statistics(uint64_t* total_queries, uint64_t* n_plus_one_detected
         return;
     }
     
-    if (total_queries) *total_queries = atomic_load(&g_analyzer->total_queries_analyzed);
-    if (n_plus_one_detected) *n_plus_one_detected = atomic_load(&g_analyzer->n_plus_one_patterns_detected);
-    if (similar_queries) *similar_queries = atomic_load(&g_analyzer->similar_queries_found);
+    if (total_queries) *total_queries = g_analyzer->total_queries_analyzed;
+    if (n_plus_one_detected) *n_plus_one_detected = g_analyzer->n_plus_one_patterns_detected;
+    if (similar_queries) *similar_queries = g_analyzer->similar_queries_found;
     if (active_clusters) *active_clusters = (int)g_analyzer->cluster_count;
 }
 
@@ -848,9 +852,9 @@ void reset_query_analyzer(void) {
     g_analyzer->cluster_count = 0;
     
     // Reset statistics
-    atomic_store(&g_analyzer->total_queries_analyzed, 0);
-    atomic_store(&g_analyzer->n_plus_one_patterns_detected, 0);
-    atomic_store(&g_analyzer->similar_queries_found, 0);
+    g_analyzer->total_queries_analyzed = 0;
+    g_analyzer->n_plus_one_patterns_detected = 0;
+    g_analyzer->similar_queries_found = 0;
     
     g_analyzer->current_severity = N_PLUS_ONE_NONE;
     g_analyzer->estimated_cause = 0;
