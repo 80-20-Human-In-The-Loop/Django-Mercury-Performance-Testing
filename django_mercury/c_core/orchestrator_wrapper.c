@@ -8,7 +8,40 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
-#include <sys/time.h>
+
+/* Cross-platform timing support */
+#ifdef _WIN32
+    #include <windows.h>
+    
+    /* Windows timing structure to mimic Unix timeval */
+    struct timeval {
+        long tv_sec;   /* seconds */
+        long tv_usec;  /* microseconds */
+    };
+    
+    /* Windows implementation of gettimeofday */
+    static int gettimeofday(struct timeval *tv, void *tz) {
+        FILETIME ft;
+        ULARGE_INTEGER epoch;
+        
+        (void)tz; /* Unused parameter */
+        
+        GetSystemTimeAsFileTime(&ft);
+        epoch.LowPart = ft.dwLowDateTime;
+        epoch.HighPart = ft.dwHighDateTime;
+        
+        /* Convert Windows epoch (1/1/1601) to Unix epoch (1/1/1970) */
+        epoch.QuadPart -= 116444736000000000ULL;
+        epoch.QuadPart /= 10; /* Convert to microseconds */
+        
+        tv->tv_sec = (long)(epoch.QuadPart / 1000000UL);
+        tv->tv_usec = (long)(epoch.QuadPart % 1000000UL);
+        
+        return 0;
+    }
+#else
+    #include <sys/time.h>
+#endif
 
 /* Test info structure */
 typedef struct TestInfo {
