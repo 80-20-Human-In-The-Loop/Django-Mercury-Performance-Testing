@@ -60,49 +60,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential python3-dev libunwind-dev
       
-      - name: Build C libraries (Linux/macOS)
+      - name: Run all tests with CI script (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          echo "Building C libraries..."
-          cd django_mercury/c_core
-          
-          # Use the CI target which includes clean, build, and install
-          if ! make ci; then
-            echo "❌ ERROR: C library build failed!"
-            echo "C extensions are REQUIRED in CI - pure Python is too slow!"
-            echo "Check the build logs above for compilation errors."
-            exit 1
-          fi
-          
-          # Verify the build with our verification script
-          cd ../..
-          echo "Running build verification..."
-          if python scripts/verify_build.py; then
-            echo "✅ Build verification passed"
-            echo "C_BUILD_SUCCESS=1" >> $GITHUB_ENV
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            ./scripts/ci_test_runner.sh linux
           else
-            echo "❌ ERROR: Build verification failed!"
-            echo "C extensions are REQUIRED in CI!"
-            exit 1
+            ./scripts/ci_test_runner.sh macos
           fi
-      
-      - name: Build Python C extensions (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          python -m pip install --upgrade setuptools wheel
-          python setup.py build_ext --inplace || echo "Python C extension build failed (expected if C libs missing)"
-          
-          # Debug C extension loading
-          echo "🔍 Debugging C extension loading..."
-          export DEBUG_C_LOADING=1
-          python -c "
-          import os
-          os.environ['DEBUG_C_LOADING'] = '1'
-          from django_mercury.python_bindings.loader import check_c_extensions, get_implementation_info
-          available, details = check_c_extensions()
-          print(f'C Extensions Available: {available}')
-          print(f'Implementation Details: {details}')
-          " || echo "Failed to check C extensions"
       
       - name: Build C Extensions (Windows)
         if: runner.os == 'Windows'
@@ -146,125 +111,12 @@ jobs:
           echo "Running C extension diagnostics..."
           python scripts/diagnose_c_extensions.py
       
-      - name: Verify C libraries exist (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "🔍 Verifying C library build products..."
-          echo "Libraries in c_core directory:"
-          ls -la django_mercury/c_core/*.so 2>/dev/null || echo "No .so files found in c_core"
-          echo ""
-          echo "Libraries in python_bindings directory:"
-          ls -la django_mercury/python_bindings/*.so 2>/dev/null || echo "No .so files found in python_bindings"
-          
-          # Count libraries found
-          SO_COUNT=$(find django_mercury -name "*.so" 2>/dev/null | wc -l)
-          echo ""
-          echo "Total .so files found: $SO_COUNT"
-          
-          # C libraries are REQUIRED in CI
-          if [ "$SO_COUNT" -eq 0 ]; then
-            echo "❌ ERROR: No C libraries found!"
-            echo "C extensions are REQUIRED in CI - pure Python is too slow!"
-            exit 1
-          else
-            echo "✅ Found $SO_COUNT C libraries"
-            echo "C_EXTENSIONS_AVAILABLE=1" >> $GITHUB_ENV
-          fi
-          
-          # Check library dependencies on Linux
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            echo ""
-            echo "🔍 Checking library dependencies with ldd:"
-            for lib in django_mercury/python_bindings/*.so; do
-              if [ -f "$lib" ]; then
-                echo "Dependencies for $lib:"
-                ldd "$lib" || echo "Failed to check dependencies"
-                echo ""
-              fi
-            done
-          fi
       
-      - name: Debug C Extension Loading (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "🔍 Testing C extension loading directly..."
-          python -c "import ctypes; print('ctypes version:', ctypes.__version__ if hasattr(ctypes, '__version__') else 'unknown')"
-          
-          # Test loading each library
-          for lib in django_mercury/python_bindings/*.so; do
-            if [ -f "$lib" ]; then
-              echo "Testing $lib..."
-              python -c "import ctypes; ctypes.CDLL('$lib'); print('  ✓ Loaded successfully')" || echo "  ✗ Failed to load"
-            fi
-          done
-          
-          # Test the actual loader
-          python -c "
-import os
-os.environ['DEBUG_C_LOADING'] = '1'
-try:
-    from django_mercury.python_bindings.loader import check_c_extensions
-    available, details = check_c_extensions()
-    print('C Extensions Available:', available)
-    print('Details:', details)
-except Exception as e:
-    print('Failed:', e)
-    import traceback
-    traceback.print_exc()
-"
-      
-      - name: Run Python tests (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          # C extensions MUST be available in CI
-          echo "Running tests with C extensions (DJANGO_MERCURY_PURE_PYTHON=0)"
-          export DJANGO_MERCURY_PURE_PYTHON=0
-          export DEBUG_C_LOADING=1
-          export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          echo "PYTHONPATH=$PYTHONPATH"
-          python test_runner.py --coverage --ci
-      
-      - name: Test C Extensions (Windows)
+      - name: Run all tests with CI script (Windows)
         if: runner.os == 'Windows'
-        run: |
-          echo "Testing C extension loading on Windows"
-          $env:PYTHONIOENCODING = "utf-8"
-          chcp 65001 > $null  # Set console to UTF-8
-          
-          # Test C extensions without forcing pure Python
-          echo "Testing C extensions..."
-          $env:DJANGO_MERCURY_PURE_PYTHON = "0"
-          
-          # Run the test and capture exit code
-          python test_windows_dll.py
-          $testResult = $LASTEXITCODE
-          
-          if ($testResult -eq 0) {
-              echo "✅ C extensions loaded successfully!"
-              # Run tests with C extensions
-              echo "Running test suite with C extensions..."
-              python test_runner.py --coverage --ci
-          } else {
-              echo "❌ C extensions failed to load (exit code: $testResult)"
-              # Fall back to pure Python
-              echo "Falling back to pure Python mode..."
-              $env:DJANGO_MERCURY_PURE_PYTHON = "1"
-              python test_runner.py --coverage --ci
-              
-              # Still fail the job if we expected C extensions to work
-              if ($env:C_EXTENSIONS_BUILT -eq "1") {
-                  echo "ERROR: C extensions were built but failed to load!"
-                  exit 1
-              }
-          }
+        shell: bash
+        run: ./scripts/ci_test_runner.sh windows
       
-      - name: Run C Core Unit Tests (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "Running C core unit tests..."
-          ./c_test_runner.sh test || echo "C tests completed with status: $?"
-          echo "Running C coverage analysis..."
-          ./c_test_runner.sh coverage || echo "Coverage completed with status: $?"
       
       # NOTE: test_runner.py already executed above in "Run Python tests" step
       # - name: Run test runner
