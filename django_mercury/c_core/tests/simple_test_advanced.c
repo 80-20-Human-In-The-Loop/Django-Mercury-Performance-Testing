@@ -17,6 +17,14 @@ int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
 
+// Quiet mode variables
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
+
 int test_multi_pattern_search(void) {
     const char* text = "The quick brown fox jumps over the lazy dog. "
                       "The brown dog was quick to jump over the lazy fox.";
@@ -234,6 +242,7 @@ int test_boyer_moore_performance(void) {
 }
 
 int main(void) {
+    QUIET_MODE_INIT();  // Initialize quiet mode from TEST_VERBOSE env var
     TEST_SUITE_START("Advanced Common Tests");
     
     RUN_TEST(test_multi_pattern_search);

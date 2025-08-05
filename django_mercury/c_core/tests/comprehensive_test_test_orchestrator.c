@@ -30,6 +30,14 @@ int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
 
+// Quiet mode variables
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
+
 // External function declarations from test_orchestrator.c
 extern void* create_test_context(const char* test_class, const char* test_method);
 extern int update_test_context(void* context_ptr, double response_time_ms, double memory_usage_mb,
@@ -548,16 +556,19 @@ int test_error_recovery_fault_tolerance(void) {
 }
 
 int main(void) {
+    QUIET_MODE_INIT();  // Initialize quiet mode from TEST_VERBOSE env var
     TEST_SUITE_START("Comprehensive Test Orchestrator Tests - Binary Format & Memory Mapping");
     
-    printf("🎯 Comprehensive testing of test_orchestrator.c advanced features:\n");
-    printf("   - Binary configuration format validation and error handling\n");
-    printf("   - Memory-mapped history file operations and integrity checking\n");  
-    printf("   - Lock-free atomic operations and concurrent context management\n");
-    printf("   - Object pool management and stress testing scenarios\n");
-    printf("   - Complex history querying with multiple filter combinations\n");
-    printf("   - Configuration persistence and recovery mechanisms\n");
-    printf("   - Error recovery and fault tolerance under adverse conditions\n\n");
+    if (!quiet_mode) {
+        printf("🎯 Comprehensive testing of test_orchestrator.c advanced features:\n");
+        printf("   - Binary configuration format validation and error handling\n");
+        printf("   - Memory-mapped history file operations and integrity checking\n");
+        printf("   - Lock-free atomic operations and concurrent context management\n");
+        printf("   - Object pool management and stress testing scenarios\n");
+        printf("   - Complex history querying with multiple filter combinations\n");
+        printf("   - Configuration persistence and recovery mechanisms\n");
+        printf("   - Error recovery and fault tolerance under adverse conditions\n\n");
+    }
     
     RUN_TEST(test_binary_configuration_format);
     RUN_TEST(test_memory_mapped_history_operations);
@@ -569,9 +580,11 @@ int main(void) {
     
     TEST_SUITE_END();
     
-    printf("\n🚀 Comprehensive test orchestrator tests completed!\n");
-    printf("Expected result: Push test_orchestrator.c coverage from ~30%% to 55-60%%\n");
-    printf("Focus areas: Binary format, memory mapping, atomic operations, object pools\n");
+    if (!quiet_mode) {
+        printf("\n🚀 Comprehensive test orchestrator tests completed!\n");
+        printf("Expected result: Push test_orchestrator.c coverage from ~30%% to 55-60%%\n");
+        printf("Focus areas: Binary format, memory mapping, atomic operations, object pools\n");
+    }
     
     return (failed_tests == 0) ? 0 : 1;
 }

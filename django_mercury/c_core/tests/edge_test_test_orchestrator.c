@@ -34,6 +34,14 @@ int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
 
+// Quiet mode variables
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
+
 // External function declarations from test_orchestrator.c
 extern void* create_test_context(const char* test_class, const char* test_method);
 extern int update_test_context(void* context_ptr, double response_time_ms, double memory_usage_mb,
@@ -584,16 +592,19 @@ int test_query_buffer_edge_cases(void) {
 }
 
 int main(void) {
+    QUIET_MODE_INIT();  // Initialize quiet mode from TEST_VERBOSE env var
     TEST_SUITE_START("Edge Case Test Orchestrator Tests - Platform Paths & Boundaries");
     
-    printf("🎯 Edge case testing of test_orchestrator.c extreme conditions:\n");
-    printf("   - Platform-specific file path handling and limits\n");
-    printf("   - String boundary conditions and buffer overflow protection\n");
-    printf("   - Numeric boundary conditions and special values\n");
-    printf("   - Race conditions and threading edge cases\n");
-    printf("   - File system edge cases and permission scenarios\n");
-    printf("   - Resource exhaustion and recovery mechanisms\n");
-    printf("   - Query buffer edge cases and size limits\n\n");
+    if (!quiet_mode) {
+        printf("🎯 Edge case testing of test_orchestrator.c extreme conditions:\n");
+        printf("   - Platform-specific file path handling and limits\n");
+        printf("   - String boundary conditions and buffer overflow protection\n");
+        printf("   - Numeric boundary conditions and special values\n");
+        printf("   - Race conditions and threading edge cases\n");
+        printf("   - File system edge cases and permission scenarios\n");
+        printf("   - Resource exhaustion and recovery mechanisms\n");
+        printf("   - Query buffer edge cases and size limits\n\n");
+    }
     
     RUN_TEST(test_platform_path_handling);
     RUN_TEST(test_string_boundary_conditions);
@@ -605,9 +616,11 @@ int main(void) {
     
     TEST_SUITE_END();
     
-    printf("\n🚀 Edge case test orchestrator tests completed!\n");
-    printf("Expected result: Push test_orchestrator.c coverage to final 55-60%% target\n");
-    printf("Focus areas: Platform boundaries, resource limits, error recovery\n");
+    if (!quiet_mode) {
+        printf("\n🚀 Edge case test orchestrator tests completed!\n");
+        printf("Expected result: Push test_orchestrator.c coverage to final 55-60%% target\n");
+        printf("Focus areas: Platform boundaries, resource limits, error recovery\n");
+    }
     
     return (failed_tests == 0) ? 0 : 1;
 }

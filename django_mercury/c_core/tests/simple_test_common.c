@@ -18,6 +18,14 @@ int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
 
+// Quiet mode variables
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
+
 int test_memory_alignment(void) {
     // Test aligned allocation with various alignments
     void* ptr16 = mercury_aligned_alloc(1024, 16);
@@ -853,6 +861,7 @@ int test_final_coverage_push(void) {
 }
 
 int main(void) {
+    QUIET_MODE_INIT();  // Initialize quiet mode from TEST_VERBOSE env var
     TEST_SUITE_START("Comprehensive Common Utilities Tests");
     
     RUN_TEST(test_memory_alignment);

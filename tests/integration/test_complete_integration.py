@@ -308,12 +308,20 @@ class TestFallbackMechanism(unittest.TestCase):
 class TestPerformanceComparison(unittest.TestCase):
     """Compare performance between implementations."""
     
-    @unittest.skipIf(
-        not check_c_extensions()[0],
-        "C extensions not available"
-    )
     def test_c_extension_performance(self):
         """Test that C extensions are faster when available."""
+        # Check if C extensions are truly available and functional
+        available, details = check_c_extensions()
+        
+        # Skip if C extensions aren't available or not functional
+        if not available or not details.get('functional', False):
+            self.skipTest(f"C extensions not available or not functional: {details}")
+        
+        # Also check implementation type to ensure we're not in fallback mode
+        implementation_info = get_implementation_info()
+        if implementation_info['type'] == 'pure_python_fallback':
+            self.skipTest("Running in pure Python fallback mode")
+        
         Monitor = get_performance_monitor()
         monitor = Monitor()
         

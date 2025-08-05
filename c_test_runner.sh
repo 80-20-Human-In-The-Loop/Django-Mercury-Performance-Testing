@@ -25,6 +25,8 @@ DEBUG=0
 EXPLAIN=0
 SPECIFIC_TEST=""
 FIX_ONLY=0
+VERBOSE=0
+SHOW_WARNINGS=0
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -36,6 +38,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         --explain)
             EXPLAIN=1
+            shift
+            ;;
+        --verbose)
+            VERBOSE=1
+            export TEST_VERBOSE=1
+            shift
+            ;;
+        --warnings)
+            SHOW_WARNINGS=1
             shift
             ;;
         --fix-only)
@@ -168,34 +179,92 @@ case "$COMMAND" in
         # Capture test output to count total tests
         cd "$C_CORE_DIR" || exit 1
         
+        # Check if test executables exist, build if needed
+        if [ ! -f "$C_CORE_DIR/simple_test_common" ] || [ ! -f "$C_CORE_DIR/libquery_analyzer.so" ]; then
+            print_info "Test executables not found, building first..."
+            echo -e "${CYAN}🔨 Building C extensions and test executables...${NC}"
+            
+            # First build the shared libraries
+            if ! make all; then
+                print_error "Failed to build C extensions"
+                echo ""
+                echo "Build output above. Common issues:"
+                echo "  - Missing dependencies (check error messages)"
+                echo "  - Compilation errors in C code"
+                echo "  - Permission issues"
+                exit 1
+            fi
+            
+            # The test target will build test executables as part of its process
+            print_success "Libraries built successfully!"
+            echo ""
+        fi
+        
         echo -e "${CYAN}🔧 Running all tests${NC}"
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         
         # Run tests and capture output
         TEST_OUTPUT=$(make test 2>&1)
-        echo "$TEST_OUTPUT"
+        TEST_EXIT_CODE=$?
         
-        # Count total tests from all "Total:" lines
+        # Check if tests failed
+        if [ $TEST_EXIT_CODE -ne 0 ]; then
+            print_error "Tests failed with exit code $TEST_EXIT_CODE"
+            echo ""
+            echo "Test output:"
+            echo "$TEST_OUTPUT"
+            echo ""
+            print_error "Test execution failed. Check the output above for details."
+            exit $TEST_EXIT_CODE
+        fi
+        
+        # Filter output if not in verbose or warnings mode
+        if [ $VERBOSE -eq 0 ] && [ $SHOW_WARNINGS -eq 0 ]; then
+            # Filter out compilation warnings and MERCURY INFO messages
+            FILTERED_OUTPUT=$(echo "$TEST_OUTPUT" | grep -v "warning:" | grep -v "note:" | grep -v "\[MERCURY INFO\]" | grep -v "Suppressing further")
+            echo "$FILTERED_OUTPUT"
+        else
+            echo "$TEST_OUTPUT"
+        fi
+        
+        # Parse test results
         TOTAL_COUNT=0
+        TOTAL_PASSED=0
+        TOTAL_FAILED=0
+        FAILURES=""
+        
         while IFS= read -r line; do
-            if [[ $line =~ Total:\ ([0-9]+) ]]; then
-                COUNT="${BASH_REMATCH[1]}"
-                TOTAL_COUNT=$((TOTAL_COUNT + COUNT))
+            # Count totals from each test suite
+            if [[ $line =~ Total:\ ([0-9]+),\ Passed:.*\[32m([0-9]+).*Failed:.*\[31m([0-9]+) ]]; then
+                SUITE_TOTAL="${BASH_REMATCH[1]}"
+                SUITE_PASSED="${BASH_REMATCH[2]}"
+                SUITE_FAILED="${BASH_REMATCH[3]}"
+                TOTAL_COUNT=$((TOTAL_COUNT + SUITE_TOTAL))
+                TOTAL_PASSED=$((TOTAL_PASSED + SUITE_PASSED))
+                TOTAL_FAILED=$((TOTAL_FAILED + SUITE_FAILED))
+            fi
+            
+            # Capture failure messages
+            if [[ $line =~ ✗\ FAIL:|Failed\ to\ run\ test|test\(s\)\ failed! ]]; then
+                FAILURES="${FAILURES}\n${line}"
             fi
         done <<< "$TEST_OUTPUT"
         
         echo ""
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${GREEN}📊 Test Summary:${NC}"
-        echo -e "${GREEN}   Total tests executed: ${BOLD}$TOTAL_COUNT${NC}"
+        echo -e "${BOLD}📊 Test Summary:${NC}"
+        echo -e "   Total tests: ${BOLD}$TOTAL_COUNT${NC}"
+        echo -e "   Passed: ${GREEN}${BOLD}$TOTAL_PASSED${NC}"
+        echo -e "   Failed: ${RED}${BOLD}$TOTAL_FAILED${NC}"
         
-        # Check if make succeeded
-        if make test > /dev/null 2>&1; then
-            print_success "All tests completed successfully!"
-        else
-            print_error "Some tests failed!"
+        if [ $TOTAL_FAILED -gt 0 ]; then
+            echo ""
+            echo -e "${RED}${BOLD}❌ FAILURES:${NC}"
+            echo -e "$FAILURES"
             cd "$ORIGINAL_DIR"
             exit 1
+        else
+            print_success "All tests passed!"
         fi
         
         cd "$ORIGINAL_DIR"
@@ -357,6 +426,8 @@ case "$COMMAND" in
         echo ""
         echo "${BOLD}Options:${NC}"
         echo "  --debug    Enable debug mode with verbose output"
+        echo "  --verbose  Show all test assertions (default: only failures)"
+        echo "  --warnings Show compilation warnings and info messages"
         echo "  --explain  Enable educational mode with explanations"
         echo "  --single TEST  Run a specific test file"
         echo "  --fix-only Only compile with fixes, don't run"
@@ -366,7 +437,8 @@ case "$COMMAND" in
         echo "  TEST_TRACE=1  Enable function tracing"
         echo ""
         echo "${BOLD}Examples:${NC}"
-        echo "  $0                      # Run simple tests"
+        echo "  $0                      # Run simple tests (quiet mode)"
+        echo "  $0 --verbose            # Run tests with all assertions shown"
         echo "  $0 coverage             # Run with coverage"
         echo "  $0 enhanced --debug     # Enhanced tests with debug"
         echo "  $0 enhanced --explain   # Enhanced tests with explanations"

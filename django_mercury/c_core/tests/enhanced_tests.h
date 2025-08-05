@@ -33,6 +33,14 @@ extern int total_tests;
 extern int passed_tests;
 extern int failed_tests;
 
+// Quiet mode support
+extern int quiet_mode;
+extern int test_assertions;
+extern int test_passed;
+extern int test_failed;
+extern char test_failure_buffer[4096];
+extern int test_failure_buffer_used;
+
 // Debug mode flag (can be set via environment variable)
 static int debug_mode = 0;
 
@@ -53,6 +61,17 @@ static TestContext current_test_context = {0};
     if (debug_mode) { \
         printf(ANSI_COLOR_CYAN "🔍 Debug mode enabled" ANSI_COLOR_RESET "\n"); \
     } \
+    const char* verbose = getenv("TEST_VERBOSE"); \
+    quiet_mode = (verbose == NULL || strcmp(verbose, "0") == 0); \
+} while(0)
+
+// Initialize quiet mode test function
+#define TEST_FUNCTION_START() do { \
+    test_assertions = 0; \
+    test_passed = 0; \
+    test_failed = 0; \
+    test_failure_buffer_used = 0; \
+    test_failure_buffer[0] = '\0'; \
 } while(0)
 
 // Set test context for better error messages
@@ -271,20 +290,43 @@ static TestContext current_test_context = {0};
 
 // Boolean assertion with clear true/false display
 #define ASSERT_TRUE(condition, message) do { \
-    total_tests++; \
-    bool _result = (bool)(condition); \
-    if (!_result) { \
-        printf(ANSI_COLOR_RED "✗ FAIL: %s" ANSI_COLOR_RESET "\n", message); \
-        printf("  " ANSI_BOLD "Expected:" ANSI_COLOR_RESET " true\n"); \
-        printf("  " ANSI_BOLD "Got:     " ANSI_COLOR_RESET " false\n"); \
-        printf("  " ANSI_BOLD "Expression:" ANSI_COLOR_RESET " %s\n", #condition); \
-        printf("  " ANSI_COLOR_DIM "at %s:%d in %s()" ANSI_COLOR_RESET "\n", \
-               __FILE__, __LINE__, __func__); \
-        failed_tests++; \
-        return 0; \
+    if (quiet_mode) { \
+        test_assertions++; \
+        total_tests++; \
+        bool _result = (bool)(condition); \
+        if (!_result) { \
+            test_failed++; \
+            failed_tests++; \
+            if (test_failure_buffer_used < (int)(sizeof(test_failure_buffer) - 256)) { \
+                test_failure_buffer_used += snprintf(test_failure_buffer + test_failure_buffer_used, \
+                    sizeof(test_failure_buffer) - test_failure_buffer_used, \
+                    "  " ANSI_COLOR_RED "✗ FAIL: %s" ANSI_COLOR_RESET "\n" \
+                    "    Expected: true, Got: false\n" \
+                    "    Expression: %s\n" \
+                    "    at %s:%d in %s()\n", \
+                    message, #condition, __FILE__, __LINE__, __func__); \
+            } \
+            return 0; \
+        } else { \
+            test_passed++; \
+            passed_tests++; \
+        } \
     } else { \
-        printf(ANSI_COLOR_GREEN "✓ PASS: %s" ANSI_COLOR_RESET "\n", message); \
-        passed_tests++; \
+        total_tests++; \
+        bool _result = (bool)(condition); \
+        if (!_result) { \
+            printf(ANSI_COLOR_RED "✗ FAIL: %s" ANSI_COLOR_RESET "\n", message); \
+            printf("  " ANSI_BOLD "Expected:" ANSI_COLOR_RESET " true\n"); \
+            printf("  " ANSI_BOLD "Got:     " ANSI_COLOR_RESET " false\n"); \
+            printf("  " ANSI_BOLD "Expression:" ANSI_COLOR_RESET " %s\n", #condition); \
+            printf("  " ANSI_COLOR_DIM "at %s:%d in %s()" ANSI_COLOR_RESET "\n", \
+                   __FILE__, __LINE__, __func__); \
+            failed_tests++; \
+            return 0; \
+        } else { \
+            printf(ANSI_COLOR_GREEN "✓ PASS: %s" ANSI_COLOR_RESET "\n", message); \
+            passed_tests++; \
+        } \
     } \
 } while(0)
 
@@ -302,6 +344,46 @@ static TestContext current_test_context = {0};
         return 0; \
     } else { \
         printf(ANSI_COLOR_GREEN "✓ PASS: %s" ANSI_COLOR_RESET "\n", message); \
+        passed_tests++; \
+    } \
+} while(0)
+
+// Quiet assertion macro - only shows failures
+#define ASSERT_QUIET(condition, message) do { \
+    test_assertions++; \
+    total_tests++; \
+    if (!(condition)) { \
+        test_failed++; \
+        failed_tests++; \
+        if (test_failure_buffer_used < sizeof(test_failure_buffer) - 512) { \
+            test_failure_buffer_used += snprintf(test_failure_buffer + test_failure_buffer_used, \
+                sizeof(test_failure_buffer) - test_failure_buffer_used, \
+                "  " ANSI_COLOR_RED "✗ FAIL: %s" ANSI_COLOR_RESET "\n    Expression: %s\n    at %s:%d in %s()\n", \
+                message, #condition, __FILE__, __LINE__, __func__); \
+        } \
+    } else { \
+        test_passed++; \
+        passed_tests++; \
+    } \
+} while(0)
+
+// Enhanced quiet assertion for integers
+#define ASSERT_EQ_INT_QUIET(actual, expected, message) do { \
+    test_assertions++; \
+    total_tests++; \
+    int _actual = (actual); \
+    int _expected = (expected); \
+    if (_actual != _expected) { \
+        test_failed++; \
+        failed_tests++; \
+        if (test_failure_buffer_used < sizeof(test_failure_buffer) - 512) { \
+            test_failure_buffer_used += snprintf(test_failure_buffer + test_failure_buffer_used, \
+                sizeof(test_failure_buffer) - test_failure_buffer_used, \
+                "  " ANSI_COLOR_RED "✗ FAIL: %s" ANSI_COLOR_RESET "\n    Expected: %d, Got: %d\n    at %s:%d in %s()\n", \
+                message, _expected, _actual, __FILE__, __LINE__, __func__); \
+        } \
+    } else { \
+        test_passed++; \
         passed_tests++; \
     } \
 } while(0)
@@ -339,10 +421,21 @@ static TestContext current_test_context = {0};
     printf(ANSI_COLOR_YELLOW "\nRunning %s..." ANSI_COLOR_RESET "\n", #test_func); \
     memset(&current_test_context, 0, sizeof(current_test_context)); \
     current_test_context.test_name = #test_func; \
-    if (test_func()) { \
-        printf(ANSI_COLOR_GREEN "✓ %s passed" ANSI_COLOR_RESET "\n", #test_func); \
+    if (quiet_mode) { \
+        TEST_FUNCTION_START(); \
+        int result = test_func(); \
+        if (test_failed == 0) { \
+            printf(ANSI_COLOR_GREEN "✓ %s: %d assertions passed" ANSI_COLOR_RESET "\n", #test_func, test_passed); \
+        } else { \
+            printf(ANSI_COLOR_RED "✗ %s: %d/%d assertions passed" ANSI_COLOR_RESET "\n", #test_func, test_passed, test_assertions); \
+            printf("%s", test_failure_buffer); \
+        } \
     } else { \
-        printf(ANSI_COLOR_RED "✗ %s failed" ANSI_COLOR_RESET "\n", #test_func); \
+        if (test_func()) { \
+            printf(ANSI_COLOR_GREEN "✓ %s passed" ANSI_COLOR_RESET "\n", #test_func); \
+        } else { \
+            printf(ANSI_COLOR_RED "✗ %s failed" ANSI_COLOR_RESET "\n", #test_func); \
+        } \
     } \
 } while(0)
 

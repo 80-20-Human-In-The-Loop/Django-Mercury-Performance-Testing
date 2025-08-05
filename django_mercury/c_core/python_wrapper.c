@@ -16,6 +16,8 @@ typedef struct {
     struct timeval end_time;
     double response_time_ms;
     int query_count;
+    int cache_hits;
+    int cache_misses;
     int is_monitoring;
 } PerformanceMonitor;
 
@@ -35,6 +37,8 @@ PerformanceMonitor_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (self != NULL) {
         self->response_time_ms = 0.0;
         self->query_count = 0;
+        self->cache_hits = 0;
+        self->cache_misses = 0;
         self->is_monitoring = 0;
     }
     return (PyObject *) self;
@@ -98,6 +102,25 @@ PerformanceMonitor_track_query(PerformanceMonitor *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+/* Track cache method */
+static PyObject *
+PerformanceMonitor_track_cache(PerformanceMonitor *self, PyObject *args)
+{
+    int hit;
+    
+    if (!PyArg_ParseTuple(args, "p", &hit)) {
+        return NULL;
+    }
+    
+    if (hit) {
+        self->cache_hits++;
+    } else {
+        self->cache_misses++;
+    }
+    
+    Py_RETURN_NONE;
+}
+
 /* Get metrics method */
 static PyObject *
 PerformanceMonitor_get_metrics(PerformanceMonitor *self, PyObject *Py_UNUSED(ignored))
@@ -111,6 +134,10 @@ PerformanceMonitor_get_metrics(PerformanceMonitor *self, PyObject *Py_UNUSED(ign
                         PyFloat_FromDouble(self->response_time_ms));
     PyDict_SetItemString(metrics, "query_count", 
                         PyLong_FromLong(self->query_count));
+    PyDict_SetItemString(metrics, "cache_hits", 
+                        PyLong_FromLong(self->cache_hits));
+    PyDict_SetItemString(metrics, "cache_misses", 
+                        PyLong_FromLong(self->cache_misses));
     PyDict_SetItemString(metrics, "implementation", 
                         PyUnicode_FromString("c_extension"));
     
@@ -123,6 +150,8 @@ PerformanceMonitor_reset(PerformanceMonitor *self, PyObject *Py_UNUSED(ignored))
 {
     self->response_time_ms = 0.0;
     self->query_count = 0;
+    self->cache_hits = 0;
+    self->cache_misses = 0;
     self->is_monitoring = 0;
     
     Py_RETURN_NONE;
@@ -136,6 +165,8 @@ static PyMethodDef PerformanceMonitor_methods[] = {
      "Stop performance monitoring"},
     {"track_query", (PyCFunction) PerformanceMonitor_track_query, METH_VARARGS,
      "Track a database query"},
+    {"track_cache", (PyCFunction) PerformanceMonitor_track_cache, METH_VARARGS,
+     "Track cache hit or miss"},
     {"get_metrics", (PyCFunction) PerformanceMonitor_get_metrics, METH_NOARGS,
      "Get collected metrics"},
     {"reset", (PyCFunction) PerformanceMonitor_reset, METH_NOARGS,

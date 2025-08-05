@@ -318,7 +318,14 @@ static MercuryError store_test_result(const TestContext* context) {
     // Check if we have space
     if (g_orchestrator->history_header->entry_count >= g_orchestrator->history_header->max_entries) {
         // Could implement circular buffer logic here
-        MERCURY_WARN("History buffer full, cannot store new entry");
+        static int warn_count = 0;
+        if (warn_count < 5) {
+            MERCURY_WARN("History buffer full, cannot store new entry");
+            warn_count++;
+            if (warn_count == 5) {
+                MERCURY_WARN("Suppressing further history buffer full warnings...");
+            }
+        }
         return MERCURY_ERROR_BUFFER_OVERFLOW;
     }
     
@@ -644,7 +651,11 @@ int finalize_test_context(void* context_ptr) {
     
     // Store result in history
     if (store_test_result(context) != MERCURY_SUCCESS) {
-        MERCURY_WARN("Failed to store test result in history");
+        static int store_warn_count = 0;
+        if (store_warn_count < 5) {
+            MERCURY_WARN("Failed to store test result in history");
+            store_warn_count++;
+        }
     }
     
     // Deactivate context

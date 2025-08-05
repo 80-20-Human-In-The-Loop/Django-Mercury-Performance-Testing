@@ -21,6 +21,14 @@ int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
 
+// Quiet mode variables
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
+
 // Function pointers for library functions
 typedef int64_t (*start_monitoring_fn)(const char*, const char*);
 typedef MercuryMetrics* (*stop_monitoring_fn)(int64_t);
@@ -371,6 +379,7 @@ int test_stress_rapid_operations(void) {
 }
 
 int main(void) {
+    QUIET_MODE_INIT();  // Initialize quiet mode from TEST_VERBOSE env var
     TEST_SUITE_START("Migration Safety Tests");
     
     // Load the library

@@ -288,6 +288,17 @@ def check_c_extensions():
     # Try to test the extensions
     if available:
         try:
+            # Verify we're not in fallback mode
+            if details.get("type") == "pure_python_fallback":
+                details["functional"] = False
+                details["error"] = "Running in pure Python fallback mode"
+                return False, details
+                
+            # Try to import the actual C modules
+            import django_mercury._c_metrics
+            import django_mercury._c_analyzer
+            import django_mercury._c_orchestrator
+            
             # Create instances to verify they work
             monitor = get_performance_monitor()()
             engine = get_metrics_engine()()
@@ -299,6 +310,10 @@ def check_c_extensions():
             monitor.stop_monitoring()
 
             details["functional"] = True
+        except ImportError as e:
+            details["functional"] = False
+            details["error"] = f"C extension import failed: {str(e)}"
+            available = False
         except Exception as e:
             details["functional"] = False
             details["error"] = str(e)

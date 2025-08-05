@@ -98,7 +98,18 @@ jobs:
         run: |
           python -m pip install --upgrade setuptools wheel
           python setup.py build_ext --inplace || echo "Python C extension build failed (expected if C libs missing)"
-          python -c "from django_mercury.python_bindings.loader import check_c_extensions; available, details = check_c_extensions(); print(f'C Extensions: {available}')" || true
+          
+          # Debug C extension loading
+          echo "🔍 Debugging C extension loading..."
+          export DEBUG_C_LOADING=1
+          python -c "
+import os
+os.environ['DEBUG_C_LOADING'] = '1'
+from django_mercury.python_bindings.loader import check_c_extensions, get_implementation_info
+available, details = check_c_extensions()
+print(f'C Extensions Available: {available}')
+print(f'Implementation Details: {details}')
+" || echo "Failed to check C extensions"
       
       - name: Build C Extensions (Windows)
         if: runner.os == 'Windows'
@@ -142,11 +153,36 @@ jobs:
           echo "Running C extension diagnostics..."
           python scripts/diagnose_c_extensions.py
       
+      - name: Verify C libraries exist (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          echo "🔍 Verifying C library build products..."
+          echo "Libraries in c_core directory:"
+          ls -la django_mercury/c_core/*.so 2>/dev/null || echo "No .so files found in c_core"
+          echo ""
+          echo "Libraries in python_bindings directory:"
+          ls -la django_mercury/python_bindings/*.so 2>/dev/null || echo "No .so files found in python_bindings"
+          
+          # Count libraries found
+          SO_COUNT=$(find django_mercury -name "*.so" 2>/dev/null | wc -l)
+          echo ""
+          echo "Total .so files found: $SO_COUNT"
+          
+          # If no libraries found, force pure Python mode
+          if [ "$SO_COUNT" -eq 0 ]; then
+            echo "⚠️ No C libraries found - forcing pure Python mode"
+            echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $GITHUB_ENV
+            echo "C_EXTENSIONS_AVAILABLE=0" >> $GITHUB_ENV
+          else
+            echo "✅ Found $SO_COUNT C libraries"
+            echo "C_EXTENSIONS_AVAILABLE=1" >> $GITHUB_ENV
+          fi
+      
       - name: Run Python tests (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           # Export env var in same shell that runs tests to ensure it's available at import time
-          if [ "$C_BUILD_FAILED" = "1" ] || [ ! -z "$DJANGO_MERCURY_PURE_PYTHON" ]; then
+          if [ "$C_BUILD_FAILED" = "1" ] || [ ! -z "$DJANGO_MERCURY_PURE_PYTHON" ] || [ "$C_EXTENSIONS_AVAILABLE" = "0" ]; then
             echo "Setting DJANGO_MERCURY_PURE_PYTHON=1 for tests"
             export DJANGO_MERCURY_PURE_PYTHON=1
           fi

@@ -16,6 +16,14 @@ int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
 
+// Quiet mode variables
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
+
 // Function declarations for query analyzer API
 extern int analyze_query(const char* query_text, double execution_time);
 extern int get_duplicate_queries(char* result_buffer, size_t buffer_size);
@@ -194,6 +202,7 @@ int test_concurrent_analyzer_access(void) {
 }
 
 int main(void) {
+    QUIET_MODE_INIT();  // Initialize quiet mode from TEST_VERBOSE env var
     TEST_SUITE_START("Query Analyzer Tests");
     
     RUN_TEST(test_query_analyzer_initialization);

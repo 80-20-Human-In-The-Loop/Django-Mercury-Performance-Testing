@@ -48,15 +48,20 @@ class CPerformanceMonitor:
     """
     Wrapper for C performance monitor extension.
 
-    Note: The C performance monitor extension was consolidated into the metrics engine.
-    This class now uses the pure Python implementation for compatibility.
+    Uses the actual C implementation when available, falls back to Python otherwise.
     """
 
     def __init__(self):
-        # Use pure Python implementation since _c_performance doesn't exist
-        # The performance monitoring was consolidated into metrics_engine
-        from .pure_python import PythonPerformanceMonitor
-        self._monitor = PythonPerformanceMonitor()
+        try:
+            # Try to use the actual C implementation
+            import django_mercury._c_performance as c_performance
+            self._monitor = c_performance.PerformanceMonitor()
+            self._using_fallback = False
+        except ImportError:
+            # Fall back to pure Python implementation
+            from .pure_python import PythonPerformanceMonitor
+            self._monitor = PythonPerformanceMonitor()
+            self._using_fallback = True
 
     def start_monitoring(self):
         return self._monitor.start_monitoring()
