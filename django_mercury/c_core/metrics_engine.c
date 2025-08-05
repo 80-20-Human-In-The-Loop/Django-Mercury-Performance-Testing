@@ -17,6 +17,11 @@
  * Memory Usage: Cache-aligned structures for SIMD operations
  */
 
+/* Suppress deprecation warnings on Windows */
+#ifdef _MSC_VER
+    #define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "common.h"
 
 // Platform-specific includes
@@ -155,18 +160,18 @@ typedef struct {
     size_t max_monitors;
     
     // SIMD-aligned threshold cache for fast checking
-    ThresholdConfig* MERCURY_ALIGNED(32) threshold_cache;
+    ThresholdConfig* threshold_cache;  /* Alignment handled at allocation */
     size_t cache_size;
     
     // Statistics
-    _Atomic(uint64_t) total_sessions;
-    _Atomic(uint64_t) violations_detected;
-    _Atomic(uint64_t) timing_overhead_ns;  // Self-monitoring
+    MERCURY_ATOMIC(uint64_t) total_sessions;
+    MERCURY_ATOMIC(uint64_t) violations_detected;
+    MERCURY_ATOMIC(uint64_t) timing_overhead_ns;  // Self-monitoring
     
     // Django hook counters
-    _Atomic(uint64_t) global_query_count;
-    _Atomic(uint64_t) global_cache_hits;
-    _Atomic(uint64_t) global_cache_misses;
+    MERCURY_ATOMIC(uint64_t) global_query_count;
+    MERCURY_ATOMIC(uint64_t) global_cache_hits;
+    MERCURY_ATOMIC(uint64_t) global_cache_misses;
     
     // RDTSC calibration
     uint64_t rdtsc_frequency;

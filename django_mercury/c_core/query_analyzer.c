@@ -17,10 +17,22 @@
  * Memory Usage: Fixed 1MB allocation for query history buffer
  */
 
+/* Suppress deprecation warnings on Windows */
+#ifdef _MSC_VER
+    #define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "common.h"
 #include <math.h>
 #include <ctype.h>
-#include <strings.h>  // For strncasecmp on macOS/POSIX systems
+
+/* Platform-specific string function includes */
+#ifdef _WIN32
+    #include <string.h>
+    #define strncasecmp _strnicmp  /* Windows equivalent */
+#else
+    #include <strings.h>  /* For strncasecmp on macOS/POSIX systems */
+#endif
 
 // === CONSTANTS ===
 
