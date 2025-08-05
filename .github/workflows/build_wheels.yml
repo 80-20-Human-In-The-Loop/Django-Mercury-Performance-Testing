@@ -184,87 +184,38 @@ jobs:
             done
           fi
       
+      - name: Debug C Extension Loading (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          echo "🔍 Testing C extension loading directly..."
+          python -c "import ctypes; print('ctypes version:', ctypes.__version__ if hasattr(ctypes, '__version__') else 'unknown')"
+          
+          # Test loading each library
+          for lib in django_mercury/python_bindings/*.so; do
+            if [ -f "$lib" ]; then
+              echo "Testing $lib..."
+              python -c "import ctypes; ctypes.CDLL('$lib'); print('  ✓ Loaded successfully')" || echo "  ✗ Failed to load"
+            fi
+          done
+          
+          # Test the actual loader
+          python -c "
+import os
+os.environ['DEBUG_C_LOADING'] = '1'
+try:
+    from django_mercury.python_bindings.loader import check_c_extensions
+    available, details = check_c_extensions()
+    print('C Extensions Available:', available)
+    print('Details:', details)
+except Exception as e:
+    print('Failed:', e)
+    import traceback
+    traceback.print_exc()
+"
+      
       - name: Run Python tests (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          # Debug: Show Python path and check library loading
-          echo "🔍 Python environment debug:"
-          echo "Python executable: $(which python)"
-          echo "Python version: $(python --version)"
-          echo ""
-          echo "Python sys.path:"
-          python -c "import sys; print('\n'.join(sys.path))"
-          echo ""
-          echo "Current directory: $(pwd)"
-          echo ""
-          echo "Checking if libraries can be loaded with ctypes:"
-          # Create debug script
-          cat > test_ctypes.py << 'PYTHON_EOF'
-import ctypes
-import os
-import sys
-import traceback
-
-print('=== CTYPES LIBRARY LOADING TEST ===')
-print(f'Python version: {sys.version}')
-print(f'ctypes file: {ctypes.__file__}')
-print()
-
-libs = ['libquery_analyzer.so', 'libmetrics_engine.so', 'libtest_orchestrator.so']
-for lib in libs:
-    print(f'\nTesting {lib}:')
-    paths = [
-        f'django_mercury/python_bindings/{lib}',
-        f'django_mercury/c_core/{lib}',
-        lib
-    ]
-    loaded = False
-    for path in paths:
-        if os.path.exists(path):
-            print(f'  Found at: {path}')
-            print(f'  File size: {os.path.getsize(path)} bytes')
-            print(f'  Permissions: {oct(os.stat(path).st_mode)}')
-            try:
-                # Try with RTLD_GLOBAL like the actual code
-                if hasattr(ctypes, 'RTLD_GLOBAL'):
-                    print('  Using RTLD_GLOBAL mode')
-                    handle = ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
-                else:
-                    print('  Using default mode')
-                    handle = ctypes.CDLL(path)
-                print(f'  ✓ Successfully loaded with ctypes')
-                print(f'  Handle: {handle}')
-                loaded = True
-                break
-            except Exception as e:
-                print(f'  ✗ Failed to load: {type(e).__name__}: {e}')
-                traceback.print_exc()
-        else:
-            print(f'  Not found at: {path}')
-    if not loaded:
-        print(f'✗ {lib} could not be loaded from any path')
-
-# Also test the actual loading mechanism
-print('\n=== TESTING ACTUAL C_BINDINGS LOADING ===')
-try:
-    os.environ['DEBUG_C_LOADING'] = '1'
-    from django_mercury.python_bindings import c_bindings
-    print('c_bindings imported successfully')
-    extensions = c_bindings.c_extensions
-    print(f'c_extensions object: {extensions}')
-    print(f'Initialized: {extensions._initialized}')
-    if not extensions._initialized:
-        print('Calling initialize()...')
-        result = extensions.initialize()
-        print(f'Initialize result: {result}')
-    stats = extensions.get_stats()
-    print(f'Stats: libraries_loaded={stats.libraries_loaded}, functions_configured={stats.functions_configured}, errors={stats.errors_encountered}')
-except Exception as e:
-    print(f'Failed to test c_bindings: {type(e).__name__}: {e}')
-    traceback.print_exc()
-PYTHON_EOF
-          python test_ctypes.py
-          echo ""
           # C extensions MUST be available in CI
           echo "Running tests with C extensions (DJANGO_MERCURY_PURE_PYTHON=0)"
           export DJANGO_MERCURY_PURE_PYTHON=0
