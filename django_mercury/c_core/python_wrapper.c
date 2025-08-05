@@ -5,9 +5,11 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include "common.h"
+#include "common.h"  /* This includes windows_compat.h which has gettimeofday for Windows */
 #include <time.h>
-#include <sys/time.h>
+#ifndef _WIN32
+    #include <sys/time.h>
+#endif
 
 /* Performance Monitor Structure */
 typedef struct {

@@ -133,6 +133,29 @@ static inline int usleep(unsigned int microseconds) {
     return 0;
 }
 
+// Time structures and functions
+#include <winsock2.h>  // For struct timeval
+
+// Windows implementation of gettimeofday
+static inline int gettimeofday(struct timeval *tv, void *tz) {
+    FILETIME ft;
+    ULARGE_INTEGER epoch;
+    
+    (void)tz; /* Unused parameter */
+    
+    GetSystemTimeAsFileTime(&ft);
+    epoch.LowPart = ft.dwLowDateTime;
+    epoch.HighPart = ft.dwHighDateTime;
+    
+    /* Convert to microseconds since Unix epoch (1970-01-01) */
+    epoch.QuadPart = epoch.QuadPart / 10 - 11644473600000000LL;
+    
+    tv->tv_sec = (long)(epoch.QuadPart / 1000000);
+    tv->tv_usec = (long)(epoch.QuadPart % 1000000);
+    
+    return 0;
+}
+
 // Export macros
 #define MERCURY_API __declspec(dllexport)
 
