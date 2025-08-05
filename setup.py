@@ -111,7 +111,7 @@ def get_c_extensions():
         # Windows with MSVC
         compile_args = ['/O2', '/W3', '/std:c11', '/DMERCURY_API=__declspec(dllexport)']
         link_args = ['/DLL']
-        libraries = ['kernel32', 'user32', 'advapi32']
+        libraries = ['kernel32', 'user32', 'advapi32', 'psapi']
     elif sys.platform == 'darwin':
         # macOS
         compile_args = [
