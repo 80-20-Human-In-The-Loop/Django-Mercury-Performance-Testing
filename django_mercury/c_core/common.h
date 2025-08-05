@@ -86,11 +86,31 @@
     #define MERCURY_ATOMIC(type) type
     #define _Atomic
     
+    // Define memory order constants for MSVC
+    #ifndef memory_order_relaxed
+        #define memory_order_relaxed 0
+        #define memory_order_consume 1
+        #define memory_order_acquire 2
+        #define memory_order_release 3
+        #define memory_order_acq_rel 4
+        #define memory_order_seq_cst 5
+    #endif
+    
     // Define atomic operations as regular operations (non-thread-safe fallback)
     #define atomic_load(ptr) (*(ptr))
     #define atomic_store(ptr, val) ((*(ptr)) = (val))
     #define atomic_fetch_add(ptr, val) ((*(ptr)) += (val), (*(ptr)) - (val))
     #define atomic_fetch_sub(ptr, val) ((*(ptr)) -= (val), (*(ptr)) + (val))
+    
+    // Define explicit atomic operations (ignore memory order for fallback)
+    #define atomic_load_explicit(ptr, order) atomic_load(ptr)
+    #define atomic_store_explicit(ptr, val, order) atomic_store(ptr, val)
+    #define atomic_fetch_add_explicit(ptr, val, order) atomic_fetch_add(ptr, val)
+    #define atomic_fetch_sub_explicit(ptr, val, order) atomic_fetch_sub(ptr, val)
+    
+    // Compare and exchange - simple non-atomic fallback
+    #define atomic_compare_exchange_weak_explicit(ptr, expected, desired, succ, fail) \
+        ((*(ptr) == *(expected)) ? (*(ptr) = (desired), 1) : (*(expected) = *(ptr), 0))
     
     #ifdef _MSC_VER
         #pragma message("WARNING: Atomic operations not available, thread safety not guaranteed")
