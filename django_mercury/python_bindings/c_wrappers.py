@@ -48,16 +48,15 @@ class CPerformanceMonitor:
     """
     Wrapper for C performance monitor extension.
 
-    Provides the same interface as PythonPerformanceMonitor.
+    Note: The C performance monitor extension was consolidated into the metrics engine.
+    This class now uses the pure Python implementation for compatibility.
     """
 
     def __init__(self):
-        # Import the actual C extension
-        import django_mercury._c_performance as c_perf
-
-        self._monitor = c_perf.PerformanceMonitor()
-        self.cache_hits = 0
-        self.cache_misses = 0
+        # Use pure Python implementation since _c_performance doesn't exist
+        # The performance monitoring was consolidated into metrics_engine
+        from .pure_python import PythonPerformanceMonitor
+        self._monitor = PythonPerformanceMonitor()
 
     def start_monitoring(self):
         return self._monitor.start_monitoring()
@@ -69,25 +68,18 @@ class CPerformanceMonitor:
         return self._monitor.track_query(sql, duration)
 
     def track_cache(self, hit: bool):
-        if hit:
-            self.cache_hits += 1
-        else:
-            self.cache_misses += 1
+        return self._monitor.track_cache(hit)
 
     def get_metrics(self) -> Dict[str, Any]:
-        metrics = self._monitor.get_metrics()
-        metrics["cache_hits"] = self.cache_hits
-        metrics["cache_misses"] = self.cache_misses
-        if self.cache_hits + self.cache_misses > 0:
-            metrics["cache_hit_rate"] = self.cache_hits / (self.cache_hits + self.cache_misses)
-        else:
-            metrics["cache_hit_rate"] = 0.0
-        return metrics
+        return self._monitor.get_metrics()
 
     def reset(self):
-        self._monitor.reset()
-        self.cache_hits = 0
-        self.cache_misses = 0
+        return self._monitor.reset()
+    
+    @property
+    def metrics(self):
+        """Access to underlying metrics for compatibility."""
+        return self._monitor.metrics
 
 
 class CMetricsEngine:
