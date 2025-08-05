@@ -126,14 +126,20 @@ def main():
     success_count = sum(1 for _, success, _ in import_results if success)
     total_count = len(import_results)
     
+    # Use ASCII characters for better Windows compatibility
+    is_utf = sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower()
+    
     if success_count == total_count:
-        print(f"✅ All {total_count} C extensions loaded successfully!")
+        marker = "✅" if is_utf else "[OK]"
+        print(f"{marker} All {total_count} C extensions loaded successfully!")
         return 0
     elif success_count > 0:
-        print(f"⚠️  {success_count}/{total_count} C extensions loaded")
+        marker = "⚠️ " if is_utf else "[WARNING]"
+        print(f"{marker} {success_count}/{total_count} C extensions loaded")
         return 1
     else:
-        print(f"❌ No C extensions could be loaded ({total_count} tested)")
+        marker = "❌" if is_utf else "[FAILED]"
+        print(f"{marker} No C extensions could be loaded ({total_count} tested)")
         return 2
 
 if __name__ == "__main__":
