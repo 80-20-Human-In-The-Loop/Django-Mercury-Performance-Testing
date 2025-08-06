@@ -9,7 +9,7 @@ This file only handles C extension building for compatibility.
 import os
 import sys
 import platform
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
 # Get the directory containing this setup.py
@@ -163,7 +163,17 @@ def get_c_extensions():
     return extensions
 
 # Minimal setup - all metadata comes from pyproject.toml
+# But we need to specify packages for direct setup.py calls (e.g., cibuildwheel)
 setup(
+    # Package discovery - needed when setup.py is called directly
+    packages=find_packages(exclude=['tests*', '_long_haul_research*']),
+    package_data={
+        'django_mercury': ['*.md', 'py.typed'],
+        'django_mercury.c_core': ['*.h', '*.c', 'Makefile', 'BUILD.md'],
+        'django_mercury.documentation': ['*.md'],
+        'django_mercury.examples': ['*.py'],
+    },
+    # C extension configuration
     ext_modules=get_c_extensions(),
     cmdclass={'build_ext': OptionalBuildExt},
 )
