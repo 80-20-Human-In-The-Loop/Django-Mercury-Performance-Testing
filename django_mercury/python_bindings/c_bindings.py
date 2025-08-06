@@ -121,7 +121,7 @@ else:
 # Platform-specific library extensions
 PLATFORM_EXTENSIONS = {
     "Linux": ".so", 
-    "Darwin": ".dylib", 
+    "Darwin": ".so",  # macOS uses .so for compatibility with our Makefile
     "Windows": ".dll",
     # Windows Python extensions
     "Windows_Python": ".pyd"
