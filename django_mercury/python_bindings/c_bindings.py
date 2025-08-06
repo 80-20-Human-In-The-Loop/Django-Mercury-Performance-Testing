@@ -246,11 +246,23 @@ class CExtensionLoader:
         self.metrics_engine: Optional[ctypes.CDLL] = None
         self.test_orchestrator: Optional[ctypes.CDLL] = None
 
-    def initialize(self) -> bool:
-        """Initialize all C extensions."""
+    def initialize(self, force_reinit: bool = False) -> bool:
+        """Initialize all C extensions.
+        
+        Args:
+            force_reinit: If True, force reinitialization even if already initialized.
+                         This is useful for tests that need a clean state.
+        
+        Returns:
+            True if at least one C extension loaded successfully, False otherwise.
+        """
         with self._lock:
-            if self._initialized:
+            if self._initialized and not force_reinit:
                 return True
+            
+            # Clean up any existing state if reinitializing
+            if self._initialized and force_reinit:
+                self.cleanup()
 
             # Check if we're in test mode and should be quieter
             import os
@@ -738,11 +750,15 @@ def is_pure_python_mode() -> bool:
     )
 
 
-def initialize_c_extensions() -> bool:
+def initialize_c_extensions(force_reinit: bool = False) -> bool:
     """Initialize C extensions. Can be called multiple times safely.
     
     This function loads the high-performance C libraries that make Mercury fast.
     If C extensions fail to load, Mercury falls back to pure Python.
+    
+    Args:
+        force_reinit: If True, force reinitialization even if already initialized.
+                     This is useful for tests that need a clean state.
     
     Returns:
         True if at least one C extension loaded successfully, False otherwise.
@@ -758,7 +774,7 @@ def initialize_c_extensions() -> bool:
         This function is called automatically when you import c_bindings.
         You only need to call it manually if you want to check the result.
     """
-    return c_extensions.initialize()
+    return c_extensions.initialize(force_reinit=force_reinit)
 
 
 def get_extension_stats() -> ExtensionStats:
@@ -774,19 +790,24 @@ def is_c_extension_available(library_name: str) -> bool:
 # === AUTOMATIC INITIALIZATION ===
 
 # Try to initialize on import, but don't fail if it doesn't work
-try:
-    _init_success = initialize_c_extensions()
-    test_mode = os.environ.get("MERCURY_TEST_MODE", "0") == "1"
-    if not test_mode:
-        if _init_success:
-            logger.info("Mercury C extensions automatically initialized")
-        else:
-            logger.info("Mercury running in Python fallback mode")
-except Exception as e:
-    test_mode = os.environ.get("MERCURY_TEST_MODE", "0") == "1"
-    if not test_mode:
-        logger.warning(f"Failed to auto-initialize C extensions: {e}")
-        logger.info("Mercury will run in Python fallback mode")
+# Skip automatic initialization if MERCURY_DEFER_INIT is set (for CI environments)
+if os.environ.get("MERCURY_DEFER_INIT", "0") != "1":
+    try:
+        _init_success = initialize_c_extensions()
+        test_mode = os.environ.get("MERCURY_TEST_MODE", "0") == "1"
+        if not test_mode:
+            if _init_success:
+                logger.info("Mercury C extensions automatically initialized")
+            else:
+                logger.info("Mercury running in Python fallback mode")
+    except Exception as e:
+        test_mode = os.environ.get("MERCURY_TEST_MODE", "0") == "1"
+        if not test_mode:
+            logger.warning(f"Failed to auto-initialize C extensions: {e}")
+            logger.info("Mercury will run in Python fallback mode")
+else:
+    # Deferred initialization mode - will be initialized later by test runner
+    logger.debug("Mercury C extensions initialization deferred (MERCURY_DEFER_INIT=1)")
 
 # === CLEANUP ON EXIT ===
 

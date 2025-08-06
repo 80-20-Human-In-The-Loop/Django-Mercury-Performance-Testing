@@ -51,8 +51,7 @@ class TestCLibraryLoading(unittest.TestCase):
     def test_all_libraries_load(self):
         """Test that all four C libraries load successfully."""
         # Force reload to test loading
-        c_bindings._initialized = False
-        c_bindings.initialize_c_extensions()
+        c_bindings.initialize_c_extensions(force_reinit=True)
         
         self.assertIsNotNone(c_bindings.c_extensions.query_analyzer)
         self.assertIsNotNone(c_bindings.c_extensions.metrics_engine)

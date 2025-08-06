@@ -32,11 +32,13 @@ cd "$PROJECT_ROOT"
 # Export CI environment variables
 export DJANGO_MERCURY_PURE_PYTHON=0
 export DEBUG_C_LOADING=1
+export MERCURY_DEFER_INIT=1  # Prevent auto-initialization on import
 export PYTHONPATH="${PYTHONPATH}:${PROJECT_ROOT}"
 
 echo "Environment:"
 echo "  DJANGO_MERCURY_PURE_PYTHON=$DJANGO_MERCURY_PURE_PYTHON"
 echo "  DEBUG_C_LOADING=$DEBUG_C_LOADING"
+echo "  MERCURY_DEFER_INIT=$MERCURY_DEFER_INIT"
 echo "  PYTHONPATH=$PYTHONPATH"
 echo ""
 
@@ -68,6 +70,21 @@ case $PLATFORM in
       ./scripts/test_c_loading.sh || true
       exit 2
     fi
+    
+    echo ""
+    echo "=== Initializing C Extensions for Test Suite ==="
+    # Initialize C extensions once before running all tests
+    python -c "
+import sys
+sys.path.insert(0, '.')
+from django_mercury.python_bindings import c_bindings
+success = c_bindings.initialize_c_extensions()
+if success:
+    print('✅ C extensions initialized successfully for test suite')
+else:
+    print('❌ Failed to initialize C extensions')
+    sys.exit(1)
+" || exit 2
     
     echo ""
     echo "=== Running Python Tests ==="
