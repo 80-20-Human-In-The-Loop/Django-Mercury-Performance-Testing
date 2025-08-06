@@ -32,11 +32,6 @@ jobs:
           echo "=== Testing setup.py build ==="
           python setup.py bdist_wheel 2>&1 || echo "setup.py failed"
           
-      - name: Try building with setup_safe.py  
-        run: |
-          echo "=== Testing setup_safe.py build ==="
-          python setup_safe.py bdist_wheel 2>&1 || echo "setup_safe.py failed"
-          
       - name: Try building with pure Python
         run: |
           echo "=== Testing pure Python build ==="
