@@ -262,10 +262,10 @@ test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
 
 # Linux-specific configuration
 [tool.cibuildwheel.linux]
-# Use manylinux2014 for broad compatibility - must specify full image path
-manylinux-x86_64-image = "quay.io/pypa/manylinux2014_x86_64"
-manylinux-i686-image = "quay.io/pypa/manylinux2014_i686"
-manylinux-aarch64-image = "quay.io/pypa/manylinux2014_aarch64"
+# Use manylinux2014 for broad compatibility - use shorthand for standard images
+manylinux-x86_64-image = "manylinux2014"
+manylinux-i686-image = "manylinux2014"
+manylinux-aarch64-image = "manylinux2014"
 
 # Environment variables - ensure CIBUILDWHEEL is set
 environment = {CIBUILDWHEEL="1", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
