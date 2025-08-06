@@ -12,9 +12,6 @@ import platform
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
-# Get the directory containing this setup.py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 class OptionalBuildExt(build_ext):
     """Build extensions optionally, falling back to pure Python if compilation fails."""
     
@@ -65,9 +62,6 @@ def get_c_extensions():
         print("PyPy detected - skipping C extensions")
         return []
     
-    # Base directory for C code
-    c_core_dir = os.path.join(BASE_DIR, 'django_mercury', 'c_core')
-    
     # Common compile arguments
     compile_args = ['-O2', '-fPIC', '-std=c99']
     libraries = ['m']  # Math library
@@ -109,10 +103,10 @@ def get_c_extensions():
     extensions.append(Extension(
         'django_mercury._c_performance',
         sources=[
-            os.path.join(c_core_dir, 'common.c'),
-            os.path.join(c_core_dir, 'performance_wrapper.c'),
+            'django_mercury/c_core/common.c',
+            'django_mercury/c_core/performance_wrapper.c',
         ],
-        include_dirs=[c_core_dir, '/usr/include', '/usr/local/include'],
+        include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
         language='c'
@@ -122,11 +116,11 @@ def get_c_extensions():
     extensions.append(Extension(
         'django_mercury._c_metrics',
         sources=[
-            os.path.join(c_core_dir, 'common.c'),
-            os.path.join(c_core_dir, 'metrics_engine.c'),
-            os.path.join(c_core_dir, 'metrics_wrapper.c'),
+            'django_mercury/c_core/common.c',
+            'django_mercury/c_core/metrics_engine.c',
+            'django_mercury/c_core/metrics_wrapper.c',
         ],
-        include_dirs=[c_core_dir, '/usr/include', '/usr/local/include'],
+        include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
         language='c'
@@ -136,11 +130,11 @@ def get_c_extensions():
     extensions.append(Extension(
         'django_mercury._c_analyzer',
         sources=[
-            os.path.join(c_core_dir, 'analyzer_wrapper.c'),
-            os.path.join(c_core_dir, 'common.c'),
-            os.path.join(c_core_dir, 'query_analyzer.c'),
+            'django_mercury/c_core/analyzer_wrapper.c',
+            'django_mercury/c_core/common.c',
+            'django_mercury/c_core/query_analyzer.c',
         ],
-        include_dirs=[c_core_dir, '/usr/include', '/usr/local/include'],
+        include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
         language='c'
@@ -150,11 +144,11 @@ def get_c_extensions():
     extensions.append(Extension(
         'django_mercury._c_orchestrator',
         sources=[
-            os.path.join(c_core_dir, 'common.c'),
-            os.path.join(c_core_dir, 'orchestrator_wrapper.c'),
-            os.path.join(c_core_dir, 'test_orchestrator.c'),
+            'django_mercury/c_core/common.c',
+            'django_mercury/c_core/orchestrator_wrapper.c',
+            'django_mercury/c_core/test_orchestrator.c',
         ],
-        include_dirs=[c_core_dir, '/usr/include', '/usr/local/include'],
+        include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
         language='c'
