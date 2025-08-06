@@ -286,8 +286,8 @@ before-build = [
     "python -m pip install --upgrade pip setuptools wheel",
 ]
 
-# Repair command with verbose output for debugging
-repair-wheel-command = "auditwheel show {wheel} && auditwheel repair -v -w {dest_dir} {wheel}"
+# Repair command - auditwheel doesn't support -v flag
+repair-wheel-command = "auditwheel show {wheel} && auditwheel repair -w {dest_dir} {wheel}"
 
 # macOS-specific configuration  
 [tool.cibuildwheel.macos]

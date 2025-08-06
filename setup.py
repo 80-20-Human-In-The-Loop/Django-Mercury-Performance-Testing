@@ -64,24 +64,32 @@ def get_c_extensions():
     
     # Common compile arguments
     compile_args = ['-O2', '-fPIC', '-std=c99']
-    libraries = ['m']  # Math library
     
-    # Platform-specific settings
-    if sys.platform == 'darwin':
-        # macOS
-        compile_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.9'])
-    elif sys.platform.startswith('win'):
-        # Windows
-        compile_args = ['/O2']
-        libraries = []
+    # When building with cibuildwheel, don't link ANY external libraries
+    # to ensure manylinux compliance (avoid GLIBC version issues)
+    if os.environ.get('CIBUILDWHEEL', '0') == '1':
+        libraries = []  # No external libraries for wheel builds
+        compile_args.append('-DMERCURY_HAS_LIBUNWIND=0')
+        if not sys.platform.startswith('win'):
+            compile_args.append('-pthread')
     else:
-        # Linux and other Unix-like systems
-        compile_args.append('-pthread')
-        libraries.append('pthread')
+        # Normal builds - link libraries as needed
+        libraries = ['m']  # Math library
         
-        # Don't link libunwind in cibuildwheel (not part of manylinux)
-        if os.environ.get('CIBUILDWHEEL', '0') != '1':
-            # Only try to link libunwind on developer machines
+        # Platform-specific settings
+        if sys.platform == 'darwin':
+            # macOS
+            compile_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.9'])
+        elif sys.platform.startswith('win'):
+            # Windows
+            compile_args = ['/O2']
+            libraries = []
+        else:
+            # Linux and other Unix-like systems
+            compile_args.append('-pthread')
+            libraries.append('pthread')
+            
+            # Try to link libunwind on developer machines
             try:
                 import subprocess
                 result = subprocess.run(['pkg-config', '--exists', 'libunwind'], 
@@ -93,8 +101,6 @@ def get_c_extensions():
                     compile_args.append('-DMERCURY_HAS_LIBUNWIND=0')
             except:
                 compile_args.append('-DMERCURY_HAS_LIBUNWIND=0')
-        else:
-            compile_args.append('-DMERCURY_HAS_LIBUNWIND=0')
     
     # Define extensions
     extensions = []
