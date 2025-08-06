@@ -69,20 +69,20 @@ except ImportError:
 # Library names and paths
 LIBRARY_CONFIG = {
     "query_analyzer": {
-        "name": "libquery_analyzer.so",
-        "fallback_name": "libquery_analyzer.dylib",
+        "name": "libquery_analyzer",
+        "fallback_name": "libquery_analyzer",
         "required": False,
         "description": "SQL Query Analysis Engine",
     },
     "metrics_engine": {
-        "name": "libmetrics_engine.so",
-        "fallback_name": "libmetrics_engine.dylib",
+        "name": "libmetrics_engine",
+        "fallback_name": "libmetrics_engine",
         "required": False,
         "description": "Performance Metrics Engine",
     },
     "test_orchestrator": {
-        "name": "libtest_orchestrator.so",
-        "fallback_name": "libtest_orchestrator.dylib",
+        "name": "libtest_orchestrator",
+        "fallback_name": "libtest_orchestrator",
         "required": False,
         "description": "Test Orchestration Engine",
     },
@@ -211,9 +211,9 @@ def find_library(library_name: str) -> Optional[Path]:
     system = platform.system()
     base_name = library_name.rsplit(".", 1)[0]
     
-    # On Windows, try both .dll and .pyd
+    # On Windows, try both .pyd and .dll (.pyd is for Python extensions)
     if system == "Windows":
-        extensions_to_try = [".dll", ".pyd"]
+        extensions_to_try = [".pyd", ".dll"]
     elif system in PLATFORM_EXTENSIONS:
         extensions_to_try = [PLATFORM_EXTENSIONS[system]]
     else:
