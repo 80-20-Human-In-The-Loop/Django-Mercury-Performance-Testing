@@ -6,6 +6,8 @@ import unittest
 from unittest.mock import patch, Mock, MagicMock
 import sys
 import os
+import platform
+import importlib
 from pathlib import Path
 
 # Add parent directory to path
@@ -17,18 +19,41 @@ class TestCBindingsFailures(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        # Patch the actual library loading to avoid real file operations
-        self.lib_patcher = patch('django_mercury.python_bindings.c_bindings.ctypes.CDLL')
-        self.mock_cdll = self.lib_patcher.start()
+        # Import c_bindings to check platform
+        from django_mercury.python_bindings import c_bindings
         
-        # Also patch find_library to control which libraries are "found"
-        self.find_lib_patcher = patch('django_mercury.python_bindings.c_bindings.find_library')
-        self.mock_find_library = self.find_lib_patcher.start()
+        # Store patchers for cleanup
+        self.patchers = []
+        
+        # Platform-specific mocking
+        if platform.system() == "Windows" or c_bindings.IS_WINDOWS:
+            # On Windows, we need to mock the import mechanism
+            # Mock importlib.import_module for Python module imports
+            self.import_patcher = patch('importlib.import_module')
+            self.mock_import = self.import_patcher.start()
+            self.patchers.append(self.import_patcher)
+            
+            # Also mock the builtin __import__ as a fallback
+            self.builtin_import_patcher = patch('builtins.__import__')
+            self.mock_builtin_import = self.builtin_import_patcher.start()
+            self.patchers.append(self.builtin_import_patcher)
+        else:
+            # On Unix, mock ctypes.CDLL for shared library loading
+            self.lib_patcher = patch('django_mercury.python_bindings.c_bindings.ctypes.CDLL')
+            self.mock_cdll = self.lib_patcher.start()
+            self.patchers.append(self.lib_patcher)
+            
+            # Also patch find_library to control which libraries are "found"
+            self.find_lib_patcher = patch('django_mercury.python_bindings.c_bindings.find_library')
+            self.mock_find_library = self.find_lib_patcher.start()
+            self.patchers.append(self.find_lib_patcher)
     
     def tearDown(self):
         """Clean up test fixtures."""
-        self.lib_patcher.stop()
-        self.find_lib_patcher.stop()
+        # Stop all patchers
+        for patcher in self.patchers:
+            patcher.stop()
+        
         # Reset the module state
         import django_mercury.python_bindings.c_bindings as c_bindings
         c_bindings.c_extensions._initialized = False
@@ -41,14 +66,33 @@ class TestCBindingsFailures(unittest.TestCase):
         """Test handling when a library fails to load."""
         from django_mercury.python_bindings import c_bindings
         
-        # Make library loading fail
-        self.mock_cdll.side_effect = OSError("Cannot load library")
-        
-        # Reset initialization state
+        # Reset initialization state and clear existing handles
         c_bindings.c_extensions._initialized = False
+        c_bindings.c_extensions.query_analyzer = None
+        c_bindings.c_extensions.metrics_engine = None
+        c_bindings.c_extensions.test_orchestrator = None
+        c_bindings.c_extensions.performance = None
+        
+        # Platform-specific failure simulation
+        if platform.system() == "Windows" or c_bindings.IS_WINDOWS:
+            # On Windows, make Python module imports fail
+            def import_side_effect(name, *args, **kwargs):
+                if name.startswith('django_mercury._c_'):
+                    raise ImportError(f"Cannot import module {name}")
+                # Allow other imports to work normally
+                return importlib.__import__(name, *args, **kwargs)
+            
+            if hasattr(self, 'mock_import'):
+                self.mock_import.side_effect = import_side_effect
+            if hasattr(self, 'mock_builtin_import'):
+                self.mock_builtin_import.side_effect = import_side_effect
+        else:
+            # On Unix, make ctypes.CDLL fail
+            if hasattr(self, 'mock_cdll'):
+                self.mock_cdll.side_effect = OSError("Cannot load library")
         
         # Try to initialize - should handle the error gracefully
-        c_bindings.initialize_c_extensions()
+        c_bindings.initialize_c_extensions(force_reinit=True)
         
         # Should be marked as initialized even if loading failed
         self.assertTrue(c_bindings.c_extensions._initialized)
@@ -67,21 +111,49 @@ class TestCBindingsFailures(unittest.TestCase):
         
         from django_mercury.python_bindings import c_bindings
         
-        # Reset state
+        # Reset state and clear existing handles
         c_bindings.c_extensions._initialized = False
+        c_bindings.c_extensions.query_analyzer = None
+        c_bindings.c_extensions.metrics_engine = None
+        c_bindings.c_extensions.test_orchestrator = None
+        c_bindings.c_extensions.performance = None
         
-        # Mock find_library to return fake paths for all libraries
-        self.mock_find_library.return_value = "/fake/lib.so"
-        
-        # Make only the second library fail (metrics_engine)
-        mock_lib1 = Mock()
-        mock_lib2_error = OSError("Cannot load metrics_engine")
-        mock_lib3 = Mock()
-        
-        self.mock_cdll.side_effect = [mock_lib1, mock_lib2_error, mock_lib3]
+        # Platform-specific partial failure simulation
+        if platform.system() == "Windows" or c_bindings.IS_WINDOWS:
+            # On Windows, make only _c_metrics fail to import
+            mock_analyzer = Mock()
+            mock_analyzer.__file__ = "fake_analyzer.pyd"
+            mock_orchestrator = Mock()
+            mock_orchestrator.__file__ = "fake_orchestrator.pyd"
+            
+            def import_side_effect(name, *args, **kwargs):
+                if name == 'django_mercury._c_analyzer':
+                    return mock_analyzer
+                elif name == 'django_mercury._c_metrics':
+                    raise ImportError(f"Cannot import module {name}")
+                elif name == 'django_mercury._c_orchestrator':
+                    return mock_orchestrator
+                # Allow other imports to work normally
+                return importlib.__import__(name, *args, **kwargs)
+            
+            if hasattr(self, 'mock_import'):
+                self.mock_import.side_effect = import_side_effect
+            if hasattr(self, 'mock_builtin_import'):
+                self.mock_builtin_import.side_effect = import_side_effect
+        else:
+            # On Unix, make only the second library fail (metrics_engine)
+            if hasattr(self, 'mock_find_library'):
+                self.mock_find_library.return_value = "/fake/lib.so"
+            
+            mock_lib1 = Mock()
+            mock_lib2_error = OSError("Cannot load metrics_engine")
+            mock_lib3 = Mock()
+            
+            if hasattr(self, 'mock_cdll'):
+                self.mock_cdll.side_effect = [mock_lib1, mock_lib2_error, mock_lib3]
         
         # Initialize
-        c_bindings.initialize_c_extensions()
+        c_bindings.initialize_c_extensions(force_reinit=True)
         
         # First library should be loaded
         self.assertIsNotNone(c_bindings.c_extensions.query_analyzer)

@@ -413,15 +413,20 @@ class CExtensionLoader:
         # On Windows, try to import as Python extension module
         if IS_WINDOWS:
             try:
-                # Import the Python extension module
-                if lib_key == "query_analyzer":
-                    import django_mercury._c_analyzer as module
-                elif lib_key == "metrics_engine":
-                    import django_mercury._c_metrics as module
-                elif lib_key == "test_orchestrator":
-                    import django_mercury._c_orchestrator as module
-                else:
+                # Import the Python extension module using importlib for better mockability
+                module_map = {
+                    "query_analyzer": "django_mercury._c_analyzer",
+                    "metrics_engine": "django_mercury._c_metrics",
+                    "test_orchestrator": "django_mercury._c_orchestrator",
+                }
+                
+                module_name = module_map.get(lib_key)
+                if not module_name:
                     raise ImportError(f"Unknown library key: {lib_key}")
+                
+                # Use importlib.import_module for mockability in tests
+                import importlib
+                module = importlib.import_module(module_name)
                 
                 # Configure function signatures (for Python modules)
                 function_count = self._configure_library_functions(module, lib_key)
