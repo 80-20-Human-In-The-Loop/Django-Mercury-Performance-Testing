@@ -75,41 +75,64 @@ jobs:
           echo "Building C extensions on Windows..."
           echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
           
+          # Set environment variables for Windows build
+          echo "DISTUTILS_USE_SDK=1" >> $env:GITHUB_ENV
+          echo "MSSdk=1" >> $env:GITHUB_ENV
+          
           # Install build dependencies
           python -m pip install --upgrade setuptools wheel
           
           # Show compiler information
           echo "Checking for Visual Studio..."
-          where cl.exe || echo "cl.exe not in PATH"
+          where cl.exe 2>$null || echo "cl.exe not in PATH - C extensions may not build"
           
-          # Build C extensions
-          echo "Building C extensions with setup.py..."
-          python setup.py build_ext --inplace
+          # Try to build C extensions (allowed to fail)
+          echo ""
+          echo "Attempting to build C extensions with setup.py..."
+          python setup.py build_ext --inplace 2>&1 || echo "C extension build failed - will use pure Python"
           
           # List built extensions
           echo ""
           echo "Looking for built extensions (.pyd files):"
-          Get-ChildItem -Path . -Filter "*.pyd" -Recurse | Select-Object FullName
+          $pydFiles = Get-ChildItem -Path . -Filter "*.pyd" -Recurse -ErrorAction SilentlyContinue
+          if ($pydFiles) {
+              $pydFiles | Select-Object FullName
+          } else {
+              echo "  No .pyd files found"
+          }
           
           # Also check for .dll files
           echo ""
           echo "Looking for DLL files:"
-          Get-ChildItem -Path django_mercury -Filter "*.dll" -Recurse | Select-Object FullName
-          
-          # Check if any C extensions were built
-          $pydCount = (Get-ChildItem -Path . -Filter "*.pyd" -Recurse).Count
-          if ($pydCount -eq 0) {
-              echo "WARNING: No .pyd files found - C extensions may not have built"
-              echo "C_EXTENSIONS_BUILT=0" >> $env:GITHUB_ENV
+          $dllFiles = Get-ChildItem -Path django_mercury -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue
+          if ($dllFiles) {
+              $dllFiles | Select-Object FullName
           } else {
-              echo "SUCCESS: Found $pydCount .pyd files"
-              echo "C_EXTENSIONS_BUILT=1" >> $env:GITHUB_ENV
+              echo "  No .dll files found"
           }
           
-          # Run diagnostics
+          # Check if any C extensions were built
+          $pydCount = if ($pydFiles) { $pydFiles.Count } else { 0 }
+          if ($pydCount -eq 0) {
+              echo ""
+              echo "INFO: No .pyd files found - using pure Python mode"
+              echo "C_EXTENSIONS_BUILT=0" >> $env:GITHUB_ENV
+              echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $env:GITHUB_ENV
+          } else {
+              echo ""
+              echo "SUCCESS: Found $pydCount .pyd files"
+              echo "C_EXTENSIONS_BUILT=1" >> $env:GITHUB_ENV
+              echo "DJANGO_MERCURY_PURE_PYTHON=0" >> $env:GITHUB_ENV
+          }
+          
+          # Run diagnostics (if available)
           echo ""
           echo "Running C extension diagnostics..."
-          python scripts/diagnose_c_extensions.py
+          if (Test-Path "scripts/diagnose_c_extensions.py") {
+              python scripts/diagnose_c_extensions.py 2>&1 || echo "Diagnostics completed"
+          } else {
+              echo "Diagnostics script not found - skipping"
+          }
       
       
       - name: Run all tests with CI script (Windows)

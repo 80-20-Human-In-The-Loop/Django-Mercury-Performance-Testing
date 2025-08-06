@@ -41,6 +41,21 @@ class OptionalBuildExt(build_ext):
             self.extensions = []
             return
         
+        # On Windows, check if we have build tools
+        if sys.platform == 'win32':
+            try:
+                from distutils import msvccompiler
+                from distutils.msvccompiler import get_build_version
+                msvc_ver = get_build_version()
+                if msvc_ver:
+                    print(f"Found MSVC version {msvc_ver}")
+            except Exception as e:
+                print(f"WARNING: MSVC not found: {e}")
+                print("C extensions may not build on Windows without Visual Studio Build Tools")
+                # Set environment variable for CI
+                if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+                    os.environ['C_EXTENSIONS_BUILT'] = '0'
+        
         # Keep track of successfully built extensions
         built_extensions = []
         failed_extensions = []
@@ -50,6 +65,7 @@ class OptionalBuildExt(build_ext):
             try:
                 super().build_extension(ext)
                 built_extensions.append(ext)
+                print(f"Successfully built {ext.name}")
             except Exception as e:
                 print(f"WARNING: Failed to build {ext.name}: {e}")
                 print(f"Skipping {ext.name} - will use pure Python fallback")
@@ -58,6 +74,13 @@ class OptionalBuildExt(build_ext):
         
         # Remove failed extensions from the list so they don't cause copy errors
         self.extensions = built_extensions
+        
+        # Set CI environment variable
+        if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+            if built_extensions:
+                os.environ['C_EXTENSIONS_BUILT'] = '1'
+            else:
+                os.environ['C_EXTENSIONS_BUILT'] = '0'
         
         # If no extensions built successfully, show help message
         if not built_extensions:

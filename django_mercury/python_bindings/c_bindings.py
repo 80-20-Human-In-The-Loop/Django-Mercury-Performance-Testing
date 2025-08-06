@@ -89,7 +89,13 @@ LIBRARY_CONFIG = {
 }
 
 # Platform-specific library extensions
-PLATFORM_EXTENSIONS = {"Linux": ".so", "Darwin": ".dylib", "Windows": ".dll"}
+PLATFORM_EXTENSIONS = {
+    "Linux": ".so", 
+    "Darwin": ".dylib", 
+    "Windows": ".dll",
+    # Windows Python extensions
+    "Windows_Python": ".pyd"
+}
 
 # === DATA STRUCTURES ===
 
@@ -141,9 +147,24 @@ def get_library_paths() -> List[Path]:
         ci_paths = [
             workspace_root / 'django_mercury' / 'python_bindings',
             workspace_root / 'django_mercury' / 'c_core',
-            Path('/home/runner/work') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'python_bindings',
-            Path('/home/runner/work') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'c_core',
+            workspace_root / 'django_mercury',  # Windows might have .pyd files here
         ]
+        
+        # Add platform-specific CI paths
+        if platform.system() == "Windows":
+            # Windows GitHub Actions runner paths
+            ci_paths.extend([
+                Path('D:/a') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'python_bindings',
+                Path('D:/a') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'c_core',
+                Path('D:/a') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury',
+            ])
+        else:
+            # Linux/macOS GitHub Actions runner paths
+            ci_paths.extend([
+                Path('/home/runner/work') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'python_bindings',
+                Path('/home/runner/work') / 'Django-Mercury-Performance-Testing' / 'Django-Mercury-Performance-Testing' / 'django_mercury' / 'c_core',
+            ])
+        
         for path in ci_paths:
             if path.exists() and path not in paths:
                 paths.append(path)
@@ -181,22 +202,38 @@ def get_library_paths() -> List[Path]:
 
 
 def find_library(library_name: str) -> Optional[Path]:
-    """Find a library file in the search paths."""
+    """Find a library file in the search paths.
+    
+    On Windows, tries both .dll and .pyd extensions.
+    On other platforms, uses platform-specific extension.
+    """
     # Handle platform-specific extensions
     system = platform.system()
-    if system in PLATFORM_EXTENSIONS:
-        base_name = library_name.rsplit(".", 1)[0]
-        extension = PLATFORM_EXTENSIONS[system]
-        library_name = f"{base_name}{extension}"
-
-    # Search all paths
+    base_name = library_name.rsplit(".", 1)[0]
+    
+    # On Windows, try both .dll and .pyd
+    if system == "Windows":
+        extensions_to_try = [".dll", ".pyd"]
+    elif system in PLATFORM_EXTENSIONS:
+        extensions_to_try = [PLATFORM_EXTENSIONS[system]]
+    else:
+        # Fallback - try the original name
+        extensions_to_try = [""]
+    
+    # Search all paths with all extensions
     for search_path in get_library_paths():
-        library_path = search_path / library_name
-        if library_path.exists() and library_path.is_file():
-            logger.debug(f"Found library: {library_path}")
-            return library_path
+        for extension in extensions_to_try:
+            if extension:
+                library_file = f"{base_name}{extension}"
+            else:
+                library_file = library_name
+            
+            library_path = search_path / library_file
+            if library_path.exists() and library_path.is_file():
+                logger.debug(f"Found library: {library_path}")
+                return library_path
 
-    logger.debug(f"Library not found: {library_name}")
+    logger.debug(f"Library not found: {library_name} (tried extensions: {extensions_to_try})")
     return None
 
 

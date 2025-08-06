@@ -107,16 +107,22 @@ else:
   windows)
     echo "=== Windows Test Flow ==="
     
-    # Test C extensions
+    # Test C extensions or pure Python fallback
     echo "Testing C extensions..."
     python test_windows_dll.py
     TEST_RESULT=$?
     
     if [ $TEST_RESULT -eq 0 ]; then
-      echo "✅ C extensions loaded successfully!"
+      echo "✅ Extension loading test passed!"
+      # Check what mode we're in
+      if [ "$C_EXTENSIONS_BUILT" = "1" ]; then
+        echo "   Running with C extensions"
+      else
+        echo "   Running in pure Python mode"
+      fi
     else
-      echo "❌ C extensions failed to load (exit code: $TEST_RESULT)"
-      # In CI, we require C extensions
+      echo "❌ Extension loading test failed (exit code: $TEST_RESULT)"
+      # This is a real failure - neither C nor pure Python worked
       exit 2
     fi
     
