@@ -667,6 +667,19 @@ def setup_test_environment():
     init_file = tests_dir / "__init__.py"
     if not init_file.exists():
         init_file.write_text("# Performance Testing Framework Tests\n")
+    
+    # Initialize C extensions if deferred initialization is enabled
+    if os.environ.get("MERCURY_DEFER_INIT", "0") == "1":
+        try:
+            from django_mercury.python_bindings import c_bindings
+            success = c_bindings.initialize_c_extensions()
+            if success:
+                print("✅ C extensions initialized successfully for test suite")
+            else:
+                print("⚠️  C extensions not available - using pure Python mode")
+        except Exception as e:
+            print(f"⚠️  Failed to initialize C extensions: {e}")
+            print("    Tests will run in pure Python mode")
 
 
 def main():

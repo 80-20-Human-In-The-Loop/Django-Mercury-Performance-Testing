@@ -200,6 +200,12 @@ def main():
     if imports.get('c_bindings'):
         from django_mercury.python_bindings import c_bindings
         
+        # Initialize C extensions if deferred initialization is enabled
+        if os.environ.get("MERCURY_DEFER_INIT", "0") == "1":
+            print("  Initializing C extensions (MERCURY_DEFER_INIT=1)...")
+            init_success = c_bindings.initialize_c_extensions()
+            print(f"  Initialization result: {init_success}")
+        
         available = c_bindings.are_c_extensions_available()
         pure_python = c_bindings.is_pure_python_mode()
         

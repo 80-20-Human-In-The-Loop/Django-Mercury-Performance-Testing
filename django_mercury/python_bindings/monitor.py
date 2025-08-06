@@ -49,21 +49,47 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Use unified C extension system instead of direct library loading
-lib = None
+# Lazy initialization to support MERCURY_DEFER_INIT mode
+_lib = None
+_lib_initialized = False
 
-try:
-    if C_EXTENSIONS_AVAILABLE and c_extensions:
-        # Use the unified metrics_engine library
-        if c_extensions.metrics_engine:
-            lib = c_extensions.metrics_engine
-            logger.debug("Using metrics engine C library for performance monitoring")
+def _get_lib():
+    """Get the C library handle with lazy initialization."""
+    global _lib, _lib_initialized
+    
+    if _lib_initialized:
+        return _lib
+    
+    _lib_initialized = True
+    
+    try:
+        if C_EXTENSIONS_AVAILABLE and c_extensions:
+            # Check if we need to initialize (for deferred mode)
+            import os
+            if os.environ.get("MERCURY_DEFER_INIT", "0") == "1":
+                # In deferred mode, check if extensions are available
+                from .c_bindings import are_c_extensions_available
+                if not are_c_extensions_available():
+                    # Extensions not yet initialized, will use fallback
+                    logger.debug("C extensions not yet initialized (MERCURY_DEFER_INIT=1)")
+                    return None
+            
+            # Use the unified metrics_engine library
+            if c_extensions.metrics_engine:
+                _lib = c_extensions.metrics_engine
+                logger.debug("Using metrics engine C library for performance monitoring")
+            else:
+                logger.debug("Metrics engine not available, using fallback")
         else:
-            logger.info("C extensions loaded but metrics engine not available")
-    else:
-        logger.debug("C extensions not available, using fallback mode")
-except Exception as e:
-    logger.error(f"Failed to initialize C performance library: {e}")
-    logger.warning("Performance monitoring will run in degraded mode without C optimizations")
+            logger.debug("C extensions not available, using fallback mode")
+    except Exception as e:
+        logger.error(f"Failed to initialize C performance library: {e}")
+        logger.warning("Performance monitoring will run in degraded mode without C optimizations")
+    
+    return _lib
+
+# For backwards compatibility
+lib = None  # Will be set on first use
 
 class MockLib:
     """Mock C library for fallback when C extensions are not available."""
@@ -109,80 +135,91 @@ class EnhancedPerformanceMetrics(ctypes.Structure):
     ]
 
 
-if not isinstance(lib, MockLib):
+_lib_configured = False
+
+def _configure_lib_signatures(lib_handle):
+    """Configure C library function signatures."""
+    global _lib_configured
+    
+    if _lib_configured or lib_handle is None or isinstance(lib_handle, MockLib):
+        return
+    
+    _lib_configured = True
+    
     try:
         # C function signatures - only configure for real C libraries
-        lib.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-        lib.start_performance_monitoring_enhanced.restype = ctypes.c_int64
+        lib_handle.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib_handle.start_performance_monitoring_enhanced.restype = ctypes.c_int64
 
-        lib.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
-        lib.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(EnhancedPerformanceMetrics)
+        lib_handle.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
+        lib_handle.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(EnhancedPerformanceMetrics)
 
-        lib.get_elapsed_time_ms.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_elapsed_time_ms.restype = ctypes.c_double
+        lib_handle.get_elapsed_time_ms.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_elapsed_time_ms.restype = ctypes.c_double
 
-        lib.get_memory_usage_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_memory_usage_mb.restype = ctypes.c_double
+        lib_handle.get_memory_usage_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_memory_usage_mb.restype = ctypes.c_double
 
-        lib.get_memory_delta_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_memory_delta_mb.restype = ctypes.c_double
+        lib_handle.get_memory_delta_mb.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_memory_delta_mb.restype = ctypes.c_double
 
-        lib.get_query_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_query_count.restype = ctypes.c_uint32
+        lib_handle.get_query_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_query_count.restype = ctypes.c_uint32
 
-        lib.get_cache_hit_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_cache_hit_count.restype = ctypes.c_uint32
+        lib_handle.get_cache_hit_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_cache_hit_count.restype = ctypes.c_uint32
 
-        lib.get_cache_miss_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_cache_miss_count.restype = ctypes.c_uint32
+        lib_handle.get_cache_miss_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_cache_miss_count.restype = ctypes.c_uint32
 
-        lib.get_cache_hit_ratio.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_cache_hit_ratio.restype = ctypes.c_double
+        lib_handle.get_cache_hit_ratio.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_cache_hit_ratio.restype = ctypes.c_double
 
-        lib.has_n_plus_one_pattern.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.has_n_plus_one_pattern.restype = ctypes.c_int
+        lib_handle.has_n_plus_one_pattern.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.has_n_plus_one_pattern.restype = ctypes.c_int
 
-        lib.detect_n_plus_one_severe.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.detect_n_plus_one_severe.restype = ctypes.c_int
+        lib_handle.detect_n_plus_one_severe.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.detect_n_plus_one_severe.restype = ctypes.c_int
 
-        lib.detect_n_plus_one_moderate.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.detect_n_plus_one_moderate.restype = ctypes.c_int
+        lib_handle.detect_n_plus_one_moderate.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.detect_n_plus_one_moderate.restype = ctypes.c_int
 
-        lib.detect_n_plus_one_pattern_by_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.detect_n_plus_one_pattern_by_count.restype = ctypes.c_int
+        lib_handle.detect_n_plus_one_pattern_by_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.detect_n_plus_one_pattern_by_count.restype = ctypes.c_int
 
-        lib.calculate_n_plus_one_severity.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.calculate_n_plus_one_severity.restype = ctypes.c_int
+        lib_handle.calculate_n_plus_one_severity.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.calculate_n_plus_one_severity.restype = ctypes.c_int
 
-        lib.estimate_n_plus_one_cause.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.estimate_n_plus_one_cause.restype = ctypes.c_int
+        lib_handle.estimate_n_plus_one_cause.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.estimate_n_plus_one_cause.restype = ctypes.c_int
 
-        lib.get_n_plus_one_fix_suggestion.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.get_n_plus_one_fix_suggestion.restype = ctypes.c_char_p
+        lib_handle.get_n_plus_one_fix_suggestion.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_n_plus_one_fix_suggestion.restype = ctypes.c_char_p
 
-        lib.is_memory_intensive.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.is_memory_intensive.restype = ctypes.c_int
+        lib_handle.is_memory_intensive.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.is_memory_intensive.restype = ctypes.c_int
 
-        lib.has_poor_cache_performance.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.has_poor_cache_performance.restype = ctypes.c_int
+        lib_handle.has_poor_cache_performance.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.has_poor_cache_performance.restype = ctypes.c_int
 
         # Django hook functions
-        lib.increment_query_count.argtypes = []
-        lib.increment_query_count.restype = None
+        lib_handle.increment_query_count.argtypes = []
+        lib_handle.increment_query_count.restype = None
 
-        lib.increment_cache_hits.argtypes = []
-        lib.increment_cache_hits.restype = None
+        lib_handle.increment_cache_hits.argtypes = []
+        lib_handle.increment_cache_hits.restype = None
 
-        lib.increment_cache_misses.argtypes = []
-        lib.increment_cache_misses.restype = None
+        lib_handle.increment_cache_misses.argtypes = []
+        lib_handle.increment_cache_misses.restype = None
 
-        lib.reset_global_counters.argtypes = []
-        lib.reset_global_counters.restype = None
+        lib_handle.reset_global_counters.argtypes = []
+        lib_handle.reset_global_counters.restype = None
 
         # Define free_metrics function signature - CRITICAL for preventing segfaults
-        lib.free_metrics.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
-        lib.free_metrics.restype = None
+        lib_handle.free_metrics.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.free_metrics.restype = None
 
+        logger.debug("C library function signatures configured successfully")
     except AttributeError as e:
         # Functions not available in C library - provide fallbacks
         logger.warning(f"Enhanced performance monitoring functions not available in C library: {e}")
@@ -1197,6 +1234,13 @@ class EnhancedPerformanceMonitor:
             operation_name: Name of the operation being monitored
             operation_type: Type of operation (view, model, serializer, query)
         """
+        global lib
+        # Initialize lib on first use
+        if lib is None:
+            lib = _get_lib()
+            if lib:
+                _configure_lib_signatures(lib)
+        
         self.operation_name = operation_name
         self.operation_type = operation_type
         self.handle: Optional[int] = None

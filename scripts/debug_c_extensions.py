@@ -197,12 +197,21 @@ def test_django_mercury_import() -> Tuple[bool, str]:
         from django_mercury.python_bindings.loader import (
             check_c_extensions, get_implementation_info
         )
+        from django_mercury.python_bindings import c_bindings
+        
+        # Initialize C extensions if deferred initialization is enabled
+        if os.environ.get("MERCURY_DEFER_INIT", "0") == "1":
+            init_success = c_bindings.initialize_c_extensions()
+            init_msg = f"  Deferred initialization: {'Success' if init_success else 'Failed'}\n"
+        else:
+            init_msg = ""
         
         # Check C extensions
         available, details = check_c_extensions()
         info = get_implementation_info()
         
         result = f"Django Mercury imported successfully\n"
+        result += init_msg
         result += f"  Version: {getattr(django_mercury, '__version__', 'unknown')}\n"
         result += f"  C Extensions Available: {available}\n"
         result += f"  Implementation Type: {info.get('type', 'unknown')}\n"

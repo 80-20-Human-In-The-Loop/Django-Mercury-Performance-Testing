@@ -72,21 +72,6 @@ case $PLATFORM in
     fi
     
     echo ""
-    echo "=== Initializing C Extensions for Test Suite ==="
-    # Initialize C extensions once before running all tests
-    python -c "
-import sys
-sys.path.insert(0, '.')
-from django_mercury.python_bindings import c_bindings
-success = c_bindings.initialize_c_extensions()
-if success:
-    print('✅ C extensions initialized successfully for test suite')
-else:
-    print('❌ Failed to initialize C extensions')
-    sys.exit(1)
-" || exit 2
-    
-    echo ""
     echo "=== Running Python Tests ==="
     if ! python test_runner.py --coverage --ci; then
       echo "❌ ERROR: Python tests failed!"

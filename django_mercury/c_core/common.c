@@ -575,11 +575,11 @@ static void compute_good_suffix_table(const char* pattern, size_t pattern_len, i
     if (!suffix) return;
     
     // Compute suffix array
-    suffix[pattern_len - 1] = pattern_len;
-    int g = pattern_len - 1;
+    suffix[pattern_len - 1] = (int)pattern_len;
+    int g = (int)pattern_len - 1;
     int f = 0;
     
-    for (int i = pattern_len - 2; i >= 0; i--) {
+    for (int i = (int)pattern_len - 2; i >= 0; i--) {
         if (i > g && suffix[i + pattern_len - 1 - f] < i - g) {
             suffix[i] = suffix[i + pattern_len - 1 - f];
         } else {
@@ -594,22 +594,22 @@ static void compute_good_suffix_table(const char* pattern, size_t pattern_len, i
     
     // Compute good suffix table
     for (size_t i = 0; i < pattern_len; i++) {
-        good_suffix_table[i] = pattern_len;
+        good_suffix_table[i] = (int)pattern_len;
     }
     
     int j = 0;
-    for (int i = pattern_len - 1; i >= 0; i--) {
+    for (int i = (int)pattern_len - 1; i >= 0; i--) {
         if (suffix[i] == i + 1) {
             for (; j < (int)(pattern_len - 1 - i); j++) {
                 if (good_suffix_table[j] == (int)pattern_len) {
-                    good_suffix_table[j] = pattern_len - 1 - i;
+                    good_suffix_table[j] = (int)pattern_len - 1 - i;
                 }
             }
         }
     }
     
     for (size_t i = 0; i <= pattern_len - 2; i++) {
-        good_suffix_table[pattern_len - 1 - suffix[i]] = pattern_len - 1 - i;
+        good_suffix_table[pattern_len - 1 - suffix[i]] = (int)(pattern_len - 1 - i);
     }
     
     free(suffix);
@@ -1292,8 +1292,20 @@ MercuryMultiPatternSearch* mercury_multi_pattern_create(const char* patterns[], 
         }
         
         // Copy pattern safely with bounds checking
+        #ifdef _MSC_VER
+        // Use Windows-safe version
+        strncpy_s(mps->patterns[i], MERCURY_MAX_PATTERN_LENGTH, patterns[i], MERCURY_MAX_PATTERN_LENGTH - 1);
+        #else
+        // POSIX version
+        #ifdef _MSC_VER
+        // Use Windows-safe version
+        strncpy_s(mps->patterns[i], MERCURY_MAX_PATTERN_LENGTH, patterns[i], MERCURY_MAX_PATTERN_LENGTH - 1);
+        #else
+        // POSIX version
         strncpy(mps->patterns[i], patterns[i], MERCURY_MAX_PATTERN_LENGTH - 1);
         mps->patterns[i][MERCURY_MAX_PATTERN_LENGTH - 1] = '\0';  // Ensure null termination
+        #endif
+        #endif
         mps->pattern_lengths[i] = len;
         mps->first_chars[i] = (uint8_t)patterns[i][0];
         
@@ -1393,8 +1405,14 @@ MercuryMultiPatternSearch* mercury_multi_pattern_create(const char* patterns[], 
             return NULL;
         }
         
+        #ifdef _MSC_VER
+        // Use Windows-safe version
+        strncpy_s(mps->patterns[i], MERCURY_MAX_PATTERN_LENGTH, patterns[i], MERCURY_MAX_PATTERN_LENGTH - 1);
+        #else
+        // POSIX version
         strncpy(mps->patterns[i], patterns[i], MERCURY_MAX_PATTERN_LENGTH - 1);
         mps->patterns[i][MERCURY_MAX_PATTERN_LENGTH - 1] = '\0';  // Ensure null termination
+        #endif
         mps->pattern_lengths[i] = len;
         mps->first_chars[i] = (uint8_t)patterns[i][0];
         
