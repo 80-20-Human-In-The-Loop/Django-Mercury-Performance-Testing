@@ -266,6 +266,9 @@ test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
 manylinux-x86_64-image = "manylinux2014"
 manylinux-aarch64-image = "manylinux2014"
 
+# Environment variables - ensure CIBUILDWHEEL is set
+environment = {CIBUILDWHEEL="1", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
+
 # Install system dependencies for C compilation
 # Note: libunwind is NOT installed for manylinux compatibility
 before-all = [
@@ -280,7 +283,7 @@ before-all = [
 archs = ["x86_64", "arm64", "universal2"]
 
 # Set deployment target for compatibility
-environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
+environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING="1", CIBUILDWHEEL="1"}
 
 # Windows-specific configuration
 [tool.cibuildwheel.windows]
@@ -288,7 +291,7 @@ environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING=
 archs = ["AMD64"]
 
 # Environment variables for Windows - enable C extensions
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0", CIBUILDWHEEL="1"}
 
 # Install Visual Studio Build Tools components and dependencies
 before-all = [
