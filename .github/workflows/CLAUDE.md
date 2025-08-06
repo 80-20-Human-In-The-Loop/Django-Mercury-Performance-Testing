@@ -139,9 +139,9 @@ setup(
 
 ## Critical Lessons Learned
 
-### Lesson 1: The CIBUILDWHEEL Environment Variable
+### Lesson 1: The CIBUILDWHEEL Environment Variable Trap
 
-**The Problem**: Your setup.py checks for `CIBUILDWHEEL` to avoid linking libunwind, but pyproject.toml doesn't set it!
+**The Problem**: Your setup.py checks for `CIBUILDWHEEL` to avoid linking libunwind, but setting it globally isn't enough!
 
 ```python
 # setup.py
@@ -149,12 +149,27 @@ if os.environ.get('CIBUILDWHEEL', '0') != '1':
     libraries.append('unwind')  # Not manylinux compliant!
 ```
 
-**The Fix**:
+**The Initial (Wrong) Fix**:
 ```toml
-# pyproject.toml
+# pyproject.toml - DOESN'T WORK!
 [tool.cibuildwheel]
-environment = {CIBUILDWHEEL="1", ...}  # MUST set this!
+environment = {CIBUILDWHEEL="1", ...}  # Global setting gets overridden!
 ```
+
+**The Real Fix - Set in EVERY Platform Section**:
+```toml
+# pyproject.toml - Platform-specific settings override global!
+[tool.cibuildwheel.linux]
+environment = {CIBUILDWHEEL="1", ...}  # MUST set for Linux
+
+[tool.cibuildwheel.macos]
+environment = {CIBUILDWHEEL="1", MACOSX_DEPLOYMENT_TARGET="10.9", ...}  # MUST set for macOS
+
+[tool.cibuildwheel.windows]
+environment = {CIBUILDWHEEL="1", DJANGO_MERCURY_PURE_PYTHON="0", ...}  # MUST set for Windows
+```
+
+**Why This Happens**: Platform-specific `environment` settings completely override global ones, they don't merge!
 
 ### Lesson 2: macOS .dylib vs .so
 
@@ -318,11 +333,26 @@ PLATFORM_EXTENSIONS = {
 
 **Cause**: Linking against non-manylinux libraries (e.g., libunwind)
 
-**Fix**: Set CIBUILDWHEEL=1 in environment:
+**Wrong Fix** (doesn't work):
 ```toml
 [tool.cibuildwheel]
-environment = {CIBUILDWHEEL="1"}
+environment = {CIBUILDWHEEL="1"}  # Global setting gets overridden!
 ```
+
+**Correct Fix** - Set in platform-specific section:
+```toml
+[tool.cibuildwheel.linux]
+environment = {CIBUILDWHEEL="1", ...}  # Linux needs its own environment section!
+
+# Also set for other platforms to be consistent
+[tool.cibuildwheel.macos]
+environment = {CIBUILDWHEEL="1", ...}
+
+[tool.cibuildwheel.windows]
+environment = {CIBUILDWHEEL="1", ...}
+```
+
+**Key Insight**: Platform-specific environment settings override global ones completely!
 
 ### Error: "setup() arguments must be /-separated paths"
 
@@ -497,7 +527,3 @@ This architecture ensures that:
 - Fallbacks exist for unsupported platforms
 - Testing covers all platform combinations
 - Deployment is reliable and repeatable
-
----
-
-*Built through trial, error, and a lot of CI runs. May your builds be green and your wheels be round.*

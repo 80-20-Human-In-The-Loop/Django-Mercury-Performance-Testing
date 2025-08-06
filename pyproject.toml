@@ -275,7 +275,19 @@ before-all = [
     "yum install -y gcc make python3-devel || apt-get update && apt-get install -y build-essential python3-dev || true",
     "python -m pip install --upgrade pip setuptools wheel",
     "python -c \"import sys; print(f'Python: {sys.version}')\"",
+    # Check if libunwind is available in the system
+    "ldconfig -p | grep unwind || echo 'No libunwind found in system (good for manylinux compliance!)'",
 ]
+
+# Pre-build: verify environment variables are set correctly
+before-build = [
+    "echo 'CIBUILDWHEEL env var:' $CIBUILDWHEEL",
+    "python -c \"import os; print('CIBUILDWHEEL from Python:', os.environ.get('CIBUILDWHEEL', 'NOT SET'))\"",
+    "python -m pip install --upgrade pip setuptools wheel",
+]
+
+# Repair command with verbose output for debugging
+repair-wheel-command = "auditwheel show {wheel} && auditwheel repair -v -w {dest_dir} {wheel}"
 
 # macOS-specific configuration  
 [tool.cibuildwheel.macos]
