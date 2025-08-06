@@ -45,15 +45,25 @@ echo ""
 case $PLATFORM in
   linux|macos)
     echo "=== Building C Extensions ==="
-    cd django_mercury/c_core
     
-    # Clean and build
+    # Build raw .so libraries using Makefile (for c_bindings.py)
+    echo "Building raw C libraries..."
+    cd django_mercury/c_core
     if ! make ci; then
       echo "❌ ERROR: C library build failed!"
       exit 1
     fi
-    
     cd "$PROJECT_ROOT"
+    
+    # Also build Python extensions for loader.py tests
+    echo "Building Python extension modules..."
+    if python setup.py build_ext --inplace 2>&1; then
+      echo "✅ Python extensions built successfully"
+      # List the built extensions
+      find . -name "_c_*.cpython*.so" -o -name "_c_*.so" | head -10
+    else
+      echo "⚠️  Python extensions build failed - loader.py will use pure Python fallback"
+    fi
     
     echo ""
     echo "=== Verifying Build ==="

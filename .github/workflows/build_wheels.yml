@@ -101,15 +101,12 @@ jobs:
               echo "  No .pyd files found"
           }
           
-          # Also check for .dll files
+          # Explain Windows Python extension format
           echo ""
-          echo "Looking for DLL files:"
-          $dllFiles = Get-ChildItem -Path django_mercury -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue
-          if ($dllFiles) {
-              $dllFiles | Select-Object FullName
-          } else {
-              echo "  No .dll files found"
-          }
+          echo "NOTE: On Windows, Python C extensions use .pyd files (Python Dynamic modules)"
+          echo "      These are the Windows equivalent of .so files on Linux"
+          echo "      Finding .pyd files means the C extensions built successfully!"
+          echo "      (Traditional .dll files are not used for Python extensions)"
           
           # Check if any C extensions were built
           $pydCount = if ($pydFiles) { $pydFiles.Count } else { 0 }

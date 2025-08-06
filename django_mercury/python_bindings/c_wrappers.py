@@ -57,7 +57,7 @@ class CPerformanceMonitor:
             import django_mercury._c_performance as c_performance
             self._monitor = c_performance.PerformanceMonitor()
             self._using_fallback = False
-        except ImportError:
+        except (ImportError, AttributeError) as e:
             # Fall back to pure Python implementation
             from .pure_python import PythonPerformanceMonitor
             self._monitor = PythonPerformanceMonitor()

@@ -150,7 +150,8 @@ def get_c_extensions():
             '-std=c99',
         ]
         link_args = []
-        libraries = ['m']  # Math library only
+        # Link with math and unwind libraries (unwind needed for stack traces in metrics_engine.c)
+        libraries = ['m', 'unwind']
     
     # Check if we're building in cibuildwheel
     if os.environ.get('CIBUILDWHEEL', '0') == '1':
@@ -166,6 +167,18 @@ def get_c_extensions():
     
     # Define extensions
     extensions = [
+        Extension(
+            name='django_mercury._c_performance',
+            sources=[
+                'django_mercury/c_core/performance_wrapper.c',  # Python wrapper for performance monitor
+            ] + common_sources,
+            include_dirs=include_dirs,
+            libraries=libraries,
+            extra_compile_args=compile_args,
+            extra_link_args=link_args,
+            language='c',
+            define_macros=[('BUILDING_MERCURY_DLL', 1)] if sys.platform == 'win32' else [],
+        ),
         Extension(
             name='django_mercury._c_metrics',
             sources=[
