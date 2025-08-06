@@ -262,21 +262,23 @@ test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
 
 # Linux-specific configuration
 [tool.cibuildwheel.linux]
-# Use manylinux2014 for broad compatibility
-manylinux-x86_64-image = "manylinux2014"
-manylinux-aarch64-image = "manylinux2014"
+# Use manylinux2014 for broad compatibility - must specify full image path
+manylinux-x86_64-image = "quay.io/pypa/manylinux2014_x86_64"
+manylinux-i686-image = "quay.io/pypa/manylinux2014_i686"
+manylinux-aarch64-image = "quay.io/pypa/manylinux2014_aarch64"
 
 # Environment variables - ensure CIBUILDWHEEL is set
 environment = {CIBUILDWHEEL="1", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
 
-# Install system dependencies for C compilation
+# Install system dependencies for C compilation in manylinux container
 # Note: libunwind is NOT installed for manylinux compatibility
 before-all = [
-    "yum install -y gcc make python3-devel || apt-get update && apt-get install -y build-essential python3-dev || true",
+    "yum install -y gcc make",  # Only use yum - we're in manylinux container
     "python -m pip install --upgrade pip setuptools wheel",
     "python -c \"import sys; print(f'Python: {sys.version}')\"",
-    # Check if libunwind is available in the system
-    "ldconfig -p | grep unwind || echo 'No libunwind found in system (good for manylinux compliance!)'",
+    # Verify we're in manylinux container
+    "cat /etc/redhat-release || echo 'Not in RHEL-based container'",
+    "ldconfig -p | grep 'libc.so.6' | head -1",  # Show GLIBC version
 ]
 
 # Pre-build: verify environment variables are set correctly
