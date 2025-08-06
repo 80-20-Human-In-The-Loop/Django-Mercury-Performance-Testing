@@ -123,6 +123,23 @@
     #define MERCURY_ATOMIC(type) _Atomic(type)
 #endif
 
+// Thread synchronization primitives
+#ifdef _WIN32
+    #include <windows.h>
+    typedef CRITICAL_SECTION mercury_mutex_t;
+    #define MERCURY_MUTEX_INIT(mutex) InitializeCriticalSection(&(mutex))
+    #define MERCURY_MUTEX_LOCK(mutex) EnterCriticalSection(&(mutex))
+    #define MERCURY_MUTEX_UNLOCK(mutex) LeaveCriticalSection(&(mutex))
+    #define MERCURY_MUTEX_DESTROY(mutex) DeleteCriticalSection(&(mutex))
+#else
+    #include <pthread.h>
+    typedef pthread_mutex_t mercury_mutex_t;
+    #define MERCURY_MUTEX_INIT(mutex) pthread_mutex_init(&(mutex), NULL)
+    #define MERCURY_MUTEX_LOCK(mutex) pthread_mutex_lock(&(mutex))
+    #define MERCURY_MUTEX_UNLOCK(mutex) pthread_mutex_unlock(&(mutex))
+    #define MERCURY_MUTEX_DESTROY(mutex) pthread_mutex_destroy(&(mutex))
+#endif
+
 // Compiler attributes for optimization
 #ifdef __GNUC__
     #define MERCURY_INLINE __attribute__((always_inline)) inline
