@@ -72,6 +72,13 @@ def get_c_extensions():
         compile_args.append('-DMERCURY_HAS_LIBUNWIND=0')
         if not sys.platform.startswith('win'):
             compile_args.append('-pthread')
+            # Prevent GCC from using newer GLIBC memcpy symbols
+            compile_args.extend([
+                '-fno-builtin-memcpy',
+                '-fno-builtin-memmove',
+                '-fno-builtin-memset',
+                '-fno-builtin-memcmp'
+            ])
     else:
         # Normal builds - link libraries as needed
         libraries = ['m']  # Math library
@@ -105,15 +112,10 @@ def get_c_extensions():
     # Define extensions
     extensions = []
     
-    # Add GLIBC compatibility file for Linux manylinux builds
-    base_sources = []
-    if sys.platform.startswith('linux') and os.environ.get('CIBUILDWHEEL', '0') == '1':
-        base_sources.append('django_mercury/c_core/glibc_compat.c')
-    
     # Performance monitor wrapper (minimal functionality)
     extensions.append(Extension(
         'django_mercury._c_performance',
-        sources=base_sources + [
+        sources=[
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/performance_wrapper.c',
         ],
@@ -126,7 +128,7 @@ def get_c_extensions():
     # Metrics engine wrapper
     extensions.append(Extension(
         'django_mercury._c_metrics',
-        sources=base_sources + [
+        sources=[
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/metrics_engine.c',
             'django_mercury/c_core/metrics_wrapper.c',
@@ -140,7 +142,7 @@ def get_c_extensions():
     # Query analyzer wrapper
     extensions.append(Extension(
         'django_mercury._c_analyzer',
-        sources=base_sources + [
+        sources=[
             'django_mercury/c_core/analyzer_wrapper.c',
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/query_analyzer.c',
@@ -154,7 +156,7 @@ def get_c_extensions():
     # Test orchestrator wrapper
     extensions.append(Extension(
         'django_mercury._c_orchestrator',
-        sources=base_sources + [
+        sources=[
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/orchestrator_wrapper.c',
             'django_mercury/c_core/test_orchestrator.c',
