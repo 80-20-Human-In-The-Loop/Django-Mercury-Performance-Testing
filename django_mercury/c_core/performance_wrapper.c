@@ -5,7 +5,7 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include <time.h>
+#include "common.h"  /* Includes windows_compat.h for cross-platform time functions */
 #include <string.h>
 
 /* Performance Monitor Structure */
