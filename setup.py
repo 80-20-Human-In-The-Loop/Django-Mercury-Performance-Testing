@@ -112,23 +112,37 @@ def get_c_extensions():
     # Define extensions
     extensions = []
     
+    # Add GLIBC compatibility wrapper for Linux manylinux builds
+    extra_link_args = []
+    base_sources = []
+    if sys.platform.startswith('linux') and os.environ.get('CIBUILDWHEEL', '0') == '1':
+        base_sources.append('django_mercury/c_core/glibc_compat.c')
+        # Use linker wrapping to redirect memcpy calls
+        extra_link_args = [
+            '-Wl,--wrap=memcpy',
+            '-Wl,--wrap=memmove',
+            '-Wl,--wrap=memset',
+            '-Wl,--wrap=memcmp'
+        ]
+    
     # Performance monitor wrapper (minimal functionality)
     extensions.append(Extension(
         'django_mercury._c_performance',
-        sources=[
+        sources=base_sources + [
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/performance_wrapper.c',
         ],
         include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
+        extra_link_args=extra_link_args,
         language='c'
     ))
     
     # Metrics engine wrapper
     extensions.append(Extension(
         'django_mercury._c_metrics',
-        sources=[
+        sources=base_sources + [
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/metrics_engine.c',
             'django_mercury/c_core/metrics_wrapper.c',
@@ -136,13 +150,14 @@ def get_c_extensions():
         include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
+        extra_link_args=extra_link_args,
         language='c'
     ))
     
     # Query analyzer wrapper
     extensions.append(Extension(
         'django_mercury._c_analyzer',
-        sources=[
+        sources=base_sources + [
             'django_mercury/c_core/analyzer_wrapper.c',
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/query_analyzer.c',
@@ -150,13 +165,14 @@ def get_c_extensions():
         include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
+        extra_link_args=extra_link_args,
         language='c'
     ))
     
     # Test orchestrator wrapper
     extensions.append(Extension(
         'django_mercury._c_orchestrator',
-        sources=[
+        sources=base_sources + [
             'django_mercury/c_core/common.c',
             'django_mercury/c_core/orchestrator_wrapper.c',
             'django_mercury/c_core/test_orchestrator.c',
@@ -164,6 +180,7 @@ def get_c_extensions():
         include_dirs=['django_mercury/c_core', '/usr/include', '/usr/local/include'],
         libraries=libraries,
         extra_compile_args=compile_args,
+        extra_link_args=extra_link_args,
         language='c'
     ))
     

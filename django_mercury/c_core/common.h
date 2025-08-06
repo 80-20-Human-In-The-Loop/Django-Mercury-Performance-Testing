@@ -19,16 +19,8 @@
 #ifndef MERCURY_COMMON_H
 #define MERCURY_COMMON_H
 
-/* GLIBC compatibility for manylinux2014 - MUST be before any includes */
-#if defined(__linux__) && defined(__GNUC__) && !defined(_WIN32)
-/* Force older GLIBC symbol versions for manylinux2014 compatibility
- * This prevents GCC from using GLIBC 2.33/2.34 memcpy symbols
- * when optimizing string operations */
-__asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
-__asm__(".symver memmove,memmove@GLIBC_2.2.5");
-__asm__(".symver memset,memset@GLIBC_2.2.5");
-__asm__(".symver memcmp,memcmp@GLIBC_2.2.5");
-#endif
+/* GLIBC compatibility note: manylinux2014 compatibility is handled
+ * via linker wrapping in setup.py when CIBUILDWHEEL=1 */
 
 /* Define feature test macros BEFORE any includes */
 #ifndef _GNU_SOURCE
