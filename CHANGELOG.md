@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Build Verification**: Added scripts to verify C extension loading across platforms
 - **Documentation**: Added CLAUDE.md files for architecture documentation
 - **Git Configuration**: Added .gitattributes for better cross-platform compatibility
+- **PyPI Deployment**: Fixed twine validation error by upgrading setuptools to handle metadata correctly
 
 ## [0.0.2] - 2025-08-03
 
