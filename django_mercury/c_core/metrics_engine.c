@@ -39,26 +39,31 @@
 #endif
 
 // Conditional includes for stack unwinding
-#ifdef MERCURY_LINUX
-    // Check if libunwind is available
-    #ifdef __has_include
-        #if __has_include(<libunwind.h>)
-            #define UNW_LOCAL_ONLY
-            #include <libunwind.h>
-            #include <dlfcn.h>
-            #define MERCURY_HAS_LIBUNWIND 1
+// Check if MERCURY_HAS_LIBUNWIND was set by the build system
+#ifndef MERCURY_HAS_LIBUNWIND
+    // If not set by build system, auto-detect
+    #ifdef MERCURY_LINUX
+        // Check if libunwind is available
+        #ifdef __has_include
+            #if __has_include(<libunwind.h>)
+                #define MERCURY_HAS_LIBUNWIND 1
+            #else
+                #define MERCURY_HAS_LIBUNWIND 0
+            #endif
         #else
-            #define MERCURY_HAS_LIBUNWIND 0
+            // Assume libunwind is available on Linux (fallback)
+            #define MERCURY_HAS_LIBUNWIND 1
         #endif
     #else
-        // Assume libunwind is available on Linux (fallback)
-        #define UNW_LOCAL_ONLY
-        #include <libunwind.h>
-        #include <dlfcn.h>
-        #define MERCURY_HAS_LIBUNWIND 1
+        #define MERCURY_HAS_LIBUNWIND 0
     #endif
-#else
-    #define MERCURY_HAS_LIBUNWIND 0
+#endif
+
+// Include libunwind headers if available
+#if MERCURY_HAS_LIBUNWIND
+    #define UNW_LOCAL_ONLY
+    #include <libunwind.h>
+    #include <dlfcn.h>
 #endif
 
 // === CONSTANTS ===

@@ -150,8 +150,18 @@ def get_c_extensions():
             '-std=c99',
         ]
         link_args = []
-        # Link with math and unwind libraries (unwind needed for stack traces in metrics_engine.c)
-        libraries = ['m', 'unwind']
+        # Default libraries - math is always needed
+        libraries = ['m']
+        
+        # Only link with libunwind if not in cibuildwheel (for manylinux compatibility)
+        # libunwind is not part of the manylinux standard
+        if os.environ.get('CIBUILDWHEEL', '0') != '1':
+            # Local builds can use libunwind for stack traces
+            libraries.append('unwind')
+            compile_args.append('-DMERCURY_HAS_LIBUNWIND=1')
+        else:
+            # cibuildwheel builds don't use libunwind for compatibility
+            compile_args.append('-DMERCURY_HAS_LIBUNWIND=0')
     
     # Check if we're building in cibuildwheel
     if os.environ.get('CIBUILDWHEEL', '0') == '1':

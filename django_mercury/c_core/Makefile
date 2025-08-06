@@ -411,7 +411,7 @@ coverage: clean-coverage
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_query_analyzer tests/simple_test_query_analyzer.c query_analyzer.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_query_analyzer_comprehensive tests/comprehensive_test_query_analyzer.c query_analyzer.c common.c -lm -pthread
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_metrics_engine tests/simple_test_metrics_engine.c metrics_engine.c common.c -lm -pthread
-	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -D_GNU_SOURCE -o $(COVERAGE_DIR)/test_metrics_engine_comprehensive tests/comprehensive_test_metrics_engine.c metrics_engine.c common.c -lm -pthread -lunwind
+	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -D_GNU_SOURCE -o $(COVERAGE_DIR)/test_metrics_engine_comprehensive tests/comprehensive_test_metrics_engine.c metrics_engine.c common.c -lm -pthread $(filter -lunwind,$(LDFLAGS))
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator tests/simple_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
 	@echo "🔨 Building new comprehensive and edge tests..."
 	@$(CC) $(CFLAGS) $(COVERAGE_FLAGS) -o $(COVERAGE_DIR)/test_test_orchestrator_comprehensive tests/comprehensive_test_test_orchestrator.c test_orchestrator.c common.c -lm -pthread
