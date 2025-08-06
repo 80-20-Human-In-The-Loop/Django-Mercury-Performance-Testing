@@ -262,10 +262,10 @@ test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
 
 # Linux-specific configuration
 [tool.cibuildwheel.linux]
-# Use manylinux_2_28 for modern compatibility without GLIBC issues
-manylinux-x86_64-image = "manylinux_2_28"
-manylinux-i686-image = "manylinux_2_28"
-manylinux-aarch64-image = "manylinux_2_28"
+# Use manylinux_2_34 to match the GLIBC symbols our build produces
+manylinux-x86_64-image = "manylinux_2_34"
+manylinux-i686-image = "manylinux_2_34"
+manylinux-aarch64-image = "manylinux_2_34"
 
 # Environment variables
 environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1"}
