@@ -240,7 +240,7 @@ skip = [
 build-verbosity = 1
 
 # Environment variables - suppress warnings during build
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0", CIBUILDWHEEL="1"}
 
 # Build settings - try C extensions but fall back to pure Python if needed
 environment-pass = ["DJANGO_MERCURY_PURE_PYTHON"]

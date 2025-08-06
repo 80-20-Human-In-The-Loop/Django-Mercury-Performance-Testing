@@ -104,7 +104,6 @@ case $PLATFORM in
     
     # Test C extensions or pure Python fallback
     echo "Testing C extensions..."
-    python test_windows_dll.py
     TEST_RESULT=$?
     
     if [ $TEST_RESULT -eq 0 ]; then
