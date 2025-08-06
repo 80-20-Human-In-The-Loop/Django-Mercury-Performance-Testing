@@ -240,7 +240,7 @@ skip = [
 build-verbosity = 1
 
 # Environment variables - suppress warnings during build
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0", CIBUILDWHEEL="1"}
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
 
 # Build settings - try C extensions but fall back to pure Python if needed
 environment-pass = ["DJANGO_MERCURY_PURE_PYTHON"]
@@ -262,13 +262,13 @@ test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
 
 # Linux-specific configuration
 [tool.cibuildwheel.linux]
-# Use manylinux2014 for broad compatibility - use shorthand for standard images
-manylinux-x86_64-image = "manylinux2014"
-manylinux-i686-image = "manylinux2014"
-manylinux-aarch64-image = "manylinux2014"
+# Use manylinux_2_28 for modern compatibility without GLIBC issues
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-i686-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
 
-# Environment variables - ensure CIBUILDWHEEL is set
-environment = {CIBUILDWHEEL="1", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
+# Environment variables
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1"}
 
 # Install system dependencies for C compilation in manylinux container
 # Note: libunwind is NOT installed for manylinux compatibility
@@ -281,10 +281,8 @@ before-all = [
     "ldconfig -p | grep 'libc.so.6' | head -1",  # Show GLIBC version
 ]
 
-# Pre-build: verify environment variables are set correctly
+# Pre-build: install build dependencies
 before-build = [
-    "echo 'CIBUILDWHEEL env var:' $CIBUILDWHEEL",
-    "python -c \"import os; print('CIBUILDWHEEL from Python:', os.environ.get('CIBUILDWHEEL', 'NOT SET'))\"",
     "python -m pip install --upgrade pip setuptools wheel",
 ]
 
@@ -297,7 +295,7 @@ repair-wheel-command = "auditwheel show {wheel} && auditwheel repair -w {dest_di
 archs = ["x86_64", "arm64", "universal2"]
 
 # Set deployment target for compatibility
-environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING="1", CIBUILDWHEEL="1"}
+environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
 
 # Windows-specific configuration
 [tool.cibuildwheel.windows]
@@ -305,7 +303,7 @@ environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING=
 archs = ["AMD64"]
 
 # Environment variables for Windows - enable C extensions
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0", CIBUILDWHEEL="1"}
+environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
 
 # Install Visual Studio Build Tools components and dependencies
 before-all = [
