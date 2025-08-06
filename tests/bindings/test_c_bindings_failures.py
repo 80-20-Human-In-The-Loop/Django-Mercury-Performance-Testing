@@ -220,7 +220,7 @@ class TestCBindingsFailures(unittest.TestCase):
             mock_module = Mock()
             mock_module.__file__ = "fake_module.pyd"
             
-            if hasattr(self, 'mock_import'):
+            if self.mock_import is not None:
                 self.mock_import.return_value = mock_module
             if hasattr(self, 'mock_builtin_import'):
                 self.mock_builtin_import.return_value = mock_module
@@ -230,14 +230,14 @@ class TestCBindingsFailures(unittest.TestCase):
             self.assertTrue(c_bindings.c_extensions._initialized)
             
             # Reset mock to track second call
-            if hasattr(self, 'mock_import'):
+            if self.mock_import is not None:
                 self.mock_import.reset_mock()
             
             # Second initialization should be skipped
             c_bindings.c_extensions.initialize()
             
             # Should not import modules again
-            if hasattr(self, 'mock_import'):
+            if self.mock_import is not None:
                 # Should have minimal calls on second init
                 self.assertLess(self.mock_import.call_count, 3)
         else:
