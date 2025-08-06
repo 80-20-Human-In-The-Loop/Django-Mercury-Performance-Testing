@@ -66,27 +66,57 @@ except ImportError:
 
 # === CONFIGURATION ===
 
+# Determine library naming scheme based on platform
+IS_WINDOWS = platform.system() == "Windows"
+
 # Library names and paths
-LIBRARY_CONFIG = {
-    "query_analyzer": {
-        "name": "libquery_analyzer",
-        "fallback_name": "libquery_analyzer",
-        "required": False,
-        "description": "SQL Query Analysis Engine",
-    },
-    "metrics_engine": {
-        "name": "libmetrics_engine",
-        "fallback_name": "libmetrics_engine",
-        "required": False,
-        "description": "Performance Metrics Engine",
-    },
-    "test_orchestrator": {
-        "name": "libtest_orchestrator",
-        "fallback_name": "libtest_orchestrator",
-        "required": False,
-        "description": "Test Orchestration Engine",
-    },
-}
+# Use different names for Windows (Python extensions) vs Unix (standalone libraries)
+if IS_WINDOWS:
+    # Windows: Python extensions built by setup.py
+    # These are built as _c_performance.pyd, _c_metrics.pyd, etc.
+    LIBRARY_CONFIG = {
+        "query_analyzer": {
+            "name": "_c_analyzer",
+            "fallback_name": "django_mercury._c_analyzer",
+            "required": False,
+            "description": "SQL Query Analysis Engine",
+        },
+        "metrics_engine": {
+            "name": "_c_metrics",
+            "fallback_name": "django_mercury._c_metrics",
+            "required": False,
+            "description": "Performance Metrics Engine",
+        },
+        "test_orchestrator": {
+            "name": "_c_orchestrator",
+            "fallback_name": "django_mercury._c_orchestrator",
+            "required": False,
+            "description": "Test Orchestration Engine",
+        },
+    }
+else:
+    # Unix: Standalone libraries built by Makefile
+    # These are built as libquery_analyzer.so, libmetrics_engine.so, etc.
+    LIBRARY_CONFIG = {
+        "query_analyzer": {
+            "name": "libquery_analyzer",
+            "fallback_name": "libquery_analyzer",
+            "required": False,
+            "description": "SQL Query Analysis Engine",
+        },
+        "metrics_engine": {
+            "name": "libmetrics_engine",
+            "fallback_name": "libmetrics_engine",
+            "required": False,
+            "description": "Performance Metrics Engine",
+        },
+        "test_orchestrator": {
+            "name": "libtest_orchestrator",
+            "fallback_name": "libtest_orchestrator",
+            "required": False,
+            "description": "Test Orchestration Engine",
+        },
+    }
 
 # Platform-specific library extensions
 PLATFORM_EXTENSIONS = {
