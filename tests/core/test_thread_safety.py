@@ -2,6 +2,7 @@
 Unit tests for thread_safety module
 """
 
+import os
 import unittest
 import threading
 import time
@@ -516,19 +517,28 @@ class TestThreadSafeOperation(unittest.TestCase):
         """Test thread_safe_operation with timeout."""
         lock = threading.Lock()
         
+        # Detect CI environment and adjust timing for reliability
+        # CI runners (especially macOS ARM64) need more time for thread scheduling
+        is_ci = os.environ.get('CI', '').lower() == 'true' or os.environ.get('GITHUB_ACTIONS', '').lower() == 'true'
+        
+        # Use longer delays in CI to ensure reliable test execution
+        hold_time = 0.25 if is_ci else 0.15  # Hold lock for 250ms in CI, 150ms locally
+        setup_delay = 0.05 if is_ci else 0.02  # Wait 50ms in CI, 20ms locally
+        timeout = 0.05  # Keep 50ms timeout (must be less than hold_time - setup_delay)
+        
         def holder():
             with lock:
-                time.sleep(0.15)  # Hold lock for 150ms (sufficient for timeout test)
+                time.sleep(hold_time)  # Hold lock long enough to trigger timeout
         
         # Start thread that holds the lock
         holder_thread = threading.Thread(target=holder)
         holder_thread.start()
         
-        time.sleep(0.02)  # Small delay to ensure holder thread has acquired lock
+        time.sleep(setup_delay)  # Ensure holder thread has acquired lock
         
-        # Try to acquire with short timeout
+        # Try to acquire with short timeout - should fail and raise TimeoutError
         with self.assertRaises(TimeoutError):
-            with thread_safe_operation(lock, timeout=0.05):  # 50ms timeout
+            with thread_safe_operation(lock, timeout=timeout):
                 pass
         
         holder_thread.join()
