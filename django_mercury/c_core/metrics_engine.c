@@ -167,6 +167,9 @@ typedef struct {
     size_t monitor_count;
     size_t max_monitors;
     
+    // Thread synchronization for monitor allocation
+    mercury_mutex_t monitor_lock;
+    
     // SIMD-aligned threshold cache for fast checking
     ThresholdConfig* threshold_cache;  /* Alignment handled at allocation */
     size_t cache_size;
@@ -437,6 +440,9 @@ static MercuryError init_metrics_engine(void) {
     
     g_engine->monitor_count = 0;
     
+    // Initialize mutex for thread-safe monitor allocation
+    MERCURY_MUTEX_INIT(g_engine->monitor_lock);
+    
     // Initialize SIMD-aligned threshold cache
     g_engine->cache_size = THRESHOLD_CACHE_SIZE;
     g_engine->threshold_cache = mercury_aligned_alloc(g_engine->cache_size * sizeof(ThresholdConfig), 32);
@@ -480,6 +486,9 @@ static MercuryError init_metrics_engine(void) {
 static void cleanup_metrics_engine(void) {
     if (!g_engine) return;
     
+    // Destroy the mutex before freeing memory
+    MERCURY_MUTEX_DESTROY(g_engine->monitor_lock);
+    
     mercury_aligned_free(g_engine->threshold_cache);
     mercury_aligned_free(g_engine->monitors);
     mercury_aligned_free(g_engine);
@@ -504,9 +513,11 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
         }
     }
     
-    // Find available monitor slot
+    // Find available monitor slot - PROTECTED SECTION
     PerformanceMonitor* monitor = NULL;
     int64_t session_id = -1;
+    
+    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
     
     for (size_t i = 0; i < g_engine->max_monitors; i++) {
         if (!g_engine->monitors[i].is_active) {
@@ -517,6 +528,7 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
     }
     
     if (!monitor) {
+        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
         MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available monitor slots");
         return -1;
     }
@@ -553,10 +565,12 @@ int64_t start_performance_monitoring_enhanced(const char* operation_name, const 
     
     // Initialize status
     monitor->violation_flags = 0;
-    monitor->is_active = true;
+    monitor->is_active = true;  // Mark active before releasing lock
     
     atomic_fetch_add(&g_engine->total_sessions, 1);
     g_engine->monitor_count++;
+    
+    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
     
     return session_id;
 }
@@ -569,7 +583,11 @@ MercuryMetrics* stop_performance_monitoring_enhanced(int64_t session_id) {
     }
     
     PerformanceMonitor* monitor = &g_engine->monitors[session_id];
+    
+    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
+    
     if (!monitor->is_active || monitor->session_id != session_id) {
+        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
         MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Session not active");
         return NULL;
     }
@@ -603,6 +621,7 @@ MercuryMetrics* stop_performance_monitoring_enhanced(int64_t session_id) {
     // Create result metrics
     MercuryMetrics* metrics = mercury_aligned_alloc(sizeof(MercuryMetrics), 64);
     if (!metrics) {
+        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
         MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate result metrics");
         return NULL;
     }
@@ -621,10 +640,12 @@ MercuryMetrics* stop_performance_monitoring_enhanced(int64_t session_id) {
     strncpy(metrics->operation_type, monitor->operation_type, sizeof(metrics->operation_type) - 1);
     metrics->operation_type[sizeof(metrics->operation_type) - 1] = '\0';
     
-    // Deactivate monitor
+    // Deactivate monitor - PROTECTED SECTION
     monitor->is_active = false;
     monitor->session_id = -1;
     g_engine->monitor_count--;
+    
+    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
     
     return metrics;
 }

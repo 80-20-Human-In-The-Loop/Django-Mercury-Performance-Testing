@@ -338,14 +338,12 @@ class TestThreadSafety(unittest.TestCase):
         total_operations = len(errors) + len(results)
         self.assertEqual(total_operations, 5, f"Expected 5 total operations, got {total_operations}")
         
-        # Note: The C library has known thread safety limitations that cause
-        # concurrent operations to fail when accessing the same handle slot.
-        # This test verifies basic functionality works but allows for up to
-        # 60% failure rate due to these race conditions.
+        # With mutex protection, all operations should succeed
+        # The race condition in monitor slot allocation has been fixed
         
-        # At least 40% should succeed (allowing for known race conditions in C library)
+        # At least 60% should succeed (should be 100% with mutex fix)
         success_rate = len(results) / total_operations
-        self.assertGreaterEqual(success_rate, 0.4,  # Changed from 0.6 to 0.4
+        self.assertGreaterEqual(success_rate, 0.6,  # Restored original threshold
                               f"Success rate {success_rate:.1%} too low. Errors: {errors}")
         
         # For successful operations, verify they completed correctly

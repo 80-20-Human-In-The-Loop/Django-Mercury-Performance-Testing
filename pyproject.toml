@@ -268,7 +268,7 @@ manylinux-aarch64-image = "manylinux2014"
 
 # Install system dependencies for C compilation
 before-all = [
-    "yum install -y gcc make python3-devel || apt-get update && apt-get install -y build-essential python3-dev || true",
+    "yum install -y gcc make python3-devel libunwind-devel || apt-get update && apt-get install -y build-essential python3-dev libunwind-dev || true",
     "python -m pip install --upgrade pip setuptools wheel",
     "python -c \"import sys; print(f'Python: {sys.version}')\"",
 ]
