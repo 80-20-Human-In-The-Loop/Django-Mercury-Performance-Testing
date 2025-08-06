@@ -409,7 +409,41 @@ class CExtensionLoader:
     def _load_library(self, lib_key: str, lib_config: Dict[str, Any]) -> LibraryInfo:
         """Load a single C library."""
         lib_name = lib_config["name"]
+        
+        # On Windows, try to import as Python extension module
+        if IS_WINDOWS:
+            try:
+                # Import the Python extension module
+                if lib_key == "query_analyzer":
+                    import django_mercury._c_analyzer as module
+                elif lib_key == "metrics_engine":
+                    import django_mercury._c_metrics as module
+                elif lib_key == "test_orchestrator":
+                    import django_mercury._c_orchestrator as module
+                else:
+                    raise ImportError(f"Unknown library key: {lib_key}")
+                
+                # Configure function signatures (for Python modules)
+                function_count = self._configure_library_functions(module, lib_key)
+                
+                # The module itself is the "handle"
+                return LibraryInfo(
+                    name=lib_name,
+                    path=f"<Python module: {module.__name__}>",
+                    handle=module,  # Use the module as the handle
+                    is_loaded=True,
+                    function_count=function_count,
+                )
+            except ImportError as e:
+                return LibraryInfo(
+                    name=lib_name,
+                    path="",
+                    handle=None,
+                    is_loaded=False,
+                    error_message=f"Failed to import Python extension: {str(e)}",
+                )
 
+        # Unix: Use ctypes.CDLL for standalone shared libraries
         # Find library file
         library_path = find_library(lib_name)
         if not library_path:
@@ -476,211 +510,291 @@ class CExtensionLoader:
         self._stats.functions_configured += function_count
         return function_count
 
-    def _configure_query_analyzer(self, lib: ctypes.CDLL) -> int:
+    def _configure_query_analyzer(self, lib) -> int:
         """Configure query analyzer function signatures."""
         functions_configured = 0
+        
+        # Check if it's a Python module (Windows) or ctypes.CDLL
+        if hasattr(lib, '__name__'):  # It's a Python module
+            # For Python extensions, functions are already accessible
+            # Just verify they exist
+            if hasattr(lib, 'analyze_query'):
+                functions_configured += 1
+            if hasattr(lib, 'get_duplicate_queries'):
+                functions_configured += 1
+            if hasattr(lib, 'detect_n_plus_one_patterns'):
+                functions_configured += 1
+            if hasattr(lib, 'get_n_plus_one_severity'):
+                functions_configured += 1
+            if hasattr(lib, 'get_n_plus_one_cause'):
+                functions_configured += 1
+            if hasattr(lib, 'get_optimization_suggestion'):
+                functions_configured += 1
+            if hasattr(lib, 'get_query_statistics'):
+                functions_configured += 1
+            if hasattr(lib, 'reset_query_analyzer'):
+                functions_configured += 1
+        else:
+            # It's a ctypes.CDLL - configure function signatures
+            try:
+                # analyze_query(const char* query_text, double execution_time) -> int
+                lib.analyze_query.argtypes = [ctypes.c_char_p, ctypes.c_double]
+                lib.analyze_query.restype = ctypes.c_int
+                functions_configured += 1
 
-        try:
-            # analyze_query(const char* query_text, double execution_time) -> int
-            lib.analyze_query.argtypes = [ctypes.c_char_p, ctypes.c_double]
-            lib.analyze_query.restype = ctypes.c_int
-            functions_configured += 1
+                # get_duplicate_queries(char* result_buffer, size_t buffer_size) -> int
+                lib.get_duplicate_queries.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+                lib.get_duplicate_queries.restype = ctypes.c_int
+                functions_configured += 1
 
-            # get_duplicate_queries(char* result_buffer, size_t buffer_size) -> int
-            lib.get_duplicate_queries.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
-            lib.get_duplicate_queries.restype = ctypes.c_int
-            functions_configured += 1
+                # detect_n_plus_one_patterns() -> int
+                lib.detect_n_plus_one_patterns.argtypes = []
+                lib.detect_n_plus_one_patterns.restype = ctypes.c_int
+                functions_configured += 1
 
-            # detect_n_plus_one_patterns() -> int
-            lib.detect_n_plus_one_patterns.argtypes = []
-            lib.detect_n_plus_one_patterns.restype = ctypes.c_int
-            functions_configured += 1
+                # get_n_plus_one_severity() -> int
+                lib.get_n_plus_one_severity.argtypes = []
+                lib.get_n_plus_one_severity.restype = ctypes.c_int
+                functions_configured += 1
 
-            # get_n_plus_one_severity() -> int
-            lib.get_n_plus_one_severity.argtypes = []
-            lib.get_n_plus_one_severity.restype = ctypes.c_int
-            functions_configured += 1
+                # get_n_plus_one_cause() -> int
+                lib.get_n_plus_one_cause.argtypes = []
+                lib.get_n_plus_one_cause.restype = ctypes.c_int
+                functions_configured += 1
 
-            # get_n_plus_one_cause() -> int
-            lib.get_n_plus_one_cause.argtypes = []
-            lib.get_n_plus_one_cause.restype = ctypes.c_int
-            functions_configured += 1
+                # get_optimization_suggestion() -> const char*
+                lib.get_optimization_suggestion.argtypes = []
+                lib.get_optimization_suggestion.restype = ctypes.c_char_p
+                functions_configured += 1
 
-            # get_optimization_suggestion() -> const char*
-            lib.get_optimization_suggestion.argtypes = []
-            lib.get_optimization_suggestion.restype = ctypes.c_char_p
-            functions_configured += 1
+                # get_query_statistics(uint64_t*, uint64_t*, uint64_t*, int*) -> void
+                lib.get_query_statistics.argtypes = [
+                    ctypes.POINTER(ctypes.c_uint64),
+                    ctypes.POINTER(ctypes.c_uint64),
+                    ctypes.POINTER(ctypes.c_uint64),
+                    ctypes.POINTER(ctypes.c_int),
+                ]
+                lib.get_query_statistics.restype = None
+                functions_configured += 1
 
-            # get_query_statistics(uint64_t*, uint64_t*, uint64_t*, int*) -> void
-            lib.get_query_statistics.argtypes = [
-                ctypes.POINTER(ctypes.c_uint64),
-                ctypes.POINTER(ctypes.c_uint64),
-                ctypes.POINTER(ctypes.c_uint64),
-                ctypes.POINTER(ctypes.c_int),
-            ]
-            lib.get_query_statistics.restype = None
-            functions_configured += 1
+                # reset_query_analyzer() -> void
+                lib.reset_query_analyzer.argtypes = []
+                lib.reset_query_analyzer.restype = None
+                functions_configured += 1
 
-            # reset_query_analyzer() -> void
-            lib.reset_query_analyzer.argtypes = []
-            lib.reset_query_analyzer.restype = None
-            functions_configured += 1
-
-        except AttributeError as e:
-            if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
-                logger.debug(f"Some query analyzer functions not available: {e}")
+            except AttributeError as e:
+                if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
+                    logger.debug(f"Some query analyzer functions not available: {e}")
 
         return functions_configured
 
-    def _configure_metrics_engine(self, lib: ctypes.CDLL) -> int:
+    def _configure_metrics_engine(self, lib) -> int:
         """Configure metrics engine function signatures."""
         functions_configured = 0
+        
+        # Check if it's a Python module (Windows) or ctypes.CDLL
+        if hasattr(lib, '__name__'):  # It's a Python module
+            # For Python extensions, functions are already accessible
+            # Just verify they exist
+            if hasattr(lib, 'start_performance_monitoring_enhanced'):
+                functions_configured += 1
+            if hasattr(lib, 'stop_performance_monitoring_enhanced'):
+                functions_configured += 1
+            if hasattr(lib, 'get_elapsed_time_ms'):
+                functions_configured += 1
+            if hasattr(lib, 'get_memory_usage_mb'):
+                functions_configured += 1
+            if hasattr(lib, 'get_query_count'):
+                functions_configured += 1
+            if hasattr(lib, 'get_cache_hit_count'):
+                functions_configured += 1
+            if hasattr(lib, 'get_cache_miss_count'):
+                functions_configured += 1
+            if hasattr(lib, 'get_cache_hit_ratio'):
+                functions_configured += 1
+            if hasattr(lib, 'has_n_plus_one_pattern'):
+                functions_configured += 1
+            if hasattr(lib, 'detect_n_plus_one_severe'):
+                functions_configured += 1
+            if hasattr(lib, 'detect_n_plus_one_moderate'):
+                functions_configured += 1
+            if hasattr(lib, 'free_metrics'):
+                functions_configured += 1
+            if hasattr(lib, 'increment_query_count'):
+                functions_configured += 1
+            if hasattr(lib, 'increment_cache_hits'):
+                functions_configured += 1
+            if hasattr(lib, 'increment_cache_misses'):
+                functions_configured += 1
+            if hasattr(lib, 'reset_global_counters'):
+                functions_configured += 1
+        else:
+            # It's a ctypes.CDLL - configure function signatures
+            try:
+                # start_performance_monitoring_enhanced(const char*, const char*) -> int64_t
+                lib.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+                lib.start_performance_monitoring_enhanced.restype = ctypes.c_int64
+                functions_configured += 1
 
-        try:
-            # start_performance_monitoring_enhanced(const char*, const char*) -> int64_t
-            lib.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-            lib.start_performance_monitoring_enhanced.restype = ctypes.c_int64
-            functions_configured += 1
+                # stop_performance_monitoring_enhanced(int64_t) -> MercuryMetrics*
+                lib.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
+                lib.stop_performance_monitoring_enhanced.restype = ctypes.c_void_p
+                functions_configured += 1
 
-            # stop_performance_monitoring_enhanced(int64_t) -> MercuryMetrics*
-            lib.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
-            lib.stop_performance_monitoring_enhanced.restype = ctypes.c_void_p
-            functions_configured += 1
+                # get_elapsed_time_ms(const MercuryMetrics*) -> double
+                lib.get_elapsed_time_ms.argtypes = [ctypes.c_void_p]
+                lib.get_elapsed_time_ms.restype = ctypes.c_double
+                functions_configured += 1
 
-            # get_elapsed_time_ms(const MercuryMetrics*) -> double
-            lib.get_elapsed_time_ms.argtypes = [ctypes.c_void_p]
-            lib.get_elapsed_time_ms.restype = ctypes.c_double
-            functions_configured += 1
+                # get_memory_usage_mb(const MercuryMetrics*) -> double
+                lib.get_memory_usage_mb.argtypes = [ctypes.c_void_p]
+                lib.get_memory_usage_mb.restype = ctypes.c_double
+                functions_configured += 1
 
-            # get_memory_usage_mb(const MercuryMetrics*) -> double
-            lib.get_memory_usage_mb.argtypes = [ctypes.c_void_p]
-            lib.get_memory_usage_mb.restype = ctypes.c_double
-            functions_configured += 1
+                # get_query_count(const MercuryMetrics*) -> uint32_t
+                lib.get_query_count.argtypes = [ctypes.c_void_p]
+                lib.get_query_count.restype = ctypes.c_uint32
+                functions_configured += 1
 
-            # get_query_count(const MercuryMetrics*) -> uint32_t
-            lib.get_query_count.argtypes = [ctypes.c_void_p]
-            lib.get_query_count.restype = ctypes.c_uint32
-            functions_configured += 1
+                # get_cache_hit_count(const MercuryMetrics*) -> uint32_t
+                lib.get_cache_hit_count.argtypes = [ctypes.c_void_p]
+                lib.get_cache_hit_count.restype = ctypes.c_uint32
+                functions_configured += 1
 
-            # get_cache_hit_count(const MercuryMetrics*) -> uint32_t
-            lib.get_cache_hit_count.argtypes = [ctypes.c_void_p]
-            lib.get_cache_hit_count.restype = ctypes.c_uint32
-            functions_configured += 1
+                # get_cache_miss_count(const MercuryMetrics*) -> uint32_t
+                lib.get_cache_miss_count.argtypes = [ctypes.c_void_p]
+                lib.get_cache_miss_count.restype = ctypes.c_uint32
+                functions_configured += 1
 
-            # get_cache_miss_count(const MercuryMetrics*) -> uint32_t
-            lib.get_cache_miss_count.argtypes = [ctypes.c_void_p]
-            lib.get_cache_miss_count.restype = ctypes.c_uint32
-            functions_configured += 1
+                # get_cache_hit_ratio(const MercuryMetrics*) -> double
+                lib.get_cache_hit_ratio.argtypes = [ctypes.c_void_p]
+                lib.get_cache_hit_ratio.restype = ctypes.c_double
+                functions_configured += 1
 
-            # get_cache_hit_ratio(const MercuryMetrics*) -> double
-            lib.get_cache_hit_ratio.argtypes = [ctypes.c_void_p]
-            lib.get_cache_hit_ratio.restype = ctypes.c_double
-            functions_configured += 1
+                # N+1 detection functions
+                lib.has_n_plus_one_pattern.argtypes = [ctypes.c_void_p]
+                lib.has_n_plus_one_pattern.restype = ctypes.c_int
+                functions_configured += 1
 
-            # N+1 detection functions
-            lib.has_n_plus_one_pattern.argtypes = [ctypes.c_void_p]
-            lib.has_n_plus_one_pattern.restype = ctypes.c_int
-            functions_configured += 1
+                lib.detect_n_plus_one_severe.argtypes = [ctypes.c_void_p]
+                lib.detect_n_plus_one_severe.restype = ctypes.c_int
+                functions_configured += 1
 
-            lib.detect_n_plus_one_severe.argtypes = [ctypes.c_void_p]
-            lib.detect_n_plus_one_severe.restype = ctypes.c_int
-            functions_configured += 1
+                lib.detect_n_plus_one_moderate.argtypes = [ctypes.c_void_p]
+                lib.detect_n_plus_one_moderate.restype = ctypes.c_int
+                functions_configured += 1
 
-            lib.detect_n_plus_one_moderate.argtypes = [ctypes.c_void_p]
-            lib.detect_n_plus_one_moderate.restype = ctypes.c_int
-            functions_configured += 1
+                # free_metrics(MercuryMetrics*) -> void
+                lib.free_metrics.argtypes = [ctypes.c_void_p]
+                lib.free_metrics.restype = None
+                functions_configured += 1
 
-            # free_metrics(MercuryMetrics*) -> void
-            lib.free_metrics.argtypes = [ctypes.c_void_p]
-            lib.free_metrics.restype = None
-            functions_configured += 1
+                # Counter functions (called by Django hooks)
+                lib.increment_query_count.argtypes = []
+                lib.increment_query_count.restype = None
+                functions_configured += 1
 
-            # Counter functions (called by Django hooks)
-            lib.increment_query_count.argtypes = []
-            lib.increment_query_count.restype = None
-            functions_configured += 1
+                lib.increment_cache_hits.argtypes = []
+                lib.increment_cache_hits.restype = None
+                functions_configured += 1
 
-            lib.increment_cache_hits.argtypes = []
-            lib.increment_cache_hits.restype = None
-            functions_configured += 1
+                lib.increment_cache_misses.argtypes = []
+                lib.increment_cache_misses.restype = None
+                functions_configured += 1
 
-            lib.increment_cache_misses.argtypes = []
-            lib.increment_cache_misses.restype = None
-            functions_configured += 1
+                lib.reset_global_counters.argtypes = []
+                lib.reset_global_counters.restype = None
+                functions_configured += 1
 
-            lib.reset_global_counters.argtypes = []
-            lib.reset_global_counters.restype = None
-            functions_configured += 1
-
-        except AttributeError as e:
-            if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
-                logger.debug(f"Some metrics engine functions not available: {e}")
+            except AttributeError as e:
+                if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
+                    logger.debug(f"Some metrics engine functions not available: {e}")
 
         return functions_configured
 
-    def _configure_test_orchestrator(self, lib: ctypes.CDLL) -> int:
-        """Configure test orchestrator function signatures."""
+    def _configure_test_orchestrator(self, lib: Any) -> int:
+        """Configure test orchestrator function signatures.
+        
+        Args:
+            lib: Either ctypes.CDLL (Unix) or Python module (Windows)
+        """
         functions_configured = 0
-
-        try:
-            # create_test_context(const char*, const char*) -> void*
-            lib.create_test_context.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-            lib.create_test_context.restype = ctypes.c_void_p
-            functions_configured += 1
-
-            # update_test_context(void*, double, double, uint32_t, double, double, 
-            #                     const char*) -> int
-            lib.update_test_context.argtypes = [
-                ctypes.c_void_p,
-                ctypes.c_double,
-                ctypes.c_double,
-                ctypes.c_uint32,
-                ctypes.c_double,
-                ctypes.c_double,
-                ctypes.c_char_p,
+        
+        # Check if it's a Python module (Windows) or ctypes.CDLL (Unix)
+        if hasattr(lib, '__file__'):
+            # It's a Python module - functions are already configured
+            # Just verify the expected functions exist
+            expected_functions = [
+                'create_test_context', 'update_test_context',
+                'update_n_plus_one_analysis', 'finalize_test_context',
+                'get_orchestrator_statistics', 'load_binary_configuration',
+                'save_binary_configuration'
             ]
-            lib.update_test_context.restype = ctypes.c_int
-            functions_configured += 1
+            
+            for func_name in expected_functions:
+                if hasattr(lib, func_name):
+                    functions_configured += 1
+        else:
+            # It's a ctypes.CDLL - configure function signatures
+            try:
+                # create_test_context(const char*, const char*) -> void*
+                lib.create_test_context.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+                lib.create_test_context.restype = ctypes.c_void_p
+                functions_configured += 1
 
-            # update_n_plus_one_analysis(void*, int, int, const char*) -> int
-            lib.update_n_plus_one_analysis.argtypes = [
-                ctypes.c_void_p,
-                ctypes.c_int,
-                ctypes.c_int,
-                ctypes.c_char_p,
-            ]
-            lib.update_n_plus_one_analysis.restype = ctypes.c_int
-            functions_configured += 1
+                # update_test_context(void*, double, double, uint32_t, double, double, 
+                #                     const char*) -> int
+                lib.update_test_context.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_double,
+                    ctypes.c_double,
+                    ctypes.c_uint32,
+                    ctypes.c_double,
+                    ctypes.c_double,
+                    ctypes.c_char_p,
+                ]
+                lib.update_test_context.restype = ctypes.c_int
+                functions_configured += 1
 
-            # finalize_test_context(void*) -> int
-            lib.finalize_test_context.argtypes = [ctypes.c_void_p]
-            lib.finalize_test_context.restype = ctypes.c_int
-            functions_configured += 1
+                # update_n_plus_one_analysis(void*, int, int, const char*) -> int
+                lib.update_n_plus_one_analysis.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_int,
+                    ctypes.c_int,
+                    ctypes.c_char_p,
+                ]
+                lib.update_n_plus_one_analysis.restype = ctypes.c_int
+                functions_configured += 1
 
-            # get_orchestrator_statistics(uint64_t*, uint64_t*, uint64_t*, size_t*, 
-            #                              uint64_t*) -> void
-            lib.get_orchestrator_statistics.argtypes = [
-                ctypes.POINTER(ctypes.c_uint64),
-                ctypes.POINTER(ctypes.c_uint64),
-                ctypes.POINTER(ctypes.c_uint64),
-                ctypes.POINTER(ctypes.c_size_t),
-                ctypes.POINTER(ctypes.c_uint64),
-            ]
-            lib.get_orchestrator_statistics.restype = None
-            functions_configured += 1
+                # finalize_test_context(void*) -> int
+                lib.finalize_test_context.argtypes = [ctypes.c_void_p]
+                lib.finalize_test_context.restype = ctypes.c_int
+                functions_configured += 1
 
-            # Configuration functions
-            lib.load_binary_configuration.argtypes = [ctypes.c_char_p]
-            lib.load_binary_configuration.restype = ctypes.c_int
-            functions_configured += 1
+                # get_orchestrator_statistics(uint64_t*, uint64_t*, uint64_t*, size_t*, 
+                #                              uint64_t*) -> void
+                lib.get_orchestrator_statistics.argtypes = [
+                    ctypes.POINTER(ctypes.c_uint64),
+                    ctypes.POINTER(ctypes.c_uint64),
+                    ctypes.POINTER(ctypes.c_uint64),
+                    ctypes.POINTER(ctypes.c_size_t),
+                    ctypes.POINTER(ctypes.c_uint64),
+                ]
+                lib.get_orchestrator_statistics.restype = None
+                functions_configured += 1
 
-            lib.save_binary_configuration.argtypes = [ctypes.c_char_p]
-            lib.save_binary_configuration.restype = ctypes.c_int
-            functions_configured += 1
+                # Configuration functions
+                lib.load_binary_configuration.argtypes = [ctypes.c_char_p]
+                lib.load_binary_configuration.restype = ctypes.c_int
+                functions_configured += 1
 
-        except AttributeError as e:
-            if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
-                logger.debug(f"Some test orchestrator functions not available: {e}")
+                lib.save_binary_configuration.argtypes = [ctypes.c_char_p]
+                lib.save_binary_configuration.restype = ctypes.c_int
+                functions_configured += 1
+
+            except AttributeError as e:
+                if os.environ.get("MERCURY_TEST_MODE", "0") != "1":
+                    logger.debug(f"Some test orchestrator functions not available: {e}")
 
         return functions_configured
 
