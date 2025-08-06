@@ -5,6 +5,32 @@ All notable changes to Django Mercury Performance Testing will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.3] - 2025-08-06
+
+### Fixed
+- **GLIBC Compatibility**: Fixed Linux wheel compatibility issues by using manylinux_2_28 containers and proper GLIBC symbol versioning
+- **Windows Build**: Improved Windows C extension building with better MSVC detection and .pyd file handling
+- **macOS Library Extensions**: Fixed library extension mismatch issues on macOS (.so vs .dylib)
+- **Thread Safety**: Enhanced thread safety in monitor module with proper lock acquisition
+
+### Changed
+- **CI/CD Pipeline**: Refactored GitHub Actions workflow to build wheels independently of test results
+- **Build System**: Switched to manylinux_2_28 for better Linux distribution compatibility
+- **Wheel Building**: Updated cibuildwheel configuration for more reliable cross-platform builds
+- **Test Organization**: Reorganized test structure into logical subdirectories (bindings/, config/, core/, django_integration/, monitor/)
+
+### Added
+- **Build Scripts**: Added comprehensive CI test runner script (scripts/ci_test_runner.sh) for all platforms
+- **Diagnostics**: New diagnostic scripts for verifying C extension builds (scripts/diagnose_c_extensions.py, scripts/verify_build.py)
+- **Pure Python Tests**: Comprehensive pure Python fallback tests for all C modules
+- **Security Tests**: Added security test suite for C extensions including buffer overflow and memory safety checks
+
+### Internal
+- **Test Coverage**: Improved test organization with separated test modules by functionality
+- **Build Verification**: Added scripts to verify C extension loading across platforms
+- **Documentation**: Added CLAUDE.md files for architecture documentation
+- **Git Configuration**: Added .gitattributes for better cross-platform compatibility
+
 ## [0.0.2] - 2025-08-03
 
 ### Fixed
