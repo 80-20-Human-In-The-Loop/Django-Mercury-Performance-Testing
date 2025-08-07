@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8"]
+requires = ["setuptools>=70.0", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -14,7 +14,6 @@ maintainers = [
     {name = "Mathew Storm", email = "mathewstormdev@gmail.com"}
 ]
 license = "GPL-3.0-or-later"
-license-files = ["LICENSE"]
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -72,6 +71,9 @@ dev = [
     "flake8>=4.0.0",
     "ruff>=0.1.0",
     "coverage>=6.0.0",
+    "twine>=5.0.0",
+    "setuptools>=70.0",
+    "build>=1.0.0",
 ]
 docs = [
     "sphinx>=4.5.0",
@@ -105,6 +107,7 @@ packages = [
     "django_mercury.examples"
 ]
 include-package-data = true
+license-files = ["LICENSE"]
 
 [tool.setuptools.package-data]
 "django_mercury" = [
