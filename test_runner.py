@@ -646,6 +646,162 @@ def run_c_integration_tests(verbose: bool = False) -> bool:
         return False
 
 
+def check_and_build_c_libraries(skip_build: bool = False, ci_mode: bool = False) -> bool:
+    """Check if C libraries exist and build them if missing.
+    
+    Returns:
+        True if libraries are available (built or already exist), False otherwise.
+    """
+    import subprocess
+    
+    c_core_dir = PERFORMANCE_TESTING_ROOT / "django_mercury" / "c_core"
+    
+    # Check if c_core directory exists
+    if not c_core_dir.exists():
+        if not ci_mode:
+            print("⚠️  C core directory not found at django_mercury/c_core")
+            print("    Tests will run using pure Python fallback mode")
+        return False
+    
+    # Required libraries
+    required_libs = [
+        "libquery_analyzer.so",
+        "libmetrics_engine.so", 
+        "libtest_orchestrator.so"
+    ]
+    
+    # Check which libraries are missing
+    missing_libs = []
+    for lib in required_libs:
+        lib_path = c_core_dir / lib
+        if not lib_path.exists():
+            missing_libs.append(lib)
+    
+    # All libraries exist
+    if not missing_libs:
+        if not ci_mode:
+            print("✅ All C libraries are built and ready")
+        return True
+    
+    # Some libraries missing
+    if not ci_mode:
+        print(f"⚠️  Missing C libraries: {', '.join(missing_libs)}")
+    
+    if skip_build:
+        if not ci_mode:
+            print("    Skipping automatic build (--skip-c-build flag set)")
+            print("    Tests will run using pure Python fallback mode")
+        return False
+    
+    # Check if make is available
+    try:
+        subprocess.run(["make", "--version"], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        if not ci_mode:
+            print("❌ 'make' command not found. Cannot build C libraries automatically.")
+            print("    Please install build tools:")
+            print("    - Ubuntu/Debian: sudo apt-get install build-essential")
+            print("    - macOS: xcode-select --install")
+            print("    - RHEL/CentOS: sudo yum install gcc make")
+            print("")
+            print("    Tests will continue using pure Python fallback mode")
+        return False
+    
+    # Check if gcc/clang is available
+    compiler_found = False
+    for compiler in ["gcc", "clang"]:
+        try:
+            subprocess.run([compiler, "--version"], capture_output=True, check=True)
+            compiler_found = True
+            break
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+    
+    if not compiler_found:
+        if not ci_mode:
+            print("❌ No C compiler found (gcc or clang). Cannot build C libraries.")
+            print("    Tests will continue using pure Python fallback mode")
+        return False
+    
+    # In CI mode or if user confirms, build automatically
+    should_build = ci_mode
+    
+    if not ci_mode:
+        # In interactive mode, ask user
+        print("")
+        print("🔨 C libraries need to be built for optimal performance.")
+        print("   Build them now? This will run 'make all' in django_mercury/c_core/")
+        print("   (You can skip with --skip-c-build flag)")
+        print("")
+        
+        try:
+            response = input("Build C libraries? [Y/n]: ").strip().lower()
+            should_build = response in ['', 'y', 'yes']
+        except (EOFError, KeyboardInterrupt):
+            print("\n    Skipping C library build")
+            should_build = False
+    
+    if not should_build:
+        if not ci_mode:
+            print("    Tests will run using pure Python fallback mode")
+        return False
+    
+    # Build the libraries
+    if not ci_mode:
+        print("")
+        print("🔨 Building C libraries...")
+        print("-" * 60)
+    
+    try:
+        # Save current directory
+        original_dir = Path.cwd()
+        
+        # Change to c_core directory
+        os.chdir(c_core_dir)
+        
+        # Run make all
+        result = subprocess.run(
+            ["make", "all"],
+            capture_output=True,
+            text=True
+        )
+        
+        # Change back to original directory
+        os.chdir(original_dir)
+        
+        if result.returncode == 0:
+            # Check if libraries were actually built
+            still_missing = [lib for lib in missing_libs if not (c_core_dir / lib).exists()]
+            
+            if not still_missing:
+                if not ci_mode:
+                    print("✅ C libraries built successfully!")
+                return True
+            else:
+                if not ci_mode:
+                    print(f"⚠️  Build completed but some libraries still missing: {', '.join(still_missing)}")
+                    print("    Check the build output for errors")
+                    print("    Tests will run using pure Python fallback mode")
+                return False
+        else:
+            if not ci_mode:
+                print("❌ Build failed. Error output:")
+                print("-" * 60)
+                if result.stderr:
+                    print(result.stderr)
+                if result.stdout and "error" in result.stdout.lower():
+                    print(result.stdout)
+                print("-" * 60)
+                print("    Tests will continue using pure Python fallback mode")
+            return False
+            
+    except Exception as e:
+        if not ci_mode:
+            print(f"❌ Failed to build C libraries: {e}")
+            print("    Tests will continue using pure Python fallback mode")
+        return False
+
+
 def setup_test_environment():
     """Set up the test environment."""
     import logging
@@ -737,6 +893,11 @@ def main():
             action="store_true",
             help="CI-friendly output mode (minimal output, only show failures)"
         )
+        parser.add_argument(
+            "--skip-c-build",
+            action="store_true",
+            help="Skip automatic C library building if libraries are missing"
+        )
         
         args = parser.parse_args()
         
@@ -747,6 +908,18 @@ def main():
         setup_test_environment()
         
         print("[START] Performance Testing Framework Test Runner")
+        print("="*50)
+        
+        # Check and build C libraries if needed
+        c_libs_available = check_and_build_c_libraries(
+            skip_build=args.skip_c_build,
+            ci_mode=ci_mode
+        )
+        
+        if c_libs_available:
+            print("[INFO] Running with C extensions for optimal performance")
+        else:
+            print("[INFO] Running with pure Python implementation")
         print("="*50)
         
         if args.list_modules:
