@@ -13,7 +13,8 @@ authors = [
 maintainers = [
     {name = "Mathew Storm", email = "mathewstormdev@gmail.com"}
 ]
-license = {text = "GPL-3.0-or-later"}
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -96,6 +97,10 @@ packages = [
     "django_mercury", 
     "django_mercury.python_bindings", 
     "django_mercury.c_core",
+    "django_mercury.cli",
+    "django_mercury.cli.educational",
+    "django_mercury.cli.management",
+    "django_mercury.cli.management.commands",
     "django_mercury.documentation",
     "django_mercury.examples"
 ]
