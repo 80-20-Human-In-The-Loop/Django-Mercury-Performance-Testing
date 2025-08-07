@@ -1,0 +1,1 @@
+"""Django Mercury management commands."""
