@@ -1,0 +1,328 @@
+{
+  "n_plus_one_queries": [
+    {
+      "level": "beginner",
+      "question": "What is the N+1 query problem?",
+      "options": [
+        "A database indexing issue",
+        "Making 1 query for a list, then N queries for related data",
+        "A caching problem in Django",
+        "Running N queries in parallel"
+      ],
+      "correct": 1,
+      "explanation": "N+1 happens when you fetch a list (1 query) then access related data for each item (N queries), creating N+1 total queries instead of 1-2 optimized queries."
+    },
+    {
+      "level": "beginner",
+      "question": "Your test made 230 queries to load 100 users. What is the most likely cause?",
+      "options": [
+        "The database is slow",
+        "You're loading each user's related data separately",
+        "You have too many users",
+        "The server needs more memory"
+      ],
+      "correct": 1,
+      "explanation": "When loading 100 users requires 230 queries, you're likely accessing related data (like profiles or permissions) for each user separately, creating additional queries."
+    },
+    {
+      "level": "intermediate",
+      "question": "Which Django method prevents N+1 queries for ForeignKey relationships?",
+      "options": [
+        "prefetch_related()",
+        "select_related()",
+        "only()",
+        "defer()"
+      ],
+      "correct": 1,
+      "explanation": "select_related() performs a SQL join to fetch ForeignKey relationships in one query. prefetch_related() is for ManyToMany and reverse ForeignKey."
+    },
+    {
+      "level": "intermediate",
+      "question": "When should you use prefetch_related() instead of select_related()?",
+      "options": [
+        "For ForeignKey relationships only",
+        "For ManyToMany and reverse ForeignKey relationships",
+        "For OneToOne relationships only",
+        "When you need to filter results"
+      ],
+      "correct": 1,
+      "explanation": "prefetch_related() is designed for ManyToMany and reverse ForeignKey relationships where joins would be inefficient. It uses separate queries then joins in Python."
+    },
+    {
+      "level": "advanced",
+      "question": "When should you use Prefetch() objects instead of simple prefetch_related()?",
+      "options": [
+        "Never, they're equivalent",
+        "When you need to filter or customize the prefetched queryset",
+        "Only for GenericForeignKey relationships",
+        "When dealing with more than 100 items"
+      ],
+      "correct": 1,
+      "explanation": "Prefetch() objects let you customize the queryset used for prefetching, allowing filtering, ordering, or using select_related() on the prefetched items."
+    },
+    {
+      "level": "advanced",
+      "question": "How can you optimize nested serializers in Django REST Framework?",
+      "options": [
+        "Remove all nested serializers",
+        "Use StringRelatedField everywhere",
+        "Combine select_related/prefetch_related with your viewset queryset",
+        "Switch to JSONField"
+      ],
+      "correct": 2,
+      "explanation": "Optimizing the viewset's queryset with select_related() and prefetch_related() ensures the serializer doesn't trigger additional queries when accessing related data."
+    }
+  ],
+  "slow_response_time": [
+    {
+      "level": "beginner",
+      "question": "Your API endpoint takes 500ms to respond. What should you check FIRST?",
+      "options": [
+        "Add more server memory",
+        "Check database query performance",
+        "Upgrade Python version",
+        "Increase worker processes"
+      ],
+      "correct": 1,
+      "explanation": "Database queries are often the primary bottleneck. Use Django Debug Toolbar or Mercury's monitoring to identify slow queries before making infrastructure changes."
+    },
+    {
+      "level": "beginner",
+      "question": "What's a common cause of slow Django views?",
+      "options": [
+        "Using Python instead of JavaScript",
+        "Missing database indexes on filtered fields",
+        "Having too many URL patterns",
+        "Using class-based views"
+      ],
+      "correct": 1,
+      "explanation": "Missing database indexes on fields used in WHERE clauses or ORDER BY can cause full table scans, dramatically slowing queries."
+    },
+    {
+      "level": "intermediate",
+      "question": "Which tool helps identify slow queries in Django?",
+      "options": [
+        "Django Admin",
+        "Django Debug Toolbar",
+        "Django Forms",
+        "Django Signals"
+      ],
+      "correct": 1,
+      "explanation": "Django Debug Toolbar shows all SQL queries executed, their execution time, and helps identify duplicates and slow queries."
+    },
+    {
+      "level": "intermediate",
+      "question": "How does pagination improve API performance?",
+      "options": [
+        "It doesn't affect performance",
+        "Reduces data transfer and memory usage",
+        "Makes queries run faster",
+        "Improves database indexing"
+      ],
+      "correct": 1,
+      "explanation": "Pagination limits the amount of data transferred and processed at once, reducing memory usage and response time for large datasets."
+    },
+    {
+      "level": "advanced",
+      "question": "What's the impact of using iterator() on large querysets?",
+      "options": [
+        "No impact, it's just syntactic sugar",
+        "Reduces memory usage by not caching results",
+        "Makes queries run faster",
+        "Enables parallel processing"
+      ],
+      "correct": 1,
+      "explanation": "iterator() streams results without caching them, reducing memory usage for large querysets at the cost of not being able to iterate multiple times."
+    }
+  ],
+  "memory_optimization": [
+    {
+      "level": "beginner",
+      "question": "What causes high memory usage in Django views?",
+      "options": [
+        "Using Django's ORM",
+        "Loading entire querysets into memory at once",
+        "Using templates",
+        "Having many URL patterns"
+      ],
+      "correct": 1,
+      "explanation": "Loading large querysets entirely into memory (e.g., list(queryset)) instead of iterating can cause high memory usage."
+    },
+    {
+      "level": "intermediate",
+      "question": "How does values() or values_list() help with memory?",
+      "options": [
+        "They don't affect memory usage",
+        "They return dictionaries/tuples instead of model instances",
+        "They cache results automatically",
+        "They use less database connections"
+      ],
+      "correct": 1,
+      "explanation": "values() and values_list() return lightweight dictionaries or tuples instead of full model instances, reducing memory overhead."
+    },
+    {
+      "level": "intermediate",
+      "question": "When processing 1 million records, which approach uses less memory?",
+      "options": [
+        "Model.objects.all()",
+        "list(Model.objects.all())",
+        "Model.objects.iterator(chunk_size=1000)",
+        "Model.objects.values()"
+      ],
+      "correct": 2,
+      "explanation": "iterator() with a chunk_size processes records in batches without loading everything into memory, ideal for large datasets."
+    },
+    {
+      "level": "advanced",
+      "question": "What causes a 'memory leak' in Django views?",
+      "options": [
+        "Using too many database queries",
+        "Storing data in module-level variables",
+        "Using class-based views",
+        "Having too many middlewares"
+      ],
+      "correct": 1,
+      "explanation": "Module-level variables persist between requests and accumulate data, causing memory to grow continuously."
+    }
+  ],
+  "cache_optimization": [
+    {
+      "level": "beginner",
+      "question": "What's the main benefit of caching in Django?",
+      "options": [
+        "Makes code cleaner",
+        "Reduces database load and speeds up responses",
+        "Enables real-time updates",
+        "Improves SEO"
+      ],
+      "correct": 1,
+      "explanation": "Caching stores computed results to avoid repeated expensive operations, reducing database load and improving response times."
+    },
+    {
+      "level": "intermediate",
+      "question": "Which caching backend is recommended for production?",
+      "options": [
+        "Local memory cache",
+        "Database cache",
+        "Redis or Memcached",
+        "File-based cache"
+      ],
+      "correct": 2,
+      "explanation": "Redis and Memcached are in-memory stores designed for caching, offering better performance and features than other backends."
+    },
+    {
+      "level": "intermediate",
+      "question": "When should you invalidate cache entries?",
+      "options": [
+        "Never, let them expire naturally",
+        "When the underlying data changes",
+        "Every hour",
+        "Only on server restart"
+      ],
+      "correct": 1,
+      "explanation": "Cache should be invalidated when the underlying data changes to prevent serving stale information to users."
+    },
+    {
+      "level": "advanced",
+      "question": "What's cache stampede and how do you prevent it?",
+      "options": [
+        "Multiple requests updating cache simultaneously",
+        "Cache growing too large",
+        "Cache being cleared too often",
+        "Users bypassing cache"
+      ],
+      "correct": 0,
+      "explanation": "Cache stampede occurs when many requests try to regenerate expired cache simultaneously. Prevent it with lock mechanisms or probabilistic early expiration."
+    }
+  ],
+  "database_optimization": [
+    {
+      "level": "beginner",
+      "question": "When should you add a database index?",
+      "options": [
+        "On every field",
+        "On fields used in WHERE, ORDER BY, and JOIN clauses",
+        "Only on primary keys",
+        "Only on foreign keys"
+      ],
+      "correct": 1,
+      "explanation": "Indexes speed up queries that filter, sort, or join on specific fields, but have a write performance cost."
+    },
+    {
+      "level": "intermediate",
+      "question": "What's the downside of having too many indexes?",
+      "options": [
+        "No downside, more is better",
+        "Slower INSERT, UPDATE, and DELETE operations",
+        "Queries become slower",
+        "Database crashes"
+      ],
+      "correct": 1,
+      "explanation": "Each index must be updated when data changes, slowing down write operations. Balance query performance with write performance."
+    },
+    {
+      "level": "advanced",
+      "question": "What's a covering index?",
+      "options": [
+        "An index on all columns",
+        "An index that includes all columns needed by a query",
+        "A backup index",
+        "An index on foreign keys"
+      ],
+      "correct": 1,
+      "explanation": "A covering index includes all columns needed by a query, allowing the database to answer the query entirely from the index without accessing the table."
+    }
+  ],
+  "general_performance": [
+    {
+      "level": "beginner",
+      "question": "When should you optimize Django performance?",
+      "options": [
+        "Before writing any code",
+        "After identifying actual bottlenecks",
+        "Only when users complain",
+        "Never, Django is fast enough"
+      ],
+      "correct": 1,
+      "explanation": "Premature optimization wastes time. Profile first, identify real bottlenecks, then optimize what matters."
+    },
+    {
+      "level": "intermediate",
+      "question": "What's the 80/20 rule in performance optimization?",
+      "options": [
+        "80% of code needs optimization",
+        "80% of performance issues come from 20% of code",
+        "Optimize for 80% of users",
+        "80% faster is good enough"
+      ],
+      "correct": 1,
+      "explanation": "The Pareto principle: 80% of performance problems typically come from 20% of the code. Focus optimization efforts on these critical sections."
+    }
+  ],
+  "mercury_grading": [
+    {
+      "level": "beginner",
+      "question": "What does Django Mercury's grade 'S' mean for your test?",
+      "options": [
+        "Satisfactory performance",
+        "Slow performance",
+        "Superior/excellent performance",
+        "Standard performance"
+      ],
+      "correct": 2,
+      "explanation": "Grade 'S' indicates superior performance - your code is highly optimized and exceeds performance expectations!"
+    },
+    {
+      "level": "intermediate",
+      "question": "Which Django Mercury grade indicates you have performance issues to fix?",
+      "options": [
+        "A+",
+        "B",
+        "C or below",
+        "S"
+      ],
+      "correct": 2,
+      "explanation": "Grades C, D, and F indicate performance issues that need attention. C is marginal, D is poor, and F is failing performance."
+    }
+  ]
+}

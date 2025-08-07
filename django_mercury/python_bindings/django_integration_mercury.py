@@ -37,6 +37,7 @@ Version: 2.0.0
 
 import time
 import sys
+import os
 import json
 import inspect
 
@@ -644,6 +645,29 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                         # This is likely a threshold failure, try to extract metrics from the monitor
                         # We'll catch the exception and re-raise it after tracking
                         test_executed = True
+                        
+                        # Check for educational mode and trigger intervention
+                        if os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true':
+                            try:
+                                from django_mercury.python_bindings.educational_monitor import EducationalMonitor
+                                from django_mercury.cli.educational.interactive_ui import InteractiveUI
+                                
+                                # Create educational components
+                                ui = InteractiveUI()
+                                monitor = EducationalMonitor(
+                                    console=ui.console,
+                                    interactive_mode=True
+                                )
+                                
+                                # Handle the performance issue educationally
+                                monitor.handle_performance_issue(
+                                    test=test_method or operation_name,
+                                    error_msg=str(monitor_exception)
+                                )
+                            except ImportError:
+                                # Educational components not available, continue normally
+                                pass
+                        
                         raise monitor_exception
                     else:
                         # Some other error, re-raise immediately
