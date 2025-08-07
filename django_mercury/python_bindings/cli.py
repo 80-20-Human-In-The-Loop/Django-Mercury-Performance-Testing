@@ -22,7 +22,7 @@ try:
 except ImportError:
     RICH_AVAILABLE = False
 
-from django_mercury import VERSION
+from django_mercury import __version__ as VERSION
 from django_mercury.python_bindings.educational_guidance import (
     EduLiteColorScheme,
 )

@@ -439,7 +439,9 @@ def get_test_modules() -> List[str]:
         'bindings',
         'core',
         'config',
-        'integration'
+        'integration',
+        'cli',
+        'educational'
     ]
     
     # Discover tests from each subdirectory

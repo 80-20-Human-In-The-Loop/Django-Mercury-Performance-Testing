@@ -29,7 +29,62 @@ class MyPerformanceTest(DjangoMercuryAPITestCase):
         # Performance is automatically monitored and reported!
 ```
 
-## 🎯 Choose Your Mode
+## 🌟 Origin Story
+
+Mercury started at [EduLite](https://github.com/ibrahim-sisar/EduLite). EduLite helps students learn with slow internet. We found our UserSearchView made **825 database queries** to show one page!
+
+We built Mercury to find these problems and teach you how to fix them. Mercury follows EduLite's values: **Fair**, **Free**, and **Open**. Everyone can use it and learn.
+
+## 🎯 Current Status: v0.0.2 on PyPI! 🎉
+
+**What Works Now:**
+- ✅ **Install from PyPI** - `pip install django-mercury-performance`
+- ✅ **NEW: Educational Mode (`--edu`)** - Interactive learning while testing
+- ✅ Finds N+1 query problems
+- ✅ Grades speed (S, A+, A, B, C, D, F) 
+- ✅ Two test types: `DjangoMercuryAPITestCase` and `DjangoPerformanceAPITestCase`
+- ✅ Knows what type of code runs
+- ✅ Teaches when tests fail
+- ✅ Fast C code for speed
+- ✅ Tracks time, queries, and memory
+
+**What We Actually Found:**
+```text
+🚨 POTENTIAL N+1 QUERY PROBLEM! 🚨
+Severity: CRITICAL (825 queries)
+```
+
+**Coming Soon:**
+- 🤖 AI Agent Mode (`--agent`) for smart automation
+- 📊 Track speed changes over time
+- 🎯 Test all Django view types
+- 🔍 Find exactly when code gets slower
+- 🛠️ Better testing tools
+
+## 📦 Installation
+
+### Install from PyPI (Recommended)
+
+```bash
+pip install django-mercury-performance
+```
+
+### Install from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/Django-Mercury/Performance-Testing.git
+cd Django-Mercury-Performance-Testing
+
+# Install in development mode
+pip install -e .
+
+# If you want to modify the C extensions
+cd django_mercury/c_core
+make clean && make
+```
+
+## Choose Your Mode
 
 Django Mercury adapts to your needs. Pick the mode that fits you:
 
@@ -130,61 +185,6 @@ python manage.py test --agent
     "5/5_critical": 1
   }
 }
-```
-
-## 🌟 Origin Story
-
-Mercury started at [EduLite](https://github.com/ibrahim-sisar/EduLite). EduLite helps students learn with slow internet. We found our UserSearchView made **825 database queries** to show one page!
-
-We built Mercury to find these problems and teach you how to fix them. Mercury follows EduLite's values: **Fair**, **Free**, and **Open**. Everyone can use it and learn.
-
-## 🎯 Current Status: v0.0.2 on PyPI! 🎉
-
-**What Works Now:**
-- ✅ **Install from PyPI** - `pip install django-mercury-performance`
-- ✅ **NEW: Educational Mode (`--edu`)** - Interactive learning while testing
-- ✅ Finds N+1 query problems
-- ✅ Grades speed (S, A+, A, B, C, D, F) 
-- ✅ Two test types: `DjangoMercuryAPITestCase` and `DjangoPerformanceAPITestCase`
-- ✅ Knows what type of code runs
-- ✅ Teaches when tests fail
-- ✅ Fast C code for speed
-- ✅ Tracks time, queries, and memory
-
-**What We Actually Found:**
-```text
-🚨 POTENTIAL N+1 QUERY PROBLEM! 🚨
-Severity: CRITICAL (825 queries)
-```
-
-**Coming Soon:**
-- 🤖 AI Agent Mode (`--agent`) for smart automation
-- 📊 Track speed changes over time
-- 🎯 Test all Django view types
-- 🔍 Find exactly when code gets slower
-- 🛠️ Better testing tools
-
-## 📦 Installation
-
-### Install from PyPI (Recommended)
-
-```bash
-pip install django-mercury-performance
-```
-
-### Install from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/Django-Mercury/Performance-Testing.git
-cd Django-Mercury-Performance-Testing
-
-# Install in development mode
-pip install -e .
-
-# If you want to modify the C extensions
-cd django_mercury/c_core
-make clean && make
 ```
 
 ## 🚀 Quick Start

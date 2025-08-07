@@ -71,6 +71,10 @@ class EducationalMonitor:
             'error': error_msg
         })
         
+        # Track the concept if we have a tracker (always track, not just in interactive mode)
+        if self.progress_tracker:
+            self.progress_tracker.add_concept(issue_type)
+        
         # Only show educational content in interactive mode
         if not self.interactive_mode:
             return
@@ -80,10 +84,6 @@ class EducationalMonitor:
             self._show_rich_educational_content(test_name, issue_type, error_msg)
         else:
             self._show_text_educational_content(test_name, issue_type, error_msg)
-        
-        # Track the concept if we have a tracker
-        if self.progress_tracker:
-            self.progress_tracker.add_concept(issue_type)
     
     def _detect_issue_type(self, error_msg: str) -> str:
         """Detect the type of performance issue from error message."""
@@ -95,7 +95,7 @@ class EducationalMonitor:
             return "slow_response_time"
         elif "memory" in error_lower or "leak" in error_lower:
             return "memory_optimization"
-        elif "cache" in error_lower:
+        elif "cache" in error_lower or "caching" in error_lower:
             return "cache_optimization"
         else:
             return "general_performance"
