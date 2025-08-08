@@ -24,18 +24,11 @@ def create_mock_path(target_platform: str):
     """
     if target_platform == "Windows":
         base_class = PureWindowsPath
-        from pathlib import _windows_flavour
-        flavour = _windows_flavour
     else:
         base_class = PurePosixPath
-        from pathlib import _posix_flavour
-        flavour = _posix_flavour
     
     class MockPath(base_class):
         """Mock Path that works across platforms."""
-        
-        # Add _flavour attribute for pathlib compatibility
-        _flavour = flavour
         
         def __new__(cls, *args, **kwargs):
             """Create new MockPath instance."""

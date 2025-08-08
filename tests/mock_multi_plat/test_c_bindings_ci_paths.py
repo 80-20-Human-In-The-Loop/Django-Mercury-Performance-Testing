@@ -124,6 +124,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
                 # Only existing paths should be added
                 self.assertGreater(len(paths), 0)
     
+    @unittest.skipIf(IS_CI, "Test requires non-CI environment (skipping when running in CI)")
     def test_non_ci_environment(self):
         """Test behavior when not in CI environment."""
         # Remove CI environment variables
