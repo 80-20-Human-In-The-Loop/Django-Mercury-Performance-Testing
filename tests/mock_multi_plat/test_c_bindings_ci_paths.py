@@ -30,7 +30,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
     def test_github_actions_detection(self):
         """Test GitHub Actions environment detection (line 174)."""
         # Test with GitHub Actions environment
-        with CIMocker('github_actions'):
+        with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             self.assertEqual(os.environ.get('CI'), 'true')
             self.assertEqual(os.environ.get('GITHUB_ACTIONS'), 'true')
             

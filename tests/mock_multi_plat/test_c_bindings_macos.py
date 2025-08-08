@@ -29,11 +29,10 @@ class TestMacOSCBindings(unittest.TestCase):
         """Test macOS library configuration."""
         from django_mercury.python_bindings import c_bindings
         
-        with PlatformMocker("Darwin"):
-            # Should use Unix-style library names on macOS
-            config = c_bindings.LIBRARY_CONFIG
-            self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
-            self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
+        # Should use Unix-style library names on macOS (no mocking needed)
+        config = c_bindings.LIBRARY_CONFIG
+        self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
+        self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_system_paths(self):
