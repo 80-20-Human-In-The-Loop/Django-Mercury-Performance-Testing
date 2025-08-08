@@ -240,17 +240,19 @@ class PlatformMocker:
         # Also patch imports that might use Path directly
         # Import the module first to ensure it's loaded
         from django_mercury.python_bindings import c_bindings
-        p4 = patch.object(c_bindings, 'Path', WindowsMockPath)
-        self.patches.append(p4)
-        p4.start()
+        # Ensure Path is accessible
+        if hasattr(c_bindings, 'Path'):
+            p4 = patch.object(c_bindings, 'Path', WindowsMockPath)
+            self.patches.append(p4)
+            p4.start()
         
         # Mock ctypes.CDLL to fail (Windows uses different mechanism)
         def windows_cdll_fail(name, *args, **kwargs):
             raise OSError("Windows cannot load .so files")
         
-        p4 = patch('ctypes.CDLL', side_effect=windows_cdll_fail)
-        self.patches.append(p4)
-        p4.start()
+        p5 = patch('ctypes.CDLL', side_effect=windows_cdll_fail)
+        self.patches.append(p5)
+        p5.start()
         
         # Mock importlib to simulate .pyd imports
         self._mock_windows_imports()
@@ -332,9 +334,11 @@ class PlatformMocker:
         # Also patch imports that might use Path directly
         # Import the module first to ensure it's loaded
         from django_mercury.python_bindings import c_bindings
-        p5 = patch.object(c_bindings, 'Path', MacOSMockPath)
-        self.patches.append(p5)
-        p5.start()
+        # Ensure Path is accessible
+        if hasattr(c_bindings, 'Path'):
+            p5 = patch.object(c_bindings, 'Path', MacOSMockPath)
+            self.patches.append(p5)
+            p5.start()
         
         # Mock Path.exists for macOS paths
         def macos_path_exists(self):
@@ -347,14 +351,14 @@ class PlatformMocker:
             ]
             return any(str_path.startswith(p) for p in macos_paths)
         
-        p3 = patch.object(Path, 'exists', macos_path_exists)
-        self.patches.append(p3)
-        p3.start()
+        p6 = patch.object(Path, 'exists', macos_path_exists)
+        self.patches.append(p6)
+        p6.start()
         
         # Mock platform.machine for Apple Silicon detection
-        p4 = patch('platform.machine', return_value='arm64')
-        self.patches.append(p4)
-        p4.start()
+        p7 = patch('platform.machine', return_value='arm64')
+        self.patches.append(p7)
+        p7.start()
         
     def _mock_linux(self):
         """Mock Linux platform behavior."""
@@ -392,9 +396,11 @@ class PlatformMocker:
         # Also patch imports that might use Path directly
         # Import the module first to ensure it's loaded
         from django_mercury.python_bindings import c_bindings
-        p4 = patch.object(c_bindings, 'Path', LinuxMockPath)
-        self.patches.append(p4)
-        p4.start()
+        # Ensure Path is accessible
+        if hasattr(c_bindings, 'Path'):
+            p4 = patch.object(c_bindings, 'Path', LinuxMockPath)
+            self.patches.append(p4)
+            p4.start()
         
         # Mock successful ctypes loading for Linux
         mock_lib = MagicMock()
