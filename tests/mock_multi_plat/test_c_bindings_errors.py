@@ -38,13 +38,9 @@ class TestErrorHandling(unittest.TestCase):
         """Test library not found error handling (lines 477-485)."""
         manager = CExtensionManager()
         
-        # Use platform-appropriate library name
-        from django_mercury.python_bindings.c_bindings import IS_WINDOWS
-        lib_name = "_c_analyzer" if IS_WINDOWS else "libquery_analyzer"
-        
         with patch('ctypes.CDLL', side_effect=OSError("cannot open shared object file: No such file or directory")):
             lib_info = manager._load_library("query_analyzer", {
-                "name": lib_name,
+                "name": "libquery_analyzer",
                 "description": "Analyzer"
             })
             
@@ -118,14 +114,10 @@ class TestErrorHandling(unittest.TestCase):
         """Test memory allocation failure handling."""
         manager = CExtensionManager()
         
-        # Use platform-appropriate library name
-        from django_mercury.python_bindings.c_bindings import IS_WINDOWS
-        lib_name = "_c_metrics" if IS_WINDOWS else "libmetrics_engine"
-        
         # Mock out of memory error
         with patch('ctypes.CDLL', side_effect=MemoryError("Out of memory")):
             lib_info = manager._load_library("metrics_engine", {
-                "name": lib_name,
+                "name": "libmetrics_engine",
                 "description": "Metrics"
             })
             
@@ -135,13 +127,9 @@ class TestErrorHandling(unittest.TestCase):
         """Test permission denied error handling."""
         manager = CExtensionManager()
         
-        # Use platform-appropriate library name
-        from django_mercury.python_bindings.c_bindings import IS_WINDOWS
-        lib_name = "_c_orchestrator" if IS_WINDOWS else "libtest_orchestrator"
-        
         with patch('ctypes.CDLL', side_effect=PermissionError("Permission denied")):
             lib_info = manager._load_library("test_orchestrator", {
-                "name": lib_name,
+                "name": "libtest_orchestrator",
                 "description": "Orchestrator"
             })
             
@@ -151,14 +139,10 @@ class TestErrorHandling(unittest.TestCase):
         """Test handling of corrupted library files."""
         manager = CExtensionManager()
         
-        # Use platform-appropriate library name
-        from django_mercury.python_bindings.c_bindings import IS_WINDOWS
-        lib_name = "_c_analyzer" if IS_WINDOWS else "libquery_analyzer"
-        
         error_msg = "invalid ELF header"
         with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
             lib_info = manager._load_library("query_analyzer", {
-                "name": lib_name,
+                "name": "libquery_analyzer",
                 "description": "Analyzer"
             })
             
@@ -169,14 +153,10 @@ class TestErrorHandling(unittest.TestCase):
         """Test handling of version mismatch errors."""
         manager = CExtensionManager()
         
-        # Use platform-appropriate library name
-        from django_mercury.python_bindings.c_bindings import IS_WINDOWS
-        lib_name = "_c_metrics" if IS_WINDOWS else "libmetrics_engine"
-        
         error_msg = "version `GLIBC_2.34' not found"
         with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
             lib_info = manager._load_library("metrics_engine", {
-                "name": lib_name,
+                "name": "libmetrics_engine",
                 "description": "Metrics"
             })
             
