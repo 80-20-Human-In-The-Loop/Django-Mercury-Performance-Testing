@@ -441,7 +441,7 @@ jobs:
       
       - name: Check distributions
         run: |
-          pip install --upgrade "twine>=5.0.0" "setuptools>=70.0"
+          pip install --upgrade "twine>=5.0.0" "setuptools>=68.0,<70.0"
           twine check upload/*
       
       - name: Publish to PyPI
