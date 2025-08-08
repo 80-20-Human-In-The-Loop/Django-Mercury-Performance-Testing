@@ -8,6 +8,7 @@ These tests cover CI/CD-specific code paths including:
 
 import os
 import sys
+import platform
 import unittest
 from unittest.mock import patch, Mock, MagicMock
 from pathlib import Path
@@ -15,7 +16,6 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from tests.mock_multi_plat.platform_mocks import mock_platform, CIMocker
 from django_mercury.python_bindings.c_bindings import CExtensionLoader, get_library_paths
 # Alias for easier use in tests
 CExtensionManager = CExtensionLoader
@@ -40,7 +40,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
             self.assertGreater(len(paths), 0)
     
     @unittest.skipIf(not IS_CI, "Test requires CI environment (GitHub Actions)")
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_github_actions_linux_paths(self):
         """Test GitHub Actions Linux runner paths (lines 193-196)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
@@ -57,7 +57,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
                 self.assertTrue(any(expected in p for p in paths_str), 
                               f"Expected path {expected} not found in {paths_str}")
     
-    @mock_platform("Windows")
+    @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
     def test_github_actions_windows_paths(self):
         """Test GitHub Actions Windows runner paths (lines 186-190)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
@@ -77,7 +77,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
                     break
             self.assertTrue(found, f"No Windows CI paths found in {paths_str}")
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_github_actions_macos_paths(self):
         """Test GitHub Actions macOS runner paths."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):

@@ -8,6 +8,7 @@ These tests cover Linux-specific code paths including:
 
 import os
 import sys
+import platform
 import unittest
 from unittest.mock import patch, Mock, MagicMock
 from pathlib import Path
@@ -15,7 +16,6 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from tests.mock_multi_plat.platform_mocks import mock_platform, PlatformMocker
 from django_mercury.python_bindings.c_bindings import CExtensionLoader
 # Alias for easier use in tests  
 CExtensionManager = CExtensionLoader
@@ -27,19 +27,18 @@ IS_CI = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 't
 class TestLinuxCBindings(unittest.TestCase):
     """Test Linux-specific behavior in c_bindings.py."""
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_library_config(self):
         """Test Linux library configuration (lines 100-119)."""
         from django_mercury.python_bindings import c_bindings
         
         # On Linux, should use .so library names
-        with PlatformMocker("Linux"):
-            config = c_bindings.LIBRARY_CONFIG
-            self.assertIn("query_analyzer", config)
-            self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
-            self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
+        config = c_bindings.LIBRARY_CONFIG
+        self.assertIn("query_analyzer", config)
+        self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
+        self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_so_loading(self):
         """Test Linux .so library loading with ctypes (lines 450-485)."""
         manager = CExtensionManager()
@@ -62,7 +61,7 @@ class TestLinuxCBindings(unittest.TestCase):
                 self.assertTrue(lib_info.is_loaded)
                 self.assertIsNotNone(lib_info.handle)
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_system_paths(self):
         """Test Linux system library paths (lines 204-205)."""
         from django_mercury.python_bindings.c_bindings import get_library_paths
@@ -76,7 +75,7 @@ class TestLinuxCBindings(unittest.TestCase):
         self.assertTrue(any('/lib' in p for p in paths_str))
     
     @unittest.skipIf(not IS_CI, "Test requires CI environment (GitHub Actions)")
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_ci_paths(self):
         """Test Linux CI paths on GitHub Actions (lines 193-196)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
@@ -88,7 +87,7 @@ class TestLinuxCBindings(unittest.TestCase):
             # Should include Linux GitHub Actions paths
             self.assertTrue(any('/home/runner/work' in p for p in paths_str))
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_ld_library_path(self):
         """Test Linux LD_LIBRARY_PATH handling."""
         # Test that LD_LIBRARY_PATH is considered
@@ -97,7 +96,7 @@ class TestLinuxCBindings(unittest.TestCase):
             # In real implementation, this path might be used
             self.assertEqual(os.environ.get('LD_LIBRARY_PATH'), test_path)
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_ctypes_error_handling(self):
         """Test Linux ctypes loading error handling (lines 477-485)."""
         manager = CExtensionManager()
@@ -112,7 +111,7 @@ class TestLinuxCBindings(unittest.TestCase):
             self.assertFalse(lib_info.is_loaded)
             self.assertIn("cannot open shared object", lib_info.error_message)
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_function_configuration(self):
         """Test Linux function signature configuration (lines 650-750)."""
         manager = CExtensionManager()
@@ -131,7 +130,7 @@ class TestLinuxCBindings(unittest.TestCase):
             count = manager._configure_metrics_engine(mock_lib)
             self.assertGreater(count, 0)
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_platform_detection(self):
         """Test Linux platform detection."""
         import platform
@@ -140,7 +139,7 @@ class TestLinuxCBindings(unittest.TestCase):
         self.assertEqual(sys.platform, "linux")
         self.assertEqual(os.name, "posix")
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_library_search_order(self):
         """Test Linux library search order."""
         manager = CExtensionManager()
@@ -158,7 +157,7 @@ class TestLinuxCBindings(unittest.TestCase):
             # Instead test that paths are searched
             self.assertTrue(path.name.startswith("libtest"))
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_soname_handling(self):
         """Test Linux shared library soname handling."""
         manager = CExtensionManager()
@@ -182,7 +181,7 @@ class TestLinuxCBindings(unittest.TestCase):
 class TestLinuxEdgeCases(unittest.TestCase):
     """Test Linux edge cases and error scenarios."""
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_permission_denied(self):
         """Test handling of permission denied errors."""
         manager = CExtensionManager()
@@ -196,7 +195,7 @@ class TestLinuxEdgeCases(unittest.TestCase):
             self.assertFalse(lib_info.is_loaded)
             self.assertIn("Permission denied", lib_info.error_message)
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_missing_dependencies(self):
         """Test handling of missing library dependencies."""
         manager = CExtensionManager()
@@ -211,7 +210,7 @@ class TestLinuxEdgeCases(unittest.TestCase):
             self.assertFalse(lib_info.is_loaded)
             self.assertIn("GLIBCXX", lib_info.error_message)
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_symlink_resolution(self):
         """Test Linux symlink resolution for libraries."""
         # Test that symlinks are followed
@@ -227,7 +226,7 @@ class TestLinuxEdgeCases(unittest.TestCase):
         # Test that the actual path contains version info
         self.assertTrue(str(actual_path).endswith(".1.0.0"))
     
-    @mock_platform("Linux")
+    @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_32bit_compatibility(self):
         """Test 32-bit library compatibility checks."""
         import platform

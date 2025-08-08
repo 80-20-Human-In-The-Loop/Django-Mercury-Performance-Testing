@@ -8,6 +8,7 @@ These tests cover macOS-specific code paths including:
 
 import os
 import sys
+import platform
 import unittest
 from unittest.mock import patch, Mock, MagicMock
 from pathlib import Path
@@ -15,7 +16,6 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from tests.mock_multi_plat.platform_mocks import mock_platform, PlatformMocker
 from django_mercury.python_bindings.c_bindings import CExtensionLoader
 # Alias for easier use in tests
 CExtensionManager = CExtensionLoader
@@ -24,7 +24,7 @@ CExtensionManager = CExtensionLoader
 class TestMacOSCBindings(unittest.TestCase):
     """Test macOS-specific behavior in c_bindings.py."""
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_library_config(self):
         """Test macOS library configuration."""
         from django_mercury.python_bindings import c_bindings
@@ -35,7 +35,7 @@ class TestMacOSCBindings(unittest.TestCase):
             self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
             self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_system_paths(self):
         """Test macOS system library paths (lines 206-207)."""
         from django_mercury.python_bindings.c_bindings import get_library_paths
@@ -48,7 +48,7 @@ class TestMacOSCBindings(unittest.TestCase):
         self.assertTrue(any('/opt/homebrew/lib' in p for p in paths_str))  # Apple Silicon
         self.assertTrue(any('/usr/lib' in p for p in paths_str))
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_apple_silicon_detection(self):
         """Test Apple Silicon (M1/M2) detection."""
         import platform
@@ -60,7 +60,7 @@ class TestMacOSCBindings(unittest.TestCase):
         with patch('platform.machine', return_value='x86_64'):
             self.assertEqual(platform.machine(), "x86_64")
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_homebrew_paths(self):
         """Test Homebrew library paths on macOS."""
         from django_mercury.python_bindings.c_bindings import get_library_paths
@@ -76,7 +76,7 @@ class TestMacOSCBindings(unittest.TestCase):
             # Intel Macs use /usr/local
             self.assertTrue(any('/usr/local' in p for p in paths_str))
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_dylib_loading(self):
         """Test macOS .dylib library loading."""
         manager = CExtensionManager()
@@ -91,7 +91,7 @@ class TestMacOSCBindings(unittest.TestCase):
                 # Should handle both extensions
                 self.assertIsNotNone(mock_lib)
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_framework_paths(self):
         """Test macOS Framework paths."""
         # macOS has special Framework directories
@@ -106,7 +106,7 @@ class TestMacOSCBindings(unittest.TestCase):
             # Framework paths should be recognizable
             self.assertTrue("Frameworks" in expanded)
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_rpath_handling(self):
         """Test macOS @rpath handling."""
         manager = CExtensionManager()
@@ -125,7 +125,7 @@ class TestMacOSCBindings(unittest.TestCase):
             if lib_info.is_loaded:
                 self.assertIsNotNone(lib_info.handle)
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_platform_detection(self):
         """Test macOS platform detection."""
         import platform
@@ -134,7 +134,7 @@ class TestMacOSCBindings(unittest.TestCase):
         self.assertEqual(sys.platform, "darwin")
         self.assertEqual(os.name, "posix")
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_codesign_issues(self):
         """Test handling of macOS code signing issues."""
         manager = CExtensionManager()
@@ -155,7 +155,7 @@ class TestMacOSCBindings(unittest.TestCase):
 class TestMacOSEdgeCases(unittest.TestCase):
     """Test macOS edge cases and error scenarios."""
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_gatekeeper_blocking(self):
         """Test handling of macOS Gatekeeper blocking."""
         manager = CExtensionManager()
@@ -171,7 +171,7 @@ class TestMacOSEdgeCases(unittest.TestCase):
             self.assertFalse(lib_info.is_loaded)
             self.assertIsNotNone(lib_info.error_message)
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_universal_binary(self):
         """Test macOS universal binary support."""
         import platform
@@ -183,7 +183,7 @@ class TestMacOSEdgeCases(unittest.TestCase):
             with patch('platform.machine', return_value=arch):
                 self.assertEqual(platform.machine(), arch)
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_sip_restrictions(self):
         """Test System Integrity Protection (SIP) restrictions."""
         # SIP restricts access to certain paths
@@ -198,7 +198,7 @@ class TestMacOSEdgeCases(unittest.TestCase):
             # These paths have special protection on macOS
             self.assertTrue(path.startswith('/'))
     
-    @mock_platform("Darwin")
+    @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_xcode_paths(self):
         """Test Xcode developer paths."""
         xcode_paths = [
