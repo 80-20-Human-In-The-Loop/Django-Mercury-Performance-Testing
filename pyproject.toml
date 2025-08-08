@@ -311,8 +311,7 @@ environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="
 
 # Install Visual Studio Build Tools components and dependencies
 before-all = [
-    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel",
-    "pip install delvewheel",
+    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel delvewheel",
 ]
 
 # Build C libraries before Python extension
