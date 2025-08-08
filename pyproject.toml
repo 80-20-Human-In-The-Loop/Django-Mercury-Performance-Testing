@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8"]
+requires = ["setuptools>=70.0", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,8 +13,8 @@ authors = [
 maintainers = [
     {name = "Mathew Storm", email = "mathewstormdev@gmail.com"}
 ]
-license = {text = "GPL-3.0-or-later"}
-requires-python = ">=3.8"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Django",
@@ -24,8 +24,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -71,6 +69,9 @@ dev = [
     "flake8>=4.0.0",
     "ruff>=0.1.0",
     "coverage>=6.0.0",
+    "twine>=5.0.0",
+    "setuptools>=70.0",
+    "build>=1.0.0",
 ]
 docs = [
     "sphinx>=4.5.0",
@@ -96,10 +97,15 @@ packages = [
     "django_mercury", 
     "django_mercury.python_bindings", 
     "django_mercury.c_core",
+    "django_mercury.cli",
+    "django_mercury.cli.educational",
+    "django_mercury.cli.management",
+    "django_mercury.cli.management.commands",
     "django_mercury.documentation",
     "django_mercury.examples"
 ]
 include-package-data = true
+license-files = ["LICENSE"]
 
 [tool.setuptools.package-data]
 "django_mercury" = [
@@ -119,7 +125,7 @@ include-package-data = true
 
 [tool.black]
 line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+target-version = ['py310', 'py311', 'py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -142,7 +148,7 @@ known_django = ["django", "rest_framework"]
 sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -171,7 +177,7 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py310"
 line-length = 100
 select = [
     "E",   # pycodestyle errors
@@ -225,8 +231,8 @@ exclude_lines = [
 ]
 
 [tool.cibuildwheel]
-# Build for Python 3.8-3.12
-build = "cp38-* cp39-* cp310-* cp311-* cp312-*"
+# Build for Python 3.10-3.12
+build = "cp310-* cp311-* cp312-*"
 
 # Skip 32-bit builds, PyPy, and musllinux for now
 skip = [

@@ -3,7 +3,7 @@
 # Django Mercury 🚀
 
 [![PyPI version](https://badge.fury.io/py/django-mercury-performance.svg)](https://badge.fury.io/py/django-mercury-performance)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Django 3.2-5.1](https://img.shields.io/badge/django-3.2--5.1-green.svg)](https://docs.djangoproject.com/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-red.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Built for: EduLite](https://img.shields.io/badge/Built%20for-EduLite-orange)](https://github.com/ibrahim-sisar/EduLite)
@@ -39,8 +39,9 @@ We built Mercury to find these problems and teach you how to fix them. Mercury f
 
 **What Works Now:**
 - ✅ **Install from PyPI** - `pip install django-mercury-performance`
+- ✅ **NEW: Educational Mode (`--edu`)** - Interactive learning while testing
 - ✅ Finds N+1 query problems
-- ✅ Grades speed (F to A+) 
+- ✅ Grades speed (S, A+, A, B, C, D, F) 
 - ✅ Two test types: `DjangoMercuryAPITestCase` and `DjangoPerformanceAPITestCase`
 - ✅ Knows what type of code runs
 - ✅ Teaches when tests fail
@@ -54,11 +55,11 @@ Severity: CRITICAL (825 queries)
 ```
 
 **Coming Soon:**
-- 🔜 AI help to fix slow code
-- 🔜 Track speed over time
-- 🔜 Test all view types
-- 🔜 Find when code gets slower
-- 🔜 Better test support
+- 🤖 AI Agent Mode (`--agent`) for smart automation
+- 📊 Track speed changes over time
+- 🎯 Test all Django view types
+- 🔍 Find exactly when code gets slower
+- 🛠️ Better testing tools
 
 ## 📦 Installation
 
@@ -83,15 +84,134 @@ cd django_mercury/c_core
 make clean && make
 ```
 
+## Choose Your Mode
+
+Django Mercury adapts to your needs. Pick the mode that fits you:
+
+### 🎓 Educational Mode (`--edu`) - For Students & Beginners
+Learn while you test! Mercury becomes your performance tutor.
+
+**What it does:**
+- ⏸️ Pauses when it finds problems to teach you
+- 📚 Explains issues in simple language  
+- 🎮 Interactive quizzes test your understanding
+- 📈 Tracks your learning progress
+- 🔧 Shows step-by-step fixes
+
+**How to enable:**
+```python
+# Add to your Django settings
+import sys
+if '--edu' in sys.argv:
+    TEST_RUNNER = 'django_mercury.test_runner.EducationalTestRunner'
+```
+
+```bash
+# Run tests with learning mode
+python manage.py test --edu
+```
+
+**Example experience:**
+```
+╭──────────── 🚨 Learning Opportunity ────────────╮
+│                                                  │
+│  ⚠️  Performance Issue Detected!                 │
+│                                                  │
+│  Test: test_user_list_api                       │
+│  Issue: N+1 Queries                             │
+│  Queries executed: 230 | Response time: 450ms   │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+📚 What's happening?
+When you fetch users without their related data, 
+Django makes a new query for each relationship.
+
+🤔 Quick Check: Which method would fix this?
+  [1] filter()
+  [2] select_related()
+  [3] annotate()
+  [4] values()
+
+Your answer: _
+```
+
+[📖 Full Educational Mode Documentation](docs/EDUCATIONAL_MODE.md)
+
+### 💼 Professional Mode (Default) - For Experts
+Fast, efficient, no hand-holding. You know what you're doing.
+
+**What it does:**
+- ✅ Automatic performance monitoring
+- 📊 Detailed reports and grades (S, A+, A, B, C, D, F)
+- ⚡ Fast execution without interruptions
+- 🎯 Precise performance metrics
+- 🔍 N+1 query detection
+
+**How to use:**
+```python
+from django_mercury import DjangoMercuryAPITestCase
+
+class MyTest(DjangoMercuryAPITestCase):
+    def test_api_performance(self):
+        response = self.client.get('/api/endpoint/')
+        # Automatically monitored!
+```
+
+### 🤖 Agent Mode (`--agent`) - Coming Soon!
+Let AI help optimize your code while you keep control.
+
+**What will it do:**
+- 🔄 Auto-fix level 1-2 complexity issues
+- 📝 Generate optimization suggestions
+- 🚨 Flag critical issues for human review  
+- 📊 Structured JSON output for tool integration
+- 🧠 Preserve human decision points
+
+**Future usage:**
+```bash
+python manage.py test --agent
+```
+
+```json
+{
+  "auto_fix_immediately": ["missing_select_related", "unused_imports"],
+  "requires_human_review": ["architecture_change", "security_update"],
+  "complexity_breakdown": {
+    "1/5_trivial": 12,
+    "2/5_routine": 8,
+    "3/5_moderate": 3,
+    "4/5_complex": 2,
+    "5/5_critical": 1
+  }
+}
+```
+
 ## 🚀 Quick Start
 
-### Two Ways to Test Performance
+### Step 1: Choose Your Experience
 
-Choose the test class that fits your needs.
+1. **🎓 Student/Beginner?** Use `--edu` for interactive learning
+2. **💼 Expert?** Use default mode for fast results  
+3. **🤖 AI Agent?** `--agent` mode coming soon!
 
-#### 1. DjangoMercuryAPITestCase - Automatic Testing
+### Step 2: Run Your Tests
 
-Mercury watches your tests automatically. You write normal tests. Mercury finds problems.
+#### 🎓 Educational Mode - Learn While Testing
+
+```bash
+# Enable in settings.py
+import sys
+if '--edu' in sys.argv:
+    TEST_RUNNER = 'django_mercury.test_runner.EducationalTestRunner'
+
+# Run with learning
+python manage.py test --edu
+```
+
+Mercury will pause at performance issues to teach you!
+
+#### 💼 Professional Mode - Automatic Monitoring (Default)
 
 ```python
 from django_mercury import DjangoMercuryAPITestCase
@@ -113,7 +233,7 @@ class UserSearchPerformanceTest(DjangoMercuryAPITestCase):
 - Finds N+1 problems
 - Shows clear reports
 
-#### 2. DjangoPerformanceAPITestCase - Manual Control
+#### 💼 Advanced: Manual Control
 
 You control when to monitor. Good for specific performance checks.
 
@@ -156,9 +276,27 @@ This is actual output from testing EduLite:
 ╰─────────────────────────────────────────────────────────────╯
 ```
 
+## 📈 Your Learning Journey
+
+### Start Here → Master Performance → Help Others
+
+```
+🎓 Educational Mode          💼 Professional Mode         🤖 Agent Mode
+Learn the basics      →      Apply your skills      →     Automate wisely
+Interactive lessons          Fast, efficient testing      AI-assisted optimization
+Quizzes & progress          Expert-level control         (Coming soon!)
+```
+
+**Your Path:**
+1. **Begin** with `--edu` mode to understand concepts
+2. **Practice** with real projects in professional mode
+3. **Master** performance optimization patterns
+4. **Contribute** improvements back to the community
+5. **Future**: Use AI agents to scale your expertise
+
 ## 🎓 How Mercury Works
 
-Mercury follows the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop/Community) way:
+Mercury follows the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop/Community) philosophy:
 
 **80% Computer Help:**
 - Watches performance automatically
@@ -436,24 +574,25 @@ After Mercury:
 
 ## 🚧 Future Plans
 
-### Phase 1: First Release ✅
-- ✅ Watch performance
-- ✅ Find N+1 problems
-- ✅ Show helpful guides
-- ✅ Available on PyPI
+### Phase 1: Foundation ✅
+- ✅ Performance monitoring
+- ✅ N+1 query detection
+- ✅ Educational guidance
+- ✅ PyPI availability
+- ✅ Educational Mode (`--edu`)
 
-### Phase 2: Make It Better
-- 🔜 Fix test problems
-- 🔜 Support all view types
-- 🔜 Track speed over time
-- 🔜 Find when code gets slower
-- 🔜 Better guides and examples
+### Phase 2: Enhancement (In Progress)
+- 🔨 Improve test stability
+- 🔨 Support all Django view types
+- 🔨 Track performance trends
+- 🔨 Better learning materials
 
-### Phase 3: Add AI Help
-- 🔜 AI suggests fixes
-- 🔜 Create fixes you can review
-- 🔜 Help new developers learn
-- 🔜 Let you add custom checks
+### Phase 3: AI Agent Mode (Coming Soon)
+- 🤖 Agent Mode (`--agent`) with structured output
+- 🤖 Auto-fix level 1-2 complexity issues
+- 🤖 Generate optimization suggestions
+- 🤖 Preserve human decision points for level 4-5 issues
+- 🤖 Integration with AI development tools
 
 ## 🤝 Contributing
 

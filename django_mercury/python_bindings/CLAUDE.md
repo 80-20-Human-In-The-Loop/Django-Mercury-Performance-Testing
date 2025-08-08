@@ -24,7 +24,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-python_requires = ">=3.8"
+python_requires = ">=3.10"
 dependencies = [
     "Django>=3.2",
     "djangorestframework>=3.12.0",
@@ -39,7 +39,7 @@ dependencies = [
 ```toml
 [tool.black]
 line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311']
+target-version = ['py310', 'py311', 'py312']
 ```
 
 **isort Configuration:**
@@ -55,7 +55,7 @@ include_trailing_comma = true
 ```toml
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py310"
 select = ["E", "F", "W", "C90", "I", "N"]
 ```
 
@@ -64,7 +64,7 @@ select = ["E", "F", "W", "C90", "I", "N"]
 *Current State (Reality):*
 ```toml
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # Currently false
@@ -75,7 +75,7 @@ ignore_missing_imports = true
 ```toml
 [tool.mypy]
 strict = true  # Goal for all new modules
-python_version = "3.8"
+python_version = "3.10"
 warn_unused_ignores = true
 disallow_untyped_defs = true  # Required for new code
 disallow_incomplete_defs = true

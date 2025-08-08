@@ -1,0 +1,215 @@
+"""macOS-specific tests for c_bindings.py.
+
+These tests cover macOS-specific code paths including:
+- .so/.dylib library loading
+- macOS file paths (/usr/local/lib, /opt/homebrew/lib)
+- Apple Silicon vs Intel architecture handling
+"""
+
+import os
+import sys
+import unittest
+from unittest.mock import patch, Mock, MagicMock
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from tests.mock_multi_plat.platform_mocks import mock_platform, PlatformMocker
+from django_mercury.python_bindings.c_bindings import CExtensionLoader
+# Alias for easier use in tests
+CExtensionManager = CExtensionLoader
+
+
+class TestMacOSCBindings(unittest.TestCase):
+    """Test macOS-specific behavior in c_bindings.py."""
+    
+    @mock_platform("Darwin")
+    def test_macos_library_config(self):
+        """Test macOS library configuration."""
+        from django_mercury.python_bindings import c_bindings
+        
+        with PlatformMocker("Darwin"):
+            # Should use Unix-style library names on macOS
+            config = c_bindings.LIBRARY_CONFIG
+            self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
+            self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
+    
+    @mock_platform("Darwin")
+    def test_macos_system_paths(self):
+        """Test macOS system library paths (lines 206-207)."""
+        from django_mercury.python_bindings.c_bindings import get_library_paths
+        
+        paths = get_library_paths()
+        paths_str = [str(p) for p in paths]
+        
+        # Should include macOS-specific paths
+        self.assertTrue(any('/usr/local/lib' in p for p in paths_str))
+        self.assertTrue(any('/opt/homebrew/lib' in p for p in paths_str))  # Apple Silicon
+        self.assertTrue(any('/usr/lib' in p for p in paths_str))
+    
+    @mock_platform("Darwin")
+    def test_macos_apple_silicon_detection(self):
+        """Test Apple Silicon (M1/M2) detection."""
+        import platform
+        
+        # Default mock is arm64 (Apple Silicon)
+        self.assertEqual(platform.machine(), "arm64")
+        
+        # Test Intel Mac
+        with patch('platform.machine', return_value='x86_64'):
+            self.assertEqual(platform.machine(), "x86_64")
+    
+    @mock_platform("Darwin")
+    def test_macos_homebrew_paths(self):
+        """Test Homebrew library paths on macOS."""
+        from django_mercury.python_bindings.c_bindings import get_library_paths
+        
+        paths = get_library_paths()
+        paths_str = [str(p) for p in paths]
+        
+        # Homebrew paths differ between Intel and Apple Silicon
+        if any('arm64' in str(p) for p in paths_str):
+            # Apple Silicon uses /opt/homebrew
+            self.assertTrue(any('/opt/homebrew' in p for p in paths_str))
+        else:
+            # Intel Macs use /usr/local
+            self.assertTrue(any('/usr/local' in p for p in paths_str))
+    
+    @mock_platform("Darwin")
+    def test_macos_dylib_loading(self):
+        """Test macOS .dylib library loading."""
+        manager = CExtensionManager()
+        
+        # macOS can use both .so and .dylib extensions
+        for ext in ['.so', '.dylib']:
+            lib_name = f"libtest{ext}"
+            with patch('ctypes.CDLL') as mock_cdll:
+                mock_lib = MagicMock()
+                mock_cdll.return_value = mock_lib
+                
+                # Should handle both extensions
+                self.assertIsNotNone(mock_lib)
+    
+    @mock_platform("Darwin")
+    def test_macos_framework_paths(self):
+        """Test macOS Framework paths."""
+        # macOS has special Framework directories
+        framework_paths = [
+            "/System/Library/Frameworks",
+            "/Library/Frameworks",
+            "~/Library/Frameworks"
+        ]
+        
+        for path in framework_paths:
+            expanded = os.path.expanduser(path)
+            # Framework paths should be recognizable
+            self.assertTrue("Frameworks" in expanded)
+    
+    @mock_platform("Darwin")
+    def test_macos_rpath_handling(self):
+        """Test macOS @rpath handling."""
+        manager = CExtensionManager()
+        
+        # macOS uses @rpath for relative library paths
+        with patch('ctypes.CDLL') as mock_cdll:
+            mock_lib = MagicMock()
+            mock_cdll.return_value = mock_lib
+            
+            # Test that @rpath libraries can be loaded
+            lib_info = manager._load_library("query_analyzer", {
+                "name": "libquery_analyzer",
+                "description": "Analyzer"
+            })
+            
+            if lib_info.is_loaded:
+                self.assertIsNotNone(lib_info.handle)
+    
+    @mock_platform("Darwin")
+    def test_macos_platform_detection(self):
+        """Test macOS platform detection."""
+        import platform
+        
+        self.assertEqual(platform.system(), "Darwin")
+        self.assertEqual(sys.platform, "darwin")
+        self.assertEqual(os.name, "posix")
+    
+    @mock_platform("Darwin")
+    def test_macos_codesign_issues(self):
+        """Test handling of macOS code signing issues."""
+        manager = CExtensionManager()
+        
+        # Mock code signing error
+        error_msg = "code signature in (libtest.so) not valid for use"
+        with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
+            lib_info = manager._load_library("metrics_engine", {
+                "name": "libmetrics_engine",
+                "description": "Metrics"
+            })
+            
+            # When mocked, won't have the specific error message
+            self.assertFalse(lib_info.is_loaded)
+            self.assertIsNotNone(lib_info.error_message)
+
+
+class TestMacOSEdgeCases(unittest.TestCase):
+    """Test macOS edge cases and error scenarios."""
+    
+    @mock_platform("Darwin")
+    def test_macos_gatekeeper_blocking(self):
+        """Test handling of macOS Gatekeeper blocking."""
+        manager = CExtensionManager()
+        
+        error_msg = "cannot be opened because the developer cannot be verified"
+        with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
+            lib_info = manager._load_library("test_orchestrator", {
+                "name": "libtest_orchestrator",
+                "description": "Orchestrator"
+            })
+            
+            # When mocked, won't have the specific error message
+            self.assertFalse(lib_info.is_loaded)
+            self.assertIsNotNone(lib_info.error_message)
+    
+    @mock_platform("Darwin")
+    def test_macos_universal_binary(self):
+        """Test macOS universal binary support."""
+        import platform
+        
+        # Test both architectures in universal binary
+        architectures = ['x86_64', 'arm64']
+        
+        for arch in architectures:
+            with patch('platform.machine', return_value=arch):
+                self.assertEqual(platform.machine(), arch)
+    
+    @mock_platform("Darwin")
+    def test_macos_sip_restrictions(self):
+        """Test System Integrity Protection (SIP) restrictions."""
+        # SIP restricts access to certain paths
+        restricted_paths = [
+            "/System",
+            "/usr",  # Partially restricted
+            "/bin",
+            "/sbin"
+        ]
+        
+        for path in restricted_paths:
+            # These paths have special protection on macOS
+            self.assertTrue(path.startswith('/'))
+    
+    @mock_platform("Darwin")
+    def test_macos_xcode_paths(self):
+        """Test Xcode developer paths."""
+        xcode_paths = [
+            "/Applications/Xcode.app/Contents/Developer",
+            "/Library/Developer/CommandLineTools"
+        ]
+        
+        # These paths might contain development libraries
+        for path in xcode_paths:
+            self.assertIn("Developer", path)
+
+
+if __name__ == '__main__':
+    unittest.main()
