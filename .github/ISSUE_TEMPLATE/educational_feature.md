@@ -34,10 +34,10 @@ Add a `--edu` flag to Django testing that transforms the experience:
 python manage.py test
 
 # Interactive educational mode (proposed)
-python manage.py mercury_test --edu
+python manage.py test --edu
 
 # AI agent mode for automation (proposed)
-python manage.py mercury_test --agent
+python manage.py test --agent
 ```
 
 ### **The Educational Experience**

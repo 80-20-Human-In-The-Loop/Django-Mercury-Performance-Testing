@@ -563,6 +563,150 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
 
         return recommendations
 
+    def _check_educational_opportunities(
+        self, 
+        test_name: str, 
+        metrics: "EnhancedPerformanceMetrics_Python", 
+        operation_type: str, 
+        context: Dict[str, Any]
+    ) -> None:
+        """Check for educational opportunities and trigger interventions when appropriate.
+        
+        This method integrates with the interactive educational system to provide
+        learning moments based on actual test performance data.
+        
+        Args:
+            test_name: Name of the test method
+            metrics: Performance metrics from the test
+            operation_type: Type of operation (list_view, create_view, etc.)
+            context: Test context information
+        """
+        try:
+            from django_mercury.cli.educational.interactive_ui import InteractiveUI
+            from django_mercury.cli.educational.quiz_system import QuizSystem
+            from django_mercury.cli.educational.progress_tracker import ProgressTracker
+            from django_mercury.python_bindings.educational_monitor import EducationalMonitor
+            
+            # Initialize educational components if needed
+            if not hasattr(self, '_educational_ui'):
+                self._educational_ui = InteractiveUI()
+                self._educational_progress = ProgressTracker()
+                self._educational_quiz = QuizSystem(
+                    console=self._educational_ui.console,
+                    progress_tracker=self._educational_progress
+                )
+                self._educational_monitor = EducationalMonitor(
+                    console=self._educational_ui.console,
+                    quiz_system=self._educational_quiz,
+                    progress_tracker=self._educational_progress,
+                    interactive_mode=not os.environ.get('MERCURY_AGENT_MODE') == 'true'
+                )
+            
+            # Check for various learning opportunities based on metrics
+            issues_found = []
+            
+            # N+1 Query Detection
+            if (hasattr(metrics, 'django_issues') and 
+                metrics.django_issues and 
+                metrics.django_issues.has_n_plus_one):
+                issues_found.append({
+                    'type': 'n_plus_one_queries',
+                    'severity': metrics.django_issues.n_plus_one_analysis.severity_text,
+                    'query_count': metrics.query_count,
+                    'message': f"N+1 queries detected: {metrics.query_count} queries executed"
+                })
+            
+            # High Query Count (even without N+1)
+            elif metrics.query_count > 10:
+                issues_found.append({
+                    'type': 'high_query_count', 
+                    'query_count': metrics.query_count,
+                    'message': f"High query count: {metrics.query_count} queries executed"
+                })
+            
+            # Slow Response Time
+            if metrics.response_time > 200:
+                issues_found.append({
+                    'type': 'slow_response_time',
+                    'response_time': metrics.response_time,
+                    'message': f"Slow response time: {metrics.response_time:.2f}ms"
+                })
+            
+            # High Memory Usage
+            if metrics.memory_usage > 50:
+                issues_found.append({
+                    'type': 'memory_optimization',
+                    'memory_usage': metrics.memory_usage,
+                    'message': f"High memory usage: {metrics.memory_usage:.2f}MB"
+                })
+            
+            # Poor Performance Score
+            if (hasattr(metrics, 'performance_score') and 
+                metrics.performance_score and 
+                metrics.performance_score.total_score < 70):
+                issues_found.append({
+                    'type': 'general_performance',
+                    'score': metrics.performance_score.total_score,
+                    'grade': metrics.performance_score.letter_grade,
+                    'message': f"Performance score: {metrics.performance_score.letter_grade} ({metrics.performance_score.total_score:.0f}/100)"
+                })
+            
+            # If educational opportunities exist, handle them
+            if issues_found:
+                for issue in issues_found:
+                    # Record the learning opportunity
+                    self._educational_progress.record_concept_learned(issue['type'])
+                    
+                    # Handle the issue educationally if interactive
+                    if self._educational_monitor.interactive_mode:
+                        self._educational_monitor.handle_performance_issue(
+                            test=test_name,
+                            error_msg=issue['message']
+                        )
+                    
+                    # Check if we should show a quiz for this concept
+                    if (self._educational_quiz and 
+                        self._educational_progress.should_show_quiz(issue['type'])):
+                        
+                        # Get contextual quiz for this specific issue
+                        quiz = self._educational_quiz.create_contextual_quiz(
+                            issue['type'], issue
+                        )
+                        
+                        if quiz and self._educational_monitor.interactive_mode:
+                            self._educational_quiz.ask_quiz(
+                                quiz=quiz,
+                                context=f"Based on {test_name} performance analysis"
+                            )
+            
+            # Even if no issues, check for learning opportunities on good performance
+            elif (hasattr(metrics, 'performance_score') and 
+                  metrics.performance_score and 
+                  metrics.performance_score.total_score >= 90):
+                
+                # Celebrate excellent performance occasionally
+                import random
+                if random.random() < 0.1 and self._educational_monitor.interactive_mode:  # 10% chance
+                    self._educational_ui.show_celebration(
+                        f"Excellent performance in {test_name}! "
+                        f"Grade: {metrics.performance_score.letter_grade}"
+                    )
+                    
+                    # Maybe ask a quiz about what made this test perform well
+                    excellence_quiz = self._educational_quiz.get_quiz_for_concept("general_performance")
+                    if excellence_quiz and random.random() < 0.3:  # 30% chance
+                        self._educational_quiz.ask_quiz(
+                            quiz=excellence_quiz,
+                            context=f"Understanding why {test_name} performed excellently"
+                        )
+                        
+        except ImportError:
+            # Educational components not available, skip silently
+            pass
+        except Exception as e:
+            # Log educational system errors but don't break tests
+            logger.debug(f"Educational system error in {test_name}: {e}")
+
     def _auto_wrap_test_method(self, original_method: Callable) -> Callable:
         """Automatically wrap test methods with performance monitoring."""
 
@@ -634,6 +778,15 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                     )
                     test_executed = True
                     context["response_time"] = metrics.response_time  # directly from monitor
+                    
+                    # Enhanced Educational Integration - Always check for learning opportunities
+                    if os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true' and metrics:
+                        self_inner._check_educational_opportunities(
+                            test_method or operation_name,
+                            metrics,
+                            operation_type,
+                            context
+                        )
                 except Exception as monitor_exception:
                     response_time = (
                         time.perf_counter() - start_time

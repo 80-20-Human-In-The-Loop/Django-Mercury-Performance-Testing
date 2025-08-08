@@ -5,6 +5,19 @@ All notable changes to Django Mercury Performance Testing will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+- **mercury_test Command**: Removed abandoned Django management command - educational mode now properly uses TEST_RUNNER approach only
+
+### Enhanced  
+- **Educational Mode**: Expanded quiz system with more comprehensive questions and improved interactive UI
+- **Educational Guidance**: Enhanced performance issue explanations and learning content
+- **Learning Paths**: Added progressive learning paths for different skill levels
+
+### Fixed
+- **Documentation**: Updated issue template to reflect correct usage (`python manage.py test --edu` instead of `mercury_test --edu`)
+
 ## [0.0.3] - 2025-08-06
 
 ### Fixed
