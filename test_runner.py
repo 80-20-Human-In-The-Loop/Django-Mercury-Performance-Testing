@@ -441,7 +441,8 @@ def get_test_modules() -> List[str]:
         'config',
         'integration',
         'cli',
-        'educational'
+        'educational',
+        'mock_multi_plat'  # Cross-platform mock tests
     ]
     
     # Discover tests from each subdirectory
@@ -584,13 +585,37 @@ def run_tests_without_coverage(test_modules: List[str], verbose: bool = False, n
 
 
 def run_specific_module_tests(module_name: str, verbose: bool = False, with_coverage: bool = False, no_timing: bool = False, ci_mode: bool = False) -> bool:
-    """Run tests for a specific module."""
-    test_module = f"tests.test_{module_name}"
+    """Run tests for a specific module or subdirectory."""
+    # Check if it's a subdirectory first
+    test_dir = PERFORMANCE_TESTING_ROOT / "tests" / module_name
     
-    if with_coverage and COVERAGE_AVAILABLE:
-        return run_tests_with_coverage([test_module], verbose, no_timing, ci_mode)
+    if test_dir.exists() and test_dir.is_dir():
+        # It's a subdirectory! Get all test files from it
+        test_modules = []
+        for test_file in test_dir.glob("test_*.py"):
+            module_parts = ['tests', module_name, test_file.stem]
+            test_modules.append('.'.join(module_parts))
+        
+        if not test_modules:
+            print(f"[WARNING] No test files found in tests/{module_name}/")
+            return False
+            
+        if not ci_mode:
+            print(f"[INFO] Found {len(test_modules)} test files in {module_name}/")
+        
+        # Run all tests in the subdirectory
+        if with_coverage and COVERAGE_AVAILABLE:
+            return run_tests_with_coverage(test_modules, verbose, no_timing, ci_mode)
+        else:
+            return run_tests_without_coverage(test_modules, verbose, no_timing, ci_mode)
     else:
-        return run_tests_without_coverage([test_module], verbose, no_timing, ci_mode)
+        # Try as single module (old behavior)
+        test_module = f"tests.test_{module_name}"
+        
+        if with_coverage and COVERAGE_AVAILABLE:
+            return run_tests_with_coverage([test_module], verbose, no_timing, ci_mode)
+        else:
+            return run_tests_without_coverage([test_module], verbose, no_timing, ci_mode)
 
 
 def run_c_integration_tests(verbose: bool = False) -> bool:
