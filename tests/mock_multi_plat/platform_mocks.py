@@ -211,7 +211,9 @@ class PlatformMocker:
         p2.start()
         
         # Mock IS_WINDOWS flag in c_bindings
-        p_flag = patch('django_mercury.python_bindings.c_bindings.IS_WINDOWS', True)
+        # Import the module first to ensure it's loaded
+        from django_mercury.python_bindings import c_bindings
+        p_flag = patch.object(c_bindings, 'IS_WINDOWS', True)
         self.patches.append(p_flag)
         p_flag.start()
         
