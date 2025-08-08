@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=70.0", "wheel", "setuptools-scm>=8"]
+requires = ["setuptools>=68.0,<70.0", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -250,7 +250,7 @@ environment-pass = ["DJANGO_MERCURY_PURE_PYTHON"]
 
 # Pre-build: ensure setuptools is installed and check versions
 before-build = [
-    "python -m pip install --upgrade pip setuptools wheel",
+    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel",
     "python -c \"import sys; print(f'Building for Python {sys.version}'); import setuptools; print(f'setuptools: {setuptools.__version__}')\""
 ]
 
@@ -286,7 +286,7 @@ before-all = [
 
 # Pre-build: install build dependencies
 before-build = [
-    "python -m pip install --upgrade pip setuptools wheel",
+    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel",
 ]
 
 # Skip auditwheel repair - our wheel requires GLIBC 2.34+ due to stat/pthread functions
@@ -311,13 +311,13 @@ environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="
 
 # Install Visual Studio Build Tools components and dependencies
 before-all = [
-    "python -m pip install --upgrade pip setuptools wheel",
+    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel",
     "pip install delvewheel",
 ]
 
 # Build C libraries before Python extension
 before-build = [
-    "python -m pip install --upgrade pip setuptools wheel delvewheel",
+    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel delvewheel",
     "python -c \"import sys; print(f'Building for Python {sys.version} on Windows')\"",
     "python -c \"import pathlib; print('Current directory:', pathlib.Path.cwd())\"",
     "python setup.py build_ext --inplace",
