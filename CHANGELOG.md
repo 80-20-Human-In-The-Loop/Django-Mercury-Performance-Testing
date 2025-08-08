@@ -5,7 +5,19 @@ All notable changes to Django Mercury Performance Testing will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.0.4] - 2025-08-08
+
+### Fixed
+- **Python 3.11/3.12 Compatibility**: Fixed unittest.mock AttributeError issues by using patch.object instead of string-based patching
+- **Platform-Specific Testing**: Simplified test architecture to only run platform-specific tests on their actual platforms (no cross-platform mocking)
+- **Windows Test Failures**: Fixed Windows-specific test failures with proper error messages and exception handling
+- **Variable Name Collisions**: Fixed variable name collisions in platform mocks
+- **Library Configuration**: Fixed LIBRARY_CONFIG patching for Windows tests
+
+### Changed
+- **Test Architecture**: Platform tests now use `@unittest.skipUnless` instead of complex mocking decorators
+- **Error Handling**: Windows error tests now use platform-appropriate error messages (PE format instead of ELF)
+- **Exception Wrapping**: Windows code path now properly wraps non-ImportError exceptions as ImportError
 
 ### Removed
 - **mercury_test Command**: Removed abandoned Django management command - educational mode now properly uses TEST_RUNNER approach only
@@ -15,8 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Educational Guidance**: Enhanced performance issue explanations and learning content
 - **Learning Paths**: Added progressive learning paths for different skill levels
 
-### Fixed
-- **Documentation**: Updated issue template to reflect correct usage (`python manage.py test --edu` instead of `mercury_test --edu`)
+### Documentation
+- **Issue Template**: Updated to reflect correct usage (`python manage.py test --edu` instead of `mercury_test --edu`)
 
 ## [0.0.3] - 2025-08-06
 
@@ -101,4 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standard TestCase for non-API views
 - Performance regression detection
 
+[0.0.4]: https://github.com/Django-Mercury/Performance-Testing/releases/tag/v0.0.4
+[0.0.3]: https://github.com/Django-Mercury/Performance-Testing/releases/tag/v0.0.3
+[0.0.2]: https://github.com/Django-Mercury/Performance-Testing/releases/tag/v0.0.2
 [0.0.1]: https://github.com/Django-Mercury/Performance-Testing/releases/tag/v0.0.1
