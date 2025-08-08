@@ -310,8 +310,8 @@ archs = ["AMD64"]
 environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
 
 # Build C libraries before Python extension
-# Note: On Windows, Python isn't available in before-all, so we do everything in before-build
-before-build = "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel delvewheel && python -c \"import sys; print(f'Building for Python {sys.version} on Windows')\" && python -c \"import pathlib; print('Current directory:', pathlib.Path.cwd())\" && python setup.py build_ext --inplace && (python scripts/diagnose_c_extensions.py || echo Diagnostic completed)"
+# Note: Windows cmd.exe doesn't handle single quotes, so we use double quotes for version constraints
+before-build = "pip install --upgrade pip \"setuptools>=68.0,<70.0\" wheel delvewheel && python setup.py build_ext --inplace"
 
 # Repair wheels to include dependencies
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
