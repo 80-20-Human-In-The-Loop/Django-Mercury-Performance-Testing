@@ -16,9 +16,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from tests.mock_multi_plat.platform_mocks import mock_library_loading_failure
-from django_mercury.python_bindings.c_bindings import CExtensionLoader
+from django_mercury.python_bindings.c_bindings import CExtensionLoader, IS_WINDOWS
 # Alias for easier use in tests
 CExtensionManager = CExtensionLoader
+
+
+def patch_library_loading(side_effect):
+    """Patch the appropriate library loading mechanism for the current platform.
+    
+    Windows uses importlib.import_module for .pyd files.
+    Unix uses ctypes.CDLL for .so files.
+    """
+    if IS_WINDOWS:
+        return patch('importlib.import_module', side_effect=side_effect)
+    else:
+        return patch('ctypes.CDLL', side_effect=side_effect)
 
 
 class TestErrorHandling(unittest.TestCase):
@@ -38,7 +50,7 @@ class TestErrorHandling(unittest.TestCase):
         """Test library not found error handling (lines 477-485)."""
         manager = CExtensionManager()
         
-        with patch('ctypes.CDLL', side_effect=OSError("cannot open shared object file: No such file or directory")):
+        with patch_library_loading(OSError("cannot open shared object file: No such file or directory")):
             lib_info = manager._load_library("query_analyzer", {
                 "name": "libquery_analyzer",
                 "description": "Analyzer"
@@ -70,7 +82,7 @@ class TestErrorHandling(unittest.TestCase):
         # Don't define all expected functions
         del mock_lib.analyze_query
         
-        with patch('ctypes.CDLL', return_value=mock_lib):
+        with patch_library_loading(mock_lib):
             # Try to configure functions
             try:
                 count = manager._configure_query_analyzer(mock_lib)
@@ -105,7 +117,7 @@ class TestErrorHandling(unittest.TestCase):
         mock_lib = MagicMock()
         mock_lib.analyze_query = Mock(return_value={'is_n_plus_one': False})
         
-        with patch('ctypes.CDLL', side_effect=[mock_lib, OSError("Failed"), OSError("Failed")]):
+        with patch_library_loading([mock_lib, OSError("Failed"), OSError("Failed")]):
             # After construction, check what loaded
             # Note: CExtensionManager loads libraries in __init__
             self.assertIsNotNone(manager)  # Manager still created even with partial loads
@@ -115,7 +127,7 @@ class TestErrorHandling(unittest.TestCase):
         manager = CExtensionManager()
         
         # Mock out of memory error
-        with patch('ctypes.CDLL', side_effect=MemoryError("Out of memory")):
+        with patch_library_loading(MemoryError("Out of memory")):
             lib_info = manager._load_library("metrics_engine", {
                 "name": "libmetrics_engine",
                 "description": "Metrics"
@@ -127,7 +139,7 @@ class TestErrorHandling(unittest.TestCase):
         """Test permission denied error handling."""
         manager = CExtensionManager()
         
-        with patch('ctypes.CDLL', side_effect=PermissionError("Permission denied")):
+        with patch_library_loading(PermissionError("Permission denied")):
             lib_info = manager._load_library("test_orchestrator", {
                 "name": "libtest_orchestrator",
                 "description": "Orchestrator"
@@ -140,7 +152,7 @@ class TestErrorHandling(unittest.TestCase):
         manager = CExtensionManager()
         
         error_msg = "invalid ELF header"
-        with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
+        with patch_library_loading(OSError(error_msg)):
             lib_info = manager._load_library("query_analyzer", {
                 "name": "libquery_analyzer",
                 "description": "Analyzer"
@@ -154,7 +166,7 @@ class TestErrorHandling(unittest.TestCase):
         manager = CExtensionManager()
         
         error_msg = "version `GLIBC_2.34' not found"
-        with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
+        with patch_library_loading(OSError(error_msg)):
             lib_info = manager._load_library("metrics_engine", {
                 "name": "libmetrics_engine",
                 "description": "Metrics"
@@ -186,7 +198,7 @@ class TestErrorRecovery(unittest.TestCase):
         
         # Second attempt with working libraries
         mock_lib = MagicMock()
-        with patch('ctypes.CDLL', return_value=mock_lib):
+        with patch_library_loading(mock_lib):
             # Create new manager - should try to load again
             manager2 = CExtensionManager()
             # Libraries are loaded in __init__, but may still be None if mock doesn't configure them
@@ -203,7 +215,7 @@ class TestErrorRecovery(unittest.TestCase):
                 return mock_metrics
             raise OSError("Library not found")
         
-        with patch('ctypes.CDLL', side_effect=cdll_side_effect):
+        with patch_library_loading(cdll_side_effect):
             manager = CExtensionManager()
             
             # Should work with partial functionality
