@@ -28,6 +28,13 @@ def patch_library_loading(side_effect):
     Unix uses ctypes.CDLL for .so files.
     """
     if IS_WINDOWS:
+        # Windows code only catches ImportError, so wrap other exceptions
+        if isinstance(side_effect, Exception) and not isinstance(side_effect, ImportError):
+            # Wrap non-ImportError exceptions as ImportError for Windows
+            wrapped_error = ImportError(str(side_effect))
+            # Preserve the original error type in the message for testing
+            wrapped_error.__cause__ = side_effect
+            side_effect = wrapped_error
         return patch('importlib.import_module', side_effect=side_effect)
     else:
         return patch('ctypes.CDLL', side_effect=side_effect)
