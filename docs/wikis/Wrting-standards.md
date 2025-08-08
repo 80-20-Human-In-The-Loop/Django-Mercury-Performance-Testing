@@ -227,7 +227,7 @@ You're now part of the class! You'll see all assignments and announcements.
 We'll help you set up EduLite on your computer.
 
 ### What you need first:
-- Python 3.8 or newer ([Download here](link))
+- Python 3.10 or newer ([Download here](link))
 - Git ([Download here](link))
 - 2GB free disk space
 
