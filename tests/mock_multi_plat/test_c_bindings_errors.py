@@ -50,14 +50,22 @@ class TestErrorHandling(unittest.TestCase):
         """Test library not found error handling (lines 477-485)."""
         manager = CExtensionManager()
         
-        with patch_library_loading(OSError("cannot open shared object file: No such file or directory")):
+        # Use platform-appropriate "file not found" error
+        if IS_WINDOWS:
+            error_msg = "The specified module could not be found"
+            expected_in_msg = "specified module"
+        else:
+            error_msg = "cannot open shared object file: No such file or directory"
+            expected_in_msg = "No such file"
+            
+        with patch_library_loading(OSError(error_msg)):
             lib_info = manager._load_library("query_analyzer", {
                 "name": "libquery_analyzer",
                 "description": "Analyzer"
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn("No such file", lib_info.error_message)
+            self.assertIn(expected_in_msg, lib_info.error_message)
     
     def test_import_error_handling(self):
         """Test Python import error handling (lines 456-460)."""
@@ -151,7 +159,12 @@ class TestErrorHandling(unittest.TestCase):
         """Test handling of corrupted library files."""
         manager = CExtensionManager()
         
-        error_msg = "invalid ELF header"
+        # Use platform-appropriate error message
+        if IS_WINDOWS:
+            error_msg = "is not a valid Win32 application"
+        else:
+            error_msg = "invalid ELF header"
+            
         with patch_library_loading(OSError(error_msg)):
             lib_info = manager._load_library("query_analyzer", {
                 "name": "libquery_analyzer",
@@ -159,13 +172,20 @@ class TestErrorHandling(unittest.TestCase):
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn("invalid ELF header", lib_info.error_message)
+            self.assertIn(error_msg, lib_info.error_message)
     
     def test_version_mismatch_error(self):
         """Test handling of version mismatch errors."""
         manager = CExtensionManager()
         
-        error_msg = "version `GLIBC_2.34' not found"
+        # Use platform-appropriate version error
+        if IS_WINDOWS:
+            error_msg = "The specified module could not be found"
+            expected_in_msg = "specified module"
+        else:
+            error_msg = "version `GLIBC_2.34' not found"
+            expected_in_msg = "GLIBC"
+            
         with patch_library_loading(OSError(error_msg)):
             lib_info = manager._load_library("metrics_engine", {
                 "name": "libmetrics_engine",
@@ -173,7 +193,7 @@ class TestErrorHandling(unittest.TestCase):
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn("GLIBC", lib_info.error_message)
+            self.assertIn(expected_in_msg, lib_info.error_message)
 
 
 class TestErrorRecovery(unittest.TestCase):
