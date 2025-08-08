@@ -238,7 +238,9 @@ class PlatformMocker:
         p3.start()
         
         # Also patch imports that might use Path directly
-        p4 = patch('django_mercury.python_bindings.c_bindings.Path', WindowsMockPath)
+        # Import the module first to ensure it's loaded
+        from django_mercury.python_bindings import c_bindings
+        p4 = patch.object(c_bindings, 'Path', WindowsMockPath)
         self.patches.append(p4)
         p4.start()
         
@@ -328,7 +330,9 @@ class PlatformMocker:
         p4.start()
         
         # Also patch imports that might use Path directly
-        p5 = patch('django_mercury.python_bindings.c_bindings.Path', MacOSMockPath)
+        # Import the module first to ensure it's loaded
+        from django_mercury.python_bindings import c_bindings
+        p5 = patch.object(c_bindings, 'Path', MacOSMockPath)
         self.patches.append(p5)
         p5.start()
         
@@ -386,7 +390,9 @@ class PlatformMocker:
         p3.start()
         
         # Also patch imports that might use Path directly
-        p4 = patch('django_mercury.python_bindings.c_bindings.Path', LinuxMockPath)
+        # Import the module first to ensure it's loaded
+        from django_mercury.python_bindings import c_bindings
+        p4 = patch.object(c_bindings, 'Path', LinuxMockPath)
         self.patches.append(p4)
         p4.start()
         
