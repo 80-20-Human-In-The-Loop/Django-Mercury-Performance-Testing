@@ -99,8 +99,6 @@ packages = [
     "django_mercury.c_core",
     "django_mercury.cli",
     "django_mercury.cli.educational",
-    "django_mercury.cli.management",
-    "django_mercury.cli.management.commands",
     "django_mercury.documentation",
     "django_mercury.examples"
 ]
