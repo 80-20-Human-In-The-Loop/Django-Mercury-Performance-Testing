@@ -38,10 +38,10 @@ class TestWindowsCBindings(unittest.TestCase):
             # Check Windows library config
             config = c_bindings.LIBRARY_CONFIG
             self.assertIn("query_analyzer", config)
-            # Config uses lib names on all platforms, loading logic handles platform differences
-            self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
-            self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
-            self.assertEqual(config["test_orchestrator"]["name"], "libtest_orchestrator")
+            # Windows uses different library names than Unix
+            self.assertEqual(config["query_analyzer"]["name"], "_c_analyzer")
+            self.assertEqual(config["metrics_engine"]["name"], "_c_metrics")
+            self.assertEqual(config["test_orchestrator"]["name"], "_c_orchestrator")
     
     @mock_platform("Windows")
     def test_windows_pyd_loading(self, platform_mocker=None):
