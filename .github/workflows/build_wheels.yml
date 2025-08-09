@@ -174,11 +174,16 @@ jobs:
       
       - name: Install build dependencies
         run: |
-          python -m pip install --upgrade pip "setuptools>=70.0"
+          python -m pip install --upgrade pip "setuptools>=75.0"
           pip install build
       
       - name: Build source distribution
         run: python -m build --sdist
+      
+      - name: Fix source distribution metadata
+        run: |
+          echo "Fixing source distribution metadata to remove License-File entries..."
+          python scripts/fix_wheel_metadata.py dist/*.tar.gz --verbose
       
       - uses: actions/upload-artifact@v4
         with:
@@ -248,6 +253,11 @@ jobs:
           CIBW_ARCHS: ${{ matrix.archs }}
           # Enable C extensions on Windows
           CIBW_ENVIRONMENT_WINDOWS: DJANGO_MERCURY_PURE_PYTHON=0
+      
+      - name: Fix wheel metadata
+        run: |
+          echo "Fixing wheel metadata to remove License-File entries..."
+          python scripts/fix_wheel_metadata.py wheelhouse/*.whl --verbose
       
       - uses: actions/upload-artifact@v4
         with:
@@ -392,6 +402,11 @@ jobs:
           echo "Found $(ls upload/*.whl 2>/dev/null | wc -l) wheel files"
           echo "Found $(ls upload/*.tar.gz 2>/dev/null | wc -l) source distributions"
       
+      - name: Fix distribution metadata
+        run: |
+          echo "Fixing metadata in all distributions to remove License-File entries..."
+          python scripts/fix_wheel_metadata.py upload/*.whl upload/*.tar.gz --verbose || echo "No distributions to fix"
+      
       - name: Check Test PyPI token
         run: |
           if [[ -z "${{ secrets.TEST_PYPI_API_TOKEN }}" ]]; then
@@ -443,10 +458,10 @@ jobs:
           find dist/ -type f \( -name "*.whl" -o -name "*.tar.gz" \) -exec cp {} upload/ \;
           ls -la upload/
       
-      - name: Fix wheel metadata
+      - name: Fix distribution metadata
         run: |
-          echo "Fixing wheel metadata to remove License-File entries..."
-          python scripts/fix_wheel_metadata.py upload/*.whl --verbose
+          echo "Fixing metadata in all distributions to remove License-File entries..."
+          python scripts/fix_wheel_metadata.py upload/*.whl upload/*.tar.gz --verbose || echo "No distributions to fix"
       
       - name: Check distributions
         run: |
