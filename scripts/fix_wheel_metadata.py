@@ -52,10 +52,11 @@ def fix_metadata_in_wheel(wheel_path: Path, verbose: bool = False) -> bool:
         with open(metadata_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
-        # Remove License-File lines
+        # Remove License-File lines and fix dynamic fields
         original_lines = len(lines)
         new_lines = []
         removed_count = 0
+        fixed_dynamic = False
         
         for line in lines:
             # Check if this is a License-File line
@@ -63,12 +64,26 @@ def fix_metadata_in_wheel(wheel_path: Path, verbose: bool = False) -> bool:
                 removed_count += 1
                 if verbose:
                     print(f"  Removing: {line.strip()}")
+            # Check for problematic dynamic field
+            elif line.startswith('Dynamic:') and 'license-file' in line.lower():
+                # Remove license-file from dynamic fields
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    fields = [f.strip() for f in parts[1].split(',')]
+                    # Remove any variation of license-file
+                    cleaned_fields = [f for f in fields if f.lower() not in ['license-file', 'license-files', 'license_file', 'license_files']]
+                    if cleaned_fields:
+                        new_lines.append(f"Dynamic: {', '.join(cleaned_fields)}\n")
+                    # If no other dynamic fields, skip the line entirely
+                    fixed_dynamic = True
+                    if verbose:
+                        print(f"  Fixed dynamic field: {line.strip()}")
             else:
                 new_lines.append(line)
         
-        if removed_count == 0:
+        if removed_count == 0 and not fixed_dynamic:
             if verbose:
-                print(f"  No License-File entries found in {wheel_path}")
+                print(f"  No License-File entries or dynamic fields to fix in {wheel_path}")
             return False
         
         # Write modified METADATA
@@ -76,7 +91,10 @@ def fix_metadata_in_wheel(wheel_path: Path, verbose: bool = False) -> bool:
             f.writelines(new_lines)
         
         if verbose:
-            print(f"  Removed {removed_count} License-File entries")
+            if removed_count > 0:
+                print(f"  Removed {removed_count} License-File entries")
+            if fixed_dynamic:
+                print(f"  Fixed Dynamic field containing license-file")
         
         # Create new wheel with modified metadata
         # First, create a backup
