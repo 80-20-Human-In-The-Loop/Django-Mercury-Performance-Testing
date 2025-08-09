@@ -476,13 +476,17 @@ static QueryCluster* find_or_create_cluster(uint64_t pattern_hash, const char* q
             MERCURY_WARN("Cluster array at maximum size (%zu), attempting eviction", current_max);
         } else {
             size_t new_max = current_max * 2;
-            QueryCluster* new_clusters = realloc(g_analyzer->clusters, new_max * sizeof(QueryCluster));
+            // Save old pointer in case realloc fails - prevents memory leak
+            QueryCluster* old_clusters = g_analyzer->clusters;
+            QueryCluster* new_clusters = realloc(old_clusters, new_max * sizeof(QueryCluster));
             
             if (new_clusters) {
                 g_analyzer->clusters = new_clusters;
                 g_analyzer->max_clusters = new_max;
                 MERCURY_DEBUG("Resized cluster array to %zu entries", new_max);
             } else {
+                // realloc failed - old_clusters is still valid and unchanged
+                g_analyzer->clusters = old_clusters;  // Restore original pointer
                 MERCURY_WARN("Failed to resize cluster array from %zu to %zu entries", current_max, new_max);
             }
         }

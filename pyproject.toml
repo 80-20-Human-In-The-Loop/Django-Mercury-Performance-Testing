@@ -7,6 +7,7 @@ name = "django-mercury-performance"
 version = "0.0.4"
 description = "A performance testing framework for Django that helps you understand and fix performance issues, not just detect them"
 readme = "README.md"
+license = "GPL-3.0-or-later"
 authors = [
     {name = "Django Mercury Team", email = "mathewstormdev@gmail.com"}
 ]

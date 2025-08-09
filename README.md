@@ -652,7 +652,7 @@ If you share a changed version, you must:
 
 This keeps knowledge open for all.
 
-For the full license text, see [LICENSE](LICENSE) or visit [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
+For the full license text, see [LICENSE.txt](LICENSE.txt) or visit [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
 ## 🙏 Thanks To
 

@@ -120,9 +120,14 @@ TestOrchestrator_start_test(TestOrchestrator *self, PyObject *args)
         }
         
         new_test->name = malloc(strlen(test_name) + 1);
-        if (new_test->name) {
-            strcpy(new_test->name, test_name);
+        if (!new_test->name) {
+            /* Memory allocation failed - clean up and return error */
+            free(new_test);
+            PyErr_SetString(PyExc_MemoryError, "Failed to allocate test name");
+            return NULL;
         }
+        strcpy(new_test->name, test_name);
+        
         gettimeofday(&new_test->start_time, NULL);
         new_test->duration_ms = 0.0;
         new_test->status = 1;  /* running */
