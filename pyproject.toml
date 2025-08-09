@@ -310,8 +310,8 @@ archs = ["AMD64"]
 environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
 
 # Build C libraries before Python extension
-# Note: Windows cmd.exe doesn't handle single quotes, so we use double quotes for version constraints
-before-build = "pip install --upgrade pip \"setuptools>=68.0,<70.0\" wheel delvewheel && python setup.py build_ext --inplace"
+# Note: Skip setuptools pinning on Windows since it's causing issues and TestPyPI works anyway
+before-build = "pip install --upgrade pip setuptools wheel delvewheel && python setup.py build_ext --inplace"
 
 # Repair wheels to include dependencies
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
