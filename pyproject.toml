@@ -311,7 +311,8 @@ environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="
 
 # Build C libraries before Python extension
 # Note: Windows requires 'python -m pip' to upgrade pip itself
-before-build = "python -m pip install --upgrade pip setuptools wheel delvewheel && python setup.py build_ext --inplace"
+# Pin setuptools <70 to avoid auto-generated license-file metadata that PyPI rejects
+before-build = "python -m pip install --upgrade pip \"setuptools>=68.0,<70.0\" wheel delvewheel && python setup.py build_ext --inplace"
 
 # Repair wheels to include dependencies
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
