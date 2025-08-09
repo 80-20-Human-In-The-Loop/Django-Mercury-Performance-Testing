@@ -180,11 +180,6 @@ jobs:
       - name: Build source distribution
         run: python -m build --sdist
       
-      - name: Fix source distribution metadata
-        run: |
-          echo "Fixing source distribution metadata to remove License-File entries..."
-          python scripts/fix_wheel_metadata.py dist/*.tar.gz --verbose
-      
       - uses: actions/upload-artifact@v4
         with:
           name: sdist
@@ -253,11 +248,6 @@ jobs:
           CIBW_ARCHS: ${{ matrix.archs }}
           # Enable C extensions on Windows
           CIBW_ENVIRONMENT_WINDOWS: DJANGO_MERCURY_PURE_PYTHON=0
-      
-      - name: Fix wheel metadata
-        run: |
-          echo "Fixing wheel metadata to remove License-File entries..."
-          python scripts/fix_wheel_metadata.py wheelhouse/*.whl --verbose
       
       - uses: actions/upload-artifact@v4
         with:
