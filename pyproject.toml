@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0,<70.0", "wheel", "setuptools-scm>=8"]
+requires = ["setuptools>=75.0", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -251,7 +251,7 @@ environment-pass = ["DJANGO_MERCURY_PURE_PYTHON"]
 
 # Pre-build: ensure setuptools is installed and check versions
 before-build = [
-    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel",
+    "python -m pip install --upgrade pip 'setuptools>=75.0' wheel",
     "python -c \"import sys; print(f'Building for Python {sys.version}'); import setuptools; print(f'setuptools: {setuptools.__version__}')\""
 ]
 
@@ -287,7 +287,7 @@ before-all = [
 
 # Pre-build: install build dependencies
 before-build = [
-    "python -m pip install --upgrade pip 'setuptools>=68.0,<70.0' wheel",
+    "python -m pip install --upgrade pip 'setuptools>=75.0' wheel",
 ]
 
 # Skip auditwheel repair - our wheel requires GLIBC 2.34+ due to stat/pthread functions
@@ -312,8 +312,8 @@ environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="
 
 # Build C libraries before Python extension
 # Note: Windows requires 'python -m pip' to upgrade pip itself
-# Pin setuptools <70 to avoid auto-generated license-file metadata that PyPI rejects
-before-build = "python -m pip install --upgrade pip \"setuptools>=68.0,<70.0\" wheel delvewheel && python setup.py build_ext --inplace"
+# Using setuptools >=75 with metadata fix script
+before-build = "python -m pip install --upgrade pip \"setuptools>=75.0\" wheel delvewheel && python setup.py build_ext --inplace"
 
 # Repair wheels to include dependencies
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
