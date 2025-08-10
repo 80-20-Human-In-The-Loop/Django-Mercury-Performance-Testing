@@ -6,8 +6,8 @@ include requirements.txt
 include setup.py
 include pyproject.toml
 
-# Include C source files
-recursive-include django_mercury/c_core *.c *.h *.so Makefile BUILD.md
+# Include C source files (not compiled libraries)
+recursive-include django_mercury/c_core *.c *.h Makefile BUILD.md
 
 # Include Python files
 recursive-include django_mercury *.py
@@ -23,8 +23,9 @@ recursive-exclude tests *
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
 
-# Exclude compiled C files (except .so)
-recursive-exclude django_mercury/c_core *.o *.d
+# Exclude compiled C files and test executables
+recursive-exclude django_mercury/c_core *.o *.d *.so
+recursive-exclude django_mercury/c_core simple_test_* edge_test_* comprehensive_test_* test_*
 recursive-exclude django_mercury/c_core/tests *
 recursive-exclude django_mercury/c_core/logs *
 recursive-exclude django_mercury/c_core/coverage *

@@ -32,11 +32,11 @@ class TestLinuxCBindings(unittest.TestCase):
         """Test Linux library configuration (lines 100-119)."""
         from django_mercury.python_bindings import c_bindings
         
-        # On Linux, should use .so library names
+        # On Linux, now uses Python extension names (consistent with Windows)
         config = c_bindings.LIBRARY_CONFIG
         self.assertIn("query_analyzer", config)
-        self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
-        self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
+        self.assertEqual(config["query_analyzer"]["name"], "_c_analyzer")
+        self.assertEqual(config["metrics_engine"]["name"], "_c_metrics")
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_so_loading(self):
@@ -98,18 +98,18 @@ class TestLinuxCBindings(unittest.TestCase):
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_ctypes_error_handling(self):
-        """Test Linux ctypes loading error handling (lines 477-485)."""
+        """Test Linux import error handling."""
         manager = CExtensionManager()
         
-        # Mock ctypes.CDLL failure
-        with patch('ctypes.CDLL', side_effect=OSError("libtest.so: cannot open shared object file")):
+        # Mock import failure
+        with patch('importlib.import_module', side_effect=ImportError("No module named 'django_mercury._c_metrics'")):
             lib_info = manager._load_library("metrics_engine", {
-                "name": "libmetrics_engine",
+                "name": "_c_metrics",
                 "description": "Metrics"
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn("cannot open shared object", lib_info.error_message)
+            self.assertIn("Failed to import", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_function_configuration(self):
@@ -186,14 +186,14 @@ class TestLinuxEdgeCases(unittest.TestCase):
         """Test handling of permission denied errors."""
         manager = CExtensionManager()
         
-        with patch('ctypes.CDLL', side_effect=OSError("Permission denied")):
+        with patch('importlib.import_module', side_effect=ImportError("Permission denied")):
             lib_info = manager._load_library("query_analyzer", {
-                "name": "libquery_analyzer",
+                "name": "_c_analyzer",
                 "description": "Analyzer"
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn("Permission denied", lib_info.error_message)
+            self.assertIn("Failed to import", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_missing_dependencies(self):
@@ -201,14 +201,14 @@ class TestLinuxEdgeCases(unittest.TestCase):
         manager = CExtensionManager()
         
         error_msg = "libstdc++.so.6: version `GLIBCXX_3.4.20' not found"
-        with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
+        with patch('importlib.import_module', side_effect=ImportError(error_msg)):
             lib_info = manager._load_library("metrics_engine", {
-                "name": "libmetrics_engine",
+                "name": "_c_metrics",
                 "description": "Metrics"
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn("GLIBCXX", lib_info.error_message)
+            self.assertIn("Failed to import", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
     def test_linux_symlink_resolution(self):

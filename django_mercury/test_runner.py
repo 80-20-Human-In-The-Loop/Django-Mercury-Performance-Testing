@@ -86,11 +86,11 @@ class EducationalTestRunner(DiscoverRunner):
     
     def __init__(self, *args, **kwargs):
         """Initialize the educational test runner."""
-        # Check for --edu flag
-        self.educational_mode = '--edu' in sys.argv
+        # Check for --edu flag OR MERCURY_EDU environment variable
+        self.educational_mode = '--edu' in sys.argv or os.environ.get('MERCURY_EDU') == '1'
         
         # Remove --edu from argv so Django doesn't complain
-        if self.educational_mode:
+        if '--edu' in sys.argv:
             sys.argv = [arg for arg in sys.argv if arg != '--edu']
             
         # Initialize parent
@@ -201,26 +201,17 @@ class EducationalTestRunner(DiscoverRunner):
         """Run test suite with educational interventions."""
         # Create custom result class if in educational mode
         if self.educational_mode:
-            # Override the test result class
-            kwargs['resultclass'] = EducationalTestResult
+            # Store the educational monitor reference
+            educational_monitor = self.educational_monitor
             
-            # Add educational monitor to result
-            original_resultclass = kwargs.get('resultclass', TextTestResult)
+            # Create a custom test result that includes educational monitor
+            class CustomEducationalTestResult(EducationalTestResult):
+                def __init__(self, stream, descriptions, verbosity):
+                    super().__init__(stream, descriptions, verbosity, 
+                                   educational_monitor=educational_monitor)
             
-            def make_result():
-                result = original_resultclass(
-                    stream=kwargs.get('stream', sys.stderr),
-                    descriptions=kwargs.get('descriptions', True),
-                    verbosity=kwargs.get('verbosity', 1)
-                )
-                if hasattr(result, '__dict__'):
-                    result.educational_monitor = self.educational_monitor
-                return result
-            
-            # Temporarily replace runner's result creation
-            old_result = self.test_runner._makeResult if hasattr(self.test_runner, '_makeResult') else None
-            if hasattr(self.test_runner, '_makeResult'):
-                self.test_runner._makeResult = make_result
+            # Use our custom result class
+            kwargs['resultclass'] = CustomEducationalTestResult
         
         # Run the tests
         result = super().run_suite(suite, **kwargs)

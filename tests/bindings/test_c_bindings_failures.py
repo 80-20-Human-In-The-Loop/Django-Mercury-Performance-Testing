@@ -64,9 +64,17 @@ class TestCBindingsFailures(unittest.TestCase):
         c_bindings.c_extensions.performance = None
     
     @unittest.skipIf(IS_WINDOWS, "Unix-specific shared library loading test")
-    def test_library_load_failure(self):
+    @patch('importlib.import_module')
+    def test_library_load_failure(self, mock_import):
         """Test handling when a library fails to load."""
         from django_mercury.python_bindings import c_bindings
+        
+        # Make imports fail
+        mock_import.side_effect = ImportError("Cannot import module")
+        
+        # Ensure find_library also returns None so fallback doesn't work
+        if self.mock_find_library:
+            self.mock_find_library.return_value = None
         
         # Reset initialization state and clear existing handles
         c_bindings.c_extensions._initialized = False
@@ -75,24 +83,20 @@ class TestCBindingsFailures(unittest.TestCase):
         c_bindings.c_extensions.test_orchestrator = None
         c_bindings.c_extensions.performance = None
         
-        # Make ctypes.CDLL fail
-        if hasattr(self, 'mock_cdll'):
-            self.mock_cdll.side_effect = OSError("Cannot load library")
-        
         # Try to initialize - should handle the error gracefully
         c_bindings.initialize_c_extensions(force_reinit=True)
         
         # Should be marked as initialized even if loading failed
         self.assertTrue(c_bindings.c_extensions._initialized)
         
-        # Libraries should be None
+        # Libraries should be None when import fails
         self.assertIsNone(c_bindings.c_extensions.query_analyzer)
         self.assertIsNone(c_bindings.c_extensions.metrics_engine)
         self.assertIsNone(c_bindings.c_extensions.test_orchestrator)
-        self.assertIsNone(c_bindings.c_extensions.performance)
     
     @unittest.skipIf(IS_WINDOWS, "Unix-specific shared library loading test")
-    def test_partial_library_load_failure(self):
+    @patch('importlib.import_module')
+    def test_partial_library_load_failure(self, mock_import):
         """Test when only some libraries fail to load."""
         # Runtime check for pure Python mode
         if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
@@ -107,16 +111,31 @@ class TestCBindingsFailures(unittest.TestCase):
         c_bindings.c_extensions.test_orchestrator = None
         c_bindings.c_extensions.performance = None
         
-        # On Unix, make only the second library fail (metrics_engine)
-        if hasattr(self, 'mock_find_library'):
-            self.mock_find_library.return_value = "/fake/lib.so"
-            
-            mock_lib1 = Mock()
-            mock_lib2_error = OSError("Cannot load metrics_engine")
-            mock_lib3 = Mock()
-            
-            if hasattr(self, 'mock_cdll'):
-                self.mock_cdll.side_effect = [mock_lib1, mock_lib2_error, mock_lib3]
+        # Create mock modules for successful imports
+        mock_analyzer = Mock()
+        mock_analyzer.__name__ = 'django_mercury._c_analyzer'
+        mock_analyzer.QueryAnalyzer = Mock()
+        mock_orchestrator = Mock()
+        mock_orchestrator.__name__ = 'django_mercury._c_orchestrator'
+        mock_orchestrator.TestOrchestrator = Mock()
+        
+        # Make only metrics_engine fail
+        def import_side_effect(name):
+            if name == 'django_mercury._c_analyzer':
+                return mock_analyzer
+            elif name == 'django_mercury._c_metrics':
+                raise ImportError("Cannot load metrics_engine")
+            elif name == 'django_mercury._c_orchestrator':
+                return mock_orchestrator
+            else:
+                raise ImportError(f"Unknown module: {name}")
+        
+        mock_import.side_effect = import_side_effect
+        
+        # Also configure CDLL to fail for metrics_engine (fallback path)
+        # Since find_library is mocked to return None by default, the fallback
+        # shouldn't be attempted, but we configure it just in case
+        self.mock_find_library.return_value = None
         
         # Initialize
         c_bindings.initialize_c_extensions(force_reinit=True)

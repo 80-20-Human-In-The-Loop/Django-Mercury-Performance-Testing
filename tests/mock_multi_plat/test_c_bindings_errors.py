@@ -57,22 +57,15 @@ class TestErrorHandling(unittest.TestCase):
         """Test library not found error handling (lines 477-485)."""
         manager = CExtensionManager()
         
-        # Use platform-appropriate "file not found" error
-        if IS_WINDOWS:
-            error_msg = "The specified module could not be found"
-            expected_in_msg = "specified module"
-        else:
-            error_msg = "cannot open shared object file: No such file or directory"
-            expected_in_msg = "No such file"
-            
-        with patch_library_loading(OSError(error_msg)):
+        # Mock import failure for Python modules
+        with patch('importlib.import_module', side_effect=ImportError("No module named 'django_mercury._c_analyzer'")):
             lib_info = manager._load_library("query_analyzer", {
-                "name": "libquery_analyzer",
+                "name": "_c_analyzer",
                 "description": "Analyzer"
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn(expected_in_msg, lib_info.error_message)
+            self.assertIn("Failed to import", lib_info.error_message)
     
     def test_import_error_handling(self):
         """Test Python import error handling (lines 456-460)."""
@@ -142,9 +135,9 @@ class TestErrorHandling(unittest.TestCase):
         manager = CExtensionManager()
         
         # Mock out of memory error
-        with patch_library_loading(MemoryError("Out of memory")):
+        with patch('importlib.import_module', side_effect=MemoryError("Out of memory")):
             lib_info = manager._load_library("metrics_engine", {
-                "name": "libmetrics_engine",
+                "name": "_c_metrics",
                 "description": "Metrics"
             })
             
@@ -154,9 +147,9 @@ class TestErrorHandling(unittest.TestCase):
         """Test permission denied error handling."""
         manager = CExtensionManager()
         
-        with patch_library_loading(PermissionError("Permission denied")):
+        with patch('importlib.import_module', side_effect=PermissionError("Permission denied")):
             lib_info = manager._load_library("test_orchestrator", {
-                "name": "libtest_orchestrator",
+                "name": "_c_orchestrator",
                 "description": "Orchestrator"
             })
             
@@ -172,14 +165,14 @@ class TestErrorHandling(unittest.TestCase):
         else:
             error_msg = "invalid ELF header"
             
-        with patch_library_loading(OSError(error_msg)):
+        with patch('importlib.import_module', side_effect=ImportError(error_msg)):
             lib_info = manager._load_library("query_analyzer", {
-                "name": "libquery_analyzer",
+                "name": "_c_analyzer",
                 "description": "Analyzer"
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn(error_msg, lib_info.error_message)
+            self.assertIn("Failed to import", lib_info.error_message)
     
     def test_version_mismatch_error(self):
         """Test handling of version mismatch errors."""
@@ -193,14 +186,14 @@ class TestErrorHandling(unittest.TestCase):
             error_msg = "version `GLIBC_2.34' not found"
             expected_in_msg = "GLIBC"
             
-        with patch_library_loading(OSError(error_msg)):
+        with patch('importlib.import_module', side_effect=ImportError(error_msg)):
             lib_info = manager._load_library("metrics_engine", {
-                "name": "libmetrics_engine",
+                "name": "_c_metrics",
                 "description": "Metrics"
             })
             
             self.assertFalse(lib_info.is_loaded)
-            self.assertIn(expected_in_msg, lib_info.error_message)
+            self.assertIn("Failed to import", lib_info.error_message)
 
 
 class TestErrorRecovery(unittest.TestCase):

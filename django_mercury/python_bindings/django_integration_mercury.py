@@ -176,25 +176,39 @@ class MercuryThresholdOverride:
 
 class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
     """
-    Intelligent, Self-Managing Django API Performance Test Case
-
-    Automatically handles:
-    - Performance monitoring for all test methods
-    - Smart threshold management based on operation complexity
-    - N+1 detection and optimization guidance
-    - Performance scoring and trend analysis
-    - Historical baseline tracking
-    - Executive summary generation
+    🎓 Django Mercury Learning & Investigation Test Case
+    
+    A performance learning tool for understanding and investigating Django app performance.
+    Use this to discover performance issues, then switch to DjangoPerformanceAPITestCase
+    for production tests.
+    
+    Purpose: LEARNING AND INVESTIGATION, not production testing
+    
+    What it does:
+    - Automatically monitors every test method
+    - Identifies the #1 performance issue to investigate
+    - Provides focused, educational guidance
+    - Teaches you what to look for and why
+    
+    Workflow:
+    1. Inherit from DjangoMercuryAPITestCase to investigate
+    2. Run tests to discover performance patterns
+    3. Learn from the focused insights
+    4. Switch to DjangoPerformanceAPITestCase with specific assertions
+    
+    Note: Output is intentionally minimal and educational.
+    For detailed metrics, use DjangoPerformanceAPITestCase.
     """
 
-    # Class-level configuration
+    # Class-level configuration - Optimized for learning
     _mercury_enabled = True
-    _auto_scoring = True
-    _auto_threshold_adjustment = True
-    _generate_summaries = True
-    _verbose_reporting = False
-    _educational_guidance = True
+    _auto_scoring = True  # Show grade to understand performance level
+    _auto_threshold_adjustment = True  # Smart defaults based on operation
+    _generate_summaries = True  # One summary at the end
+    _verbose_reporting = False  # Keep output focused
+    _educational_guidance = True  # Core feature: teaching
     _summary_generated = False  # Prevent double printing
+    _learning_mode = True  # New flag to indicate learning focus
 
     # Custom performance thresholds (set by user in setUpClass)
     _custom_thresholds: Optional[Dict[str, Any]] = None
@@ -215,10 +229,7 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
     def setUp(self):
         """Enhanced setup with automatic Mercury initialization."""
         super().setUp()
-
-        if self._mercury_enabled:
-            logger.info("🚀 Mercury Intelligent Performance Testing")
-            logger.info("🧠 Auto-monitoring enabled | 🎯 Smart thresholds | 📊 Performance scoring")
+        # Silent setup - let the results do the talking
 
     def _initialize_operation_profiles(self) -> Dict[str, OperationProfile]:
         """Initialize smart operation profiles for different API operations with realistic Django defaults."""
@@ -766,8 +777,8 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                             expect_response_under=thresholds.get("response_time"),
                             expect_memory_under=thresholds.get("memory_usage"),
                             expect_queries_under=thresholds.get("query_count"),
-                            print_analysis=self._verbose_reporting,
-                            show_scoring=self._auto_scoring,
+                            print_analysis=False if self._learning_mode else self._verbose_reporting,
+                            show_scoring=False if self._learning_mode else self._auto_scoring,
                             auto_detect_n_plus_one=True,
                             test_file=test_file,
                             test_line=test_line,
@@ -870,32 +881,26 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                     # ALWAYS track execution for summary (even if test failed)
                     self_inner._test_executions.append(metrics)
 
-                    # Show intelligent summary
-                    if not self._verbose_reporting:
-                        grade_color = {
-                            "S": EduLiteColorScheme.EXCELLENT,
-                            "A+": EduLiteColorScheme.EXCELLENT,
-                            "A": EduLiteColorScheme.GOOD,
-                            "B": EduLiteColorScheme.ACCEPTABLE,
-                            "C": EduLiteColorScheme.WARNING,
-                            "D": EduLiteColorScheme.CRITICAL,
-                            "F": EduLiteColorScheme.CRITICAL,
-                        }.get(metrics.performance_score.grade, EduLiteColorScheme.TEXT)
-
-                        # Show test result with performance metrics
-                        logger.info(
-                            f"✓ {original_method.__name__} (Grade {metrics.performance_score.grade} - {metrics.response_time:.1f}ms, {metrics.query_count}Q)"
-                        )
-
-                        # Show critical issues immediately - only if severity > 0 and query_count > 0
-                        if (
-                            metrics.django_issues.has_n_plus_one
-                            and metrics.django_issues.n_plus_one_analysis.severity_level > 0
+                    # In learning mode, only show critical issues per test
+                    if self._learning_mode and not self._verbose_reporting:
+                        # Only show output if there's something to learn
+                        if metrics.performance_score.grade in ['D', 'F'] or (
+                            metrics.django_issues.has_n_plus_one and 
+                            metrics.django_issues.n_plus_one_analysis.severity_level > 0 and
+                            metrics.django_issues.n_plus_one_analysis.query_count > 0
                         ):
-                            analysis = metrics.django_issues.n_plus_one_analysis
-                            # Fix false positive: No N+1 possible with 0 queries
-                            if analysis.query_count > 0:
-                                logger.warning(f"      🚨 N+1 Issue: {analysis.severity_text}")
+                            # Show ONE key learning point per test
+                            test_display_name = f"{original_method.__name__}"
+                            
+                            if metrics.django_issues.has_n_plus_one and metrics.django_issues.n_plus_one_analysis.query_count > 0:
+                                print(f"\n💡 {test_display_name}: N+1 Query Pattern Detected ({metrics.django_issues.n_plus_one_analysis.query_count} queries)")
+                                print(f"   → Fix: Use select_related() or prefetch_related()")
+                            elif metrics.response_time > 200:
+                                print(f"\n⏱️  {test_display_name}: Slow Response ({metrics.response_time:.0f}ms)")
+                                print(f"   → Investigate: Database indexes, query optimization")
+                            elif metrics.query_count > 20:
+                                print(f"\n🗃️  {test_display_name}: High Query Count ({metrics.query_count} queries)")
+                                print(f"   → Consider: Query optimization, caching")
 
                 # Reset per-test thresholds after each test
                 self_inner._per_test_thresholds = None
@@ -1044,15 +1049,20 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
     def _provide_educational_guidance(
         self, test_name: str, error_msg: str, operation_type: str, context: Dict[str, Any]
     ):
-        """Provide detailed educational guidance (original verbose format)."""
-        print(
-            f"\n{colors.colorize('📚 MERCURY EDUCATIONAL GUIDANCE', EduLiteColorScheme.OPTIMIZATION, bold=True)}"
-        )
-        print(f"{colors.colorize('=' * 60, EduLiteColorScheme.BORDER)}")
-
-        print(f"🎯 {colors.colorize(f'Test: {test_name}', EduLiteColorScheme.INFO)}")
-        print(f"⚠️  {colors.colorize('Default thresholds exceeded', EduLiteColorScheme.WARNING)}")
-        print(f"🔍 {colors.colorize(f'Operation Type: {operation_type}', EduLiteColorScheme.INFO)}")
+        """Provide focused educational guidance for learning mode."""
+        # In learning mode, be concise and educational
+        if not self._learning_mode:
+            # Fall back to original verbose format if not in learning mode
+            print(f"\n📚 MERCURY EDUCATIONAL GUIDANCE")
+            print(f"{'=' * 60}")
+            print(f"Test: {test_name}")
+            print(f"Issue: {error_msg}")
+            return
+            
+        # Learning mode: One focused message
+        print(f"\n📚 Learning Point: {test_name}")
+        print(f"   Issue: Threshold exceeded")
+        print(f"   Type: {operation_type}")
 
         # Parse and display exceedance amounts
         if "Response time" in error_msg:
@@ -1271,16 +1281,19 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
 
     @classmethod
     def _generate_mercury_executive_summary(cls):
-        """Generate comprehensive executive summary with actionable insights."""
-
-        # Create enhanced dashboard for the test suite
-        cls._create_mercury_dashboard()
-
-        # Note: Using print() for the summary report as it's meant to be visible in test output
-        print(
-            f"\n{colors.colorize('🎯 MERCURY INTELLIGENT PERFORMANCE ANALYSIS', EduLiteColorScheme.ACCENT, bold=True)}"
-        )
-        print(f"{colors.colorize('=' * 80, EduLiteColorScheme.BORDER)}")
+        """Generate focused learning summary."""
+        
+        if not cls._test_executions:
+            return
+            
+        # In learning mode, provide ONE clear summary
+        if cls._learning_mode:
+            cls._generate_learning_summary()
+        else:
+            # Original detailed analysis for non-learning mode
+            cls._create_mercury_dashboard()
+            print(f"\n🎯 MERCURY PERFORMANCE ANALYSIS")
+            print(f"{'=' * 80}")
 
         if not cls._test_executions:
             print(
@@ -1302,12 +1315,13 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
 
         grade_counts = Counter(grades)
 
-        # Critical issues analysis
+        # Critical issues analysis  
         n_plus_one_tests = sum(
             1
             for m in cls._test_executions
             if m.django_issues.has_n_plus_one
             and m.django_issues.n_plus_one_analysis.severity_level > 0
+            and m.django_issues.n_plus_one_analysis.query_count > 0  # Exclude false positives
         )
         critical_issues = []
 
@@ -1473,6 +1487,71 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                 else:
                     potential_scores.append(m.performance_score.total_score)
 
+    @classmethod
+    def _generate_learning_summary(cls):
+        """Generate focused learning summary for investigation mode."""
+        if not cls._test_executions:
+            return
+            
+        # Count critical issues
+        n_plus_one_tests = sum(
+            1 for m in cls._test_executions
+            if m.django_issues.has_n_plus_one 
+            and m.django_issues.n_plus_one_analysis.query_count > 0
+        )
+        
+        slow_tests = sum(1 for m in cls._test_executions if m.response_time > 200)
+        high_query_tests = sum(1 for m in cls._test_executions if m.query_count > 20)
+        failed_tests = len([m for m in cls._test_executions if m.performance_score.grade in ['D', 'F']])
+        
+        # Calculate averages
+        total_tests = len(cls._test_executions)
+        avg_response = sum(m.response_time for m in cls._test_executions) / total_tests
+        avg_queries = sum(m.query_count for m in cls._test_executions) / total_tests
+        
+        print("\n" + "="*60)
+        print("🎓 MERCURY LEARNING SUMMARY")
+        print("="*60)
+        
+        # Show the #1 issue to investigate
+        if n_plus_one_tests > 0:
+            print(f"\n📍 PRIMARY ISSUE: N+1 Query Pattern")
+            print(f"   Found in {n_plus_one_tests}/{total_tests} tests")
+            print(f"   → Next Step: Add select_related() and prefetch_related()")
+            print(f"   → Learn more: https://docs.djangoproject.com/en/stable/topics/db/optimization/")
+        elif slow_tests > total_tests / 2:
+            print(f"\n📍 PRIMARY ISSUE: Slow Response Times")
+            print(f"   {slow_tests}/{total_tests} tests over 200ms (avg: {avg_response:.0f}ms)")
+            print(f"   → Next Step: Profile slow views and add database indexes")
+        elif high_query_tests > 0:
+            print(f"\n📍 PRIMARY ISSUE: High Query Count")
+            print(f"   {high_query_tests}/{total_tests} tests with >20 queries")
+            print(f"   → Next Step: Optimize queries and implement caching")
+        else:
+            print(f"\n✅ Performance looks good!")
+            print(f"   Avg response: {avg_response:.0f}ms")
+            print(f"   Avg queries: {avg_queries:.1f}")
+        
+        # Quick stats
+        print(f"\n📊 Quick Stats:")
+        print(f"   Tests run: {total_tests}")
+        print(f"   Avg response time: {avg_response:.0f}ms")
+        print(f"   Avg query count: {avg_queries:.1f}")
+        
+        # Show grades distribution only if there are issues
+        if failed_tests > 0:
+            grades = [m.performance_score.grade for m in cls._test_executions]
+            from collections import Counter
+            grade_counts = Counter(grades)
+            print(f"   Grades: {', '.join(f'{g}:{c}' for g, c in sorted(grade_counts.items()))}")
+        
+        # Actionable next step
+        print(f"\n💡 Ready to optimize?")
+        print(f"   Switch to DjangoPerformanceAPITestCase for production tests")
+        print(f"   Add specific assertions: assertResponseTimeLess(), assertQueriesLess()")
+        
+        print("="*60 + "\n")
+    
     @classmethod
     def _create_mercury_dashboard(cls):
         """Create enhanced dashboard for Mercury test suite summary."""

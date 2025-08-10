@@ -149,6 +149,7 @@ setup(
     packages=find_packages(exclude=['tests*', '_long_haul_research*']),
     package_data={
         'django_mercury': ['*.md', 'py.typed'],
+        # Only include source files, not built libraries (they're Python extensions now)
         'django_mercury.c_core': ['*.h', '*.c', 'Makefile', 'BUILD.md'],
         'django_mercury.documentation': ['*.md'],
         'django_mercury.examples': ['*.py'],

@@ -5,6 +5,21 @@ All notable changes to Django Mercury Performance Testing will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2025-08-10
+
+### Added
+- **3-Tier Educational Mode Access**: Implemented three user-friendly ways to enable educational mode:
+  - `mercury-test` console command for immediate use
+  - `MERCURY_EDU=1` environment variable for CI/CD integration
+  - `enable_educational_testing()` function for programmatic control
+- **Enhanced Quiz System**: Added 5 new beginner-level N+1 quiz questions for variety
+- **Contextual Educational Content**: Educational explanations now include test-specific metrics and tailored advice
+
+### Fixed
+- **Educational Mode Interactivity**: Fixed EOF errors in educational mode by detecting non-interactive environments (CI, piped input) and gracefully falling back to non-interactive output
+- **C Extension Loading**: Fixed issue where C extensions failed to load when installed from PyPI by using Python extension modules instead of standalone libraries
+- **Key Mismatches**: Fixed concept key mismatches between `n+1_queries` and `n_plus_one_queries`
+
 ## [0.0.4] - 2025-08-08
 
 ### Fixed

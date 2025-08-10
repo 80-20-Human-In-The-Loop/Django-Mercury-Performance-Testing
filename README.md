@@ -88,7 +88,7 @@ make clean && make
 
 Django Mercury adapts to your needs. Pick the mode that fits you:
 
-### 🎓 Educational Mode (`--edu`) - For Students & Beginners
+### 🎓 Educational Mode - For Learning & Understanding
 Learn while you test! Mercury becomes your performance tutor.
 
 **What it does:**
@@ -98,17 +98,43 @@ Learn while you test! Mercury becomes your performance tutor.
 - 📈 Tracks your learning progress
 - 🔧 Shows step-by-step fixes
 
-**How to enable:**
-```python
-# Add to your Django settings
-import sys
-if '--edu' in sys.argv:
-    TEST_RUNNER = 'django_mercury.test_runner.EducationalTestRunner'
+**Three Ways to Enable (Choose Your Favorite):**
+
+#### Option 1: `mercury-test` Command (Easiest! 🌟)
+```bash
+# Just use mercury-test instead of python manage.py test
+mercury-test
+
+# Run specific tests
+mercury-test users.tests
+
+# Set difficulty level
+mercury-test --level advanced
+
+# Run without pauses (for CI)
+mercury-test --no-pause
 ```
 
+#### Option 2: Environment Variable (Great for CI/CD 🤖)
 ```bash
-# Run tests with learning mode
-python manage.py test --edu
+# Set the environment variable
+export MERCURY_EDU=1
+export MERCURY_EDU_LEVEL=intermediate  # optional
+
+# Then run tests normally
+python manage.py test
+```
+
+#### Option 3: Python Configuration (For manage.py 📝)
+```python
+# Add to your manage.py or settings.py
+from django_mercury import enable_educational_testing
+
+# Enable educational mode
+enable_educational_testing('beginner')  # or 'intermediate', 'advanced'
+
+# Then run tests normally
+python manage.py test
 ```
 
 **Example experience:**

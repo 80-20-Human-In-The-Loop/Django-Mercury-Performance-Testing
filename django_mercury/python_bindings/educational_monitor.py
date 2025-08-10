@@ -90,11 +90,11 @@ class EducationalMonitor:
         error_lower = error_msg.lower()
         
         if "query count" in error_lower or "n+1" in error_lower:
-            return "n_plus_one_queries"
+            return "n_plus_one_queries"  # Match test expectations
         elif "response time" in error_lower or "timeout" in error_lower:
             return "slow_response_time"
         elif "memory" in error_lower or "leak" in error_lower:
-            return "memory_optimization"
+            return "memory_optimization"  # Match test expectations
         elif "cache" in error_lower or "caching" in error_lower:
             return "cache_optimization"
         else:
@@ -105,14 +105,33 @@ class EducationalMonitor:
         # Clear some space
         self.console.print("\n")
         
-        # Show issue panel
+        # Extract specific metrics for context
+        import re
+        query_count = None
+        response_time = None
+        query_match = re.search(r"Query count (\d+)", error_msg)
+        if query_match:
+            query_count = int(query_match.group(1))
+        time_match = re.search(r"Response time (\d+\.?\d*)ms", error_msg)
+        if time_match:
+            response_time = float(time_match.group(1))
+        
+        # Show issue panel with contextual information
+        issue_text = f"[bold red]⚠️  Performance Issue Detected![/bold red]\n\n"
+        issue_text += f"[yellow]Test:[/yellow] {test_name}\n"
+        issue_text += f"[yellow]Issue Type:[/yellow] {issue_type.replace('_', ' ').title()}\n"
+        issue_text += f"[yellow]Details:[/yellow] {self._extract_issue_details(error_msg)}"
+        
+        # Add contextual advice based on metrics
+        if query_count and query_count > 100:
+            issue_text += f"\n\n[red]⚠️ CRITICAL:[/red] {query_count} queries is extremely high!"
+            issue_text += "\nThis will cause serious performance problems in production."
+        elif query_count and query_count > 50:
+            issue_text += f"\n\n[yellow]⚠️ WARNING:[/yellow] {query_count} queries is quite high."
+            issue_text += "\nConsider optimizing before deployment."
+        
         issue_panel = Panel(
-            Text.from_markup(
-                f"[bold red]⚠️  Performance Issue Detected![/bold red]\n\n"
-                f"[yellow]Test:[/yellow] {test_name}\n"
-                f"[yellow]Issue Type:[/yellow] {issue_type.replace('_', ' ').title()}\n"
-                f"[yellow]Details:[/yellow] {self._extract_issue_details(error_msg)}"
-            ),
+            Text.from_markup(issue_text),
             title="[bold]Learning Opportunity[/bold]",
             border_style="red",
             padding=(1, 2)
@@ -120,7 +139,7 @@ class EducationalMonitor:
         self.console.print(issue_panel)
         
         # Get educational content for this issue type
-        content = self._get_educational_content(issue_type)
+        content = self._get_educational_content_contextual(issue_type, test_name, query_count, response_time)
         
         # Show explanation
         explanation_panel = Panel(
@@ -142,15 +161,25 @@ class EducationalMonitor:
         
         # Ask if user wants to continue
         if self.interactive_mode:
-            self.console.print()
-            continue_choice = Confirm.ask(
-                "[yellow]Ready to continue testing?[/yellow]",
-                default=True
-            )
+            # Check if we can actually interact
+            from django_mercury.cli.educational.utils import is_interactive_environment, safe_confirm
             
-            if not continue_choice:
-                # User wants more information
-                self._show_additional_resources(issue_type)
+            if is_interactive_environment():
+                self.console.print()
+                try:
+                    continue_choice = Confirm.ask(
+                        "[yellow]Ready to continue testing?[/yellow]",
+                        default=True
+                    )
+                except (EOFError, KeyboardInterrupt):
+                    continue_choice = True
+                    
+                if not continue_choice:
+                    # User wants more information
+                    self._show_additional_resources(issue_type)
+            else:
+                # Non-interactive environment - just show the content without pausing
+                self.console.print("\n[dim](Running in non-interactive mode - not pausing)[/dim]")
     
     def _show_text_educational_content(self, test_name: str, issue_type: str, error_msg: str):
         """Display simple text educational content."""
@@ -176,7 +205,12 @@ class EducationalMonitor:
         print()
         
         if self.interactive_mode:
-            input("Press Enter to continue testing...")
+            from django_mercury.cli.educational.utils import is_interactive_environment, safe_input
+            
+            if is_interactive_environment():
+                safe_input("Press Enter to continue testing...")
+            else:
+                print("(Running in non-interactive mode - not pausing)")
     
     def _extract_issue_details(self, error_msg: str) -> str:
         """Extract relevant details from error message."""
@@ -363,6 +397,58 @@ def my_view(request):
         }
         
         return content_db.get(issue_type, content_db['general_performance'])
+    
+    def _get_educational_content_contextual(self, issue_type: str, test_name: str, query_count: Optional[int] = None, response_time: Optional[float] = None) -> Dict[str, str]:
+        """Get educational content with test-specific context."""
+        # Start with base content
+        base_content = self._get_educational_content(issue_type)
+        
+        # Add contextual information for N+1 queries
+        if issue_type == "n_plus_one_queries" and query_count:
+            # Calculate likely N+1 pattern
+            likely_items = query_count - 1  # Subtract initial query
+            
+            contextual_explanation = f"""
+## The N+1 Query Problem in '{test_name}'
+
+Your test made **{query_count} queries** to the database. This suggests you're loading approximately {likely_items} items, 
+with each item triggering an additional query for its related data.
+
+### What's happening in your test:
+1. First query loads the main list (~1 query)
+2. Each item loads its related data separately (~{likely_items} queries)
+3. Total: {query_count} queries
+
+### Why this is bad:
+- With 10 items: ~11 queries (manageable)
+- With 100 items: ~101 queries (slow)
+- With 1000 items: ~1001 queries (timeout!)
+- **Your case ({likely_items} items): {query_count} queries**
+
+### How to fix it:
+```python
+# Bad (your current code likely looks like this):
+items = Model.objects.all()
+for item in items:
+    print(item.related_field.name)  # Each access = new query!
+
+# Good (what you should do):
+items = Model.objects.select_related('related_field').all()
+for item in items:
+    print(item.related_field.name)  # No additional queries!
+```
+"""
+            base_content['explanation'] = contextual_explanation
+            
+            # Add specific fix based on test name
+            if 'user' in test_name.lower():
+                base_content['fix_summary'] = f"For {query_count} queries on users: Use User.objects.select_related('profile').prefetch_related('groups')"
+            elif 'product' in test_name.lower():
+                base_content['fix_summary'] = f"For {query_count} queries on products: Use Product.objects.select_related('category', 'manufacturer')"
+            elif 'api' in test_name.lower():
+                base_content['fix_summary'] = f"For {query_count} queries in API: Add select_related/prefetch_related to your viewset's queryset"
+        
+        return base_content
     
     def _show_fix_guide(self, issue_type: str, content: Dict[str, str]):
         """Show detailed fix guide."""

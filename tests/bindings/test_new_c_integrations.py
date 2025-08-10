@@ -60,17 +60,15 @@ class TestCLibraryLoading(unittest.TestCase):
     
     def test_library_functions_exist(self):
         """Test that expected functions are available in each library."""
-        # Query Analyzer functions
-        self.assertTrue(hasattr(c_bindings.c_extensions.query_analyzer, 'analyze_query'))
-        self.assertTrue(hasattr(c_bindings.c_extensions.query_analyzer, 'detect_n_plus_one_patterns'))
+        # Libraries now provide classes instead of raw functions
+        # Query Analyzer - check for QueryAnalyzer class
+        self.assertTrue(hasattr(c_bindings.c_extensions.query_analyzer, 'QueryAnalyzer'))
         
-        # Metrics Engine functions
-        self.assertTrue(hasattr(c_bindings.c_extensions.metrics_engine, 'start_performance_monitoring_enhanced'))
-        self.assertTrue(hasattr(c_bindings.c_extensions.metrics_engine, 'get_elapsed_time_ms'))
+        # Metrics Engine - check for MetricsEngine class
+        self.assertTrue(hasattr(c_bindings.c_extensions.metrics_engine, 'MetricsEngine'))
         
-        # Test Orchestrator functions
-        self.assertTrue(hasattr(c_bindings.c_extensions.test_orchestrator, 'load_binary_configuration'))
-        self.assertTrue(hasattr(c_bindings.c_extensions.test_orchestrator, 'create_test_context'))
+        # Test Orchestrator - check for TestOrchestrator class
+        self.assertTrue(hasattr(c_bindings.c_extensions.test_orchestrator, 'TestOrchestrator'))
 
 
 @unittest.skipIf(platform.system() == 'Windows', "C extensions not supported on Windows")

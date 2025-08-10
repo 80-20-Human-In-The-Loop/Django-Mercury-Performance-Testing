@@ -95,24 +95,24 @@ if IS_WINDOWS:
         },
     }
 else:
-    # Unix: Standalone libraries built by Makefile
-    # These are built as libquery_analyzer.so, libmetrics_engine.so, etc.
+    # Unix: Use Python extensions just like Windows for consistency
+    # These are built as _c_analyzer.so, _c_metrics.so, etc.
     LIBRARY_CONFIG = {
         "query_analyzer": {
-            "name": "libquery_analyzer",
-            "fallback_name": "libquery_analyzer",
+            "name": "_c_analyzer",
+            "fallback_name": "django_mercury._c_analyzer",
             "required": False,
             "description": "SQL Query Analysis Engine",
         },
         "metrics_engine": {
-            "name": "libmetrics_engine",
-            "fallback_name": "libmetrics_engine",
+            "name": "_c_metrics",
+            "fallback_name": "django_mercury._c_metrics",
             "required": False,
             "description": "Performance Metrics Engine",
         },
         "test_orchestrator": {
-            "name": "libtest_orchestrator",
-            "fallback_name": "libtest_orchestrator",
+            "name": "_c_orchestrator",
+            "fallback_name": "django_mercury._c_orchestrator",
             "required": False,
             "description": "Test Orchestration Engine",
         },
@@ -410,90 +410,93 @@ class CExtensionLoader:
         """Load a single C library."""
         lib_name = lib_config["name"]
         
-        # On Windows, try to import as Python extension module
-        if IS_WINDOWS:
-            try:
-                # Import the Python extension module using importlib for better mockability
-                module_map = {
-                    "query_analyzer": "django_mercury._c_analyzer",
-                    "metrics_engine": "django_mercury._c_metrics",
-                    "test_orchestrator": "django_mercury._c_orchestrator",
-                }
-                
-                module_name = module_map.get(lib_key)
-                if not module_name:
-                    raise ImportError(f"Unknown library key: {lib_key}")
-                
-                # Use importlib.import_module for mockability in tests
-                import importlib
-                module = importlib.import_module(module_name)
-                
-                # Configure function signatures (for Python modules)
-                function_count = self._configure_library_functions(module, lib_key)
-                
-                # The module itself is the "handle"
-                return LibraryInfo(
-                    name=lib_name,
-                    path=f"<Python module: {module.__name__}>",
-                    handle=module,  # Use the module as the handle
-                    is_loaded=True,
-                    function_count=function_count,
-                )
-            except ImportError as e:
+        # All platforms: Try to import as Python extension module
+        # This provides consistency across platforms and better packaging support
+        try:
+            # Import the Python extension module using importlib for better mockability
+            module_map = {
+                "query_analyzer": "django_mercury._c_analyzer",
+                "metrics_engine": "django_mercury._c_metrics",
+                "test_orchestrator": "django_mercury._c_orchestrator",
+            }
+            
+            module_name = module_map.get(lib_key)
+            if not module_name:
+                raise ImportError(f"Unknown library key: {lib_key}")
+            
+            # Use importlib.import_module for mockability in tests
+            import importlib
+            module = importlib.import_module(module_name)
+            
+            # Configure function signatures (for Python modules)
+            function_count = self._configure_library_functions(module, lib_key)
+            
+            # The module itself is the "handle"
+            return LibraryInfo(
+                name=lib_name,
+                path=f"<Python module: {module.__name__}>",
+                handle=module,  # Use the module as the handle
+                is_loaded=True,
+                function_count=function_count,
+            )
+        except (ImportError, MemoryError, PermissionError, Exception) as e:
+            # Handle specific error types
+            if isinstance(e, MemoryError):
                 return LibraryInfo(
                     name=lib_name,
                     path="",
                     handle=None,
                     is_loaded=False,
-                    error_message=f"Failed to import Python extension: {str(e)}",
+                    error_message=f"Out of memory while loading {lib_name}",
                 )
-
-        # Unix: Use ctypes.CDLL for standalone shared libraries
-        # Find library file
-        library_path = find_library(lib_name)
-        if not library_path:
-            # Try fallback name (e.g., .dylib on macOS)
-            fallback_name = lib_config.get("fallback_name")
-            if fallback_name:
-                library_path = find_library(fallback_name)
+            elif isinstance(e, PermissionError):
+                return LibraryInfo(
+                    name=lib_name,
+                    path="",
+                    handle=None,
+                    is_loaded=False,
+                    error_message=f"Permission denied while loading {lib_name}",
+                )
+            
+            # If Python extension not found, try loading as standalone library (fallback)
+            # This is mainly for development environments where libraries are built with make
+            if not IS_WINDOWS and isinstance(e, ImportError):
+                # Try loading standalone .so file for Unix/Linux development
+                library_path = find_library(f"lib{lib_key.replace('_', '')}")
+                if not library_path:
+                    # Also try the exact library name from config
+                    fallback_name = lib_config.get("fallback_name")
+                    if fallback_name and "django_mercury" not in fallback_name:
+                        library_path = find_library(fallback_name)
+                
                 if library_path:
-                    lib_name = fallback_name
+                    try:
+                        # Use RTLD_GLOBAL for symbol sharing between libraries
+                        if hasattr(ctypes, "RTLD_GLOBAL"):
+                            handle = ctypes.CDLL(str(library_path), mode=ctypes.RTLD_GLOBAL)
+                        else:
+                            handle = ctypes.CDLL(str(library_path))
 
-        if not library_path:
+                        # Configure function signatures
+                        function_count = self._configure_library_functions(handle, lib_key)
+
+                        return LibraryInfo(
+                            name=lib_name,
+                            path=str(library_path),
+                            handle=handle,
+                            is_loaded=True,
+                            function_count=function_count,
+                        )
+                    except Exception as load_error:
+                        # Continue to return import error below
+                        pass
+            
             return LibraryInfo(
                 name=lib_name,
                 path="",
                 handle=None,
                 is_loaded=False,
-                error_message=f"Library file not found: {lib_name}",
-            )
-
-        # Load library
-        try:
-            # Use RTLD_GLOBAL for symbol sharing between libraries
-            if hasattr(ctypes, "RTLD_GLOBAL"):
-                handle = ctypes.CDLL(str(library_path), mode=ctypes.RTLD_GLOBAL)
-            else:
-                handle = ctypes.CDLL(str(library_path))
-
-            # Configure function signatures
-            function_count = self._configure_library_functions(handle, lib_key)
-
-            return LibraryInfo(
-                name=lib_name,
-                path=str(library_path),
-                handle=handle,
-                is_loaded=True,
-                function_count=function_count,
-            )
-
-        except Exception as e:
-            return LibraryInfo(
-                name=lib_name,
-                path=str(library_path),
-                handle=None,
-                is_loaded=False,
-                error_message=f"Failed to load library: {str(e)}",
+                error_message=f"Failed to import Python extension: {str(e)}",
             )
 
     def _configure_library_functions(self, handle: ctypes.CDLL, lib_key: str) -> int:
@@ -521,24 +524,9 @@ class CExtensionLoader:
         
         # Check if it's a Python module (Windows) or ctypes.CDLL
         if hasattr(lib, '__name__'):  # It's a Python module
-            # For Python extensions, functions are already accessible
-            # Just verify they exist
-            if hasattr(lib, 'analyze_query'):
-                functions_configured += 1
-            if hasattr(lib, 'get_duplicate_queries'):
-                functions_configured += 1
-            if hasattr(lib, 'detect_n_plus_one_patterns'):
-                functions_configured += 1
-            if hasattr(lib, 'get_n_plus_one_severity'):
-                functions_configured += 1
-            if hasattr(lib, 'get_n_plus_one_cause'):
-                functions_configured += 1
-            if hasattr(lib, 'get_optimization_suggestion'):
-                functions_configured += 1
-            if hasattr(lib, 'get_query_statistics'):
-                functions_configured += 1
-            if hasattr(lib, 'reset_query_analyzer'):
-                functions_configured += 1
+            # For Python extensions, check for the class
+            if hasattr(lib, 'QueryAnalyzer'):
+                functions_configured += 1  # The class wraps all functionality
         else:
             # It's a ctypes.CDLL - configure function signatures
             try:
@@ -599,40 +587,9 @@ class CExtensionLoader:
         
         # Check if it's a Python module (Windows) or ctypes.CDLL
         if hasattr(lib, '__name__'):  # It's a Python module
-            # For Python extensions, functions are already accessible
-            # Just verify they exist
-            if hasattr(lib, 'start_performance_monitoring_enhanced'):
-                functions_configured += 1
-            if hasattr(lib, 'stop_performance_monitoring_enhanced'):
-                functions_configured += 1
-            if hasattr(lib, 'get_elapsed_time_ms'):
-                functions_configured += 1
-            if hasattr(lib, 'get_memory_usage_mb'):
-                functions_configured += 1
-            if hasattr(lib, 'get_query_count'):
-                functions_configured += 1
-            if hasattr(lib, 'get_cache_hit_count'):
-                functions_configured += 1
-            if hasattr(lib, 'get_cache_miss_count'):
-                functions_configured += 1
-            if hasattr(lib, 'get_cache_hit_ratio'):
-                functions_configured += 1
-            if hasattr(lib, 'has_n_plus_one_pattern'):
-                functions_configured += 1
-            if hasattr(lib, 'detect_n_plus_one_severe'):
-                functions_configured += 1
-            if hasattr(lib, 'detect_n_plus_one_moderate'):
-                functions_configured += 1
-            if hasattr(lib, 'free_metrics'):
-                functions_configured += 1
-            if hasattr(lib, 'increment_query_count'):
-                functions_configured += 1
-            if hasattr(lib, 'increment_cache_hits'):
-                functions_configured += 1
-            if hasattr(lib, 'increment_cache_misses'):
-                functions_configured += 1
-            if hasattr(lib, 'reset_global_counters'):
-                functions_configured += 1
+            # For Python extensions, check for the class
+            if hasattr(lib, 'MetricsEngine'):
+                functions_configured += 1  # The class wraps all functionality
         else:
             # It's a ctypes.CDLL - configure function signatures
             try:
@@ -725,20 +682,11 @@ class CExtensionLoader:
         """
         functions_configured = 0
         
-        # Check if it's a Python module (Windows) or ctypes.CDLL (Unix)
-        if hasattr(lib, '__file__'):
-            # It's a Python module - functions are already configured
-            # Just verify the expected functions exist
-            expected_functions = [
-                'create_test_context', 'update_test_context',
-                'update_n_plus_one_analysis', 'finalize_test_context',
-                'get_orchestrator_statistics', 'load_binary_configuration',
-                'save_binary_configuration'
-            ]
-            
-            for func_name in expected_functions:
-                if hasattr(lib, func_name):
-                    functions_configured += 1
+        # Check if it's a Python module or ctypes.CDLL
+        if hasattr(lib, '__name__') or hasattr(lib, '__file__'):
+            # It's a Python module - check for the class
+            if hasattr(lib, 'TestOrchestrator'):
+                functions_configured += 1  # The class wraps all functionality
         else:
             # It's a ctypes.CDLL - configure function signatures
             try:

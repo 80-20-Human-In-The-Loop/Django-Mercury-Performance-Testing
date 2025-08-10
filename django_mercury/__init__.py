@@ -13,7 +13,7 @@ Basic Usage:
             # Performance is automatically monitored and analyzed
 """
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 __author__ = "Django Mercury Team"
 
 
@@ -74,6 +74,43 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+def enable_educational_testing(level='beginner'):
+    """
+    Enable Django Mercury Educational Testing Mode programmatically.
+    
+    This function configures Django to use Mercury's educational test runner
+    and sets the appropriate environment variables for educational mode.
+    
+    Args:
+        level: Educational difficulty level ('beginner', 'intermediate', 'advanced')
+    
+    Example:
+        In your Django settings.py or manage.py:
+        
+        from django_mercury import enable_educational_testing
+        enable_educational_testing('intermediate')
+    
+    Returns:
+        str: The test runner class path that was configured
+    """
+    import os
+    from django.conf import settings
+    
+    # Set environment variables
+    os.environ['MERCURY_EDU'] = '1'
+    os.environ['MERCURY_EDUCATIONAL_MODE'] = 'true'
+    os.environ['MERCURY_EDU_LEVEL'] = level
+    
+    # Configure Django to use educational test runner
+    test_runner = 'django_mercury.test_runner.EducationalTestRunner'
+    
+    # Update Django settings if they're already configured
+    if settings.configured:
+        settings.TEST_RUNNER = test_runner
+    
+    return test_runner
+
+
 __all__ = [
     "DjangoMercuryAPITestCase",
     "DjangoPerformanceAPITestCase",
@@ -86,4 +123,5 @@ __all__ = [
     "MEMORY_THRESHOLDS",
     "QUERY_COUNT_THRESHOLDS",
     "N_PLUS_ONE_THRESHOLDS",
+    "enable_educational_testing",
 ]

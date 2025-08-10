@@ -86,7 +86,46 @@ class QuizSystem:
                 ],
                 correct_answer=1,
                 explanation="When we fetch users without their related data, Django makes a new query for each relationship. This creates N+1 queries (1 for the list, N for each item's relations).",
-                concept="n+1_queries",
+                concept="n_plus_one_queries",
+                difficulty="beginner",
+            ),
+            Quiz(
+                question="If your view loads 50 blog posts and shows each author's name, how many queries would Django make without optimization?",
+                options=[
+                    "1 query total",
+                    "2 queries total", 
+                    "51 queries total (1 for posts + 50 for authors)",
+                    "50 queries total",
+                ],
+                correct_answer=2,
+                explanation="Without optimization, Django makes 1 query for the posts, then 1 query for each author (50 more), totaling 51 queries - a classic N+1 problem.",
+                concept="n_plus_one_queries",
+                difficulty="beginner",
+            ),
+            Quiz(
+                question="What's the EASIEST way to spot N+1 query problems in your Django app?",
+                options=[
+                    "Reading all your code carefully",
+                    "Using Django Debug Toolbar to see query counts",
+                    "Waiting for users to complain about slow pages",
+                    "Checking server CPU usage",
+                ],
+                correct_answer=1,
+                explanation="Django Debug Toolbar shows you exactly how many queries each page makes, making N+1 problems obvious. Django Mercury also detects these automatically!",
+                concept="n_plus_one_queries",
+                difficulty="beginner",
+            ),
+            Quiz(
+                question="Your product list page is slow. Debug toolbar shows 201 queries for 200 products. What's likely happening?",
+                options=[
+                    "The database is broken",
+                    "Each product is loading related data separately (N+1 problem)",
+                    "You have too many products",
+                    "The products table is too large",
+                ],
+                correct_answer=1,
+                explanation="201 queries for 200 items is a telltale sign of N+1: 1 query for the list + 1 query per item for related data like category, manufacturer, etc.",
+                concept="n_plus_one_queries",
                 difficulty="beginner",
             ),
             Quiz(
@@ -99,8 +138,8 @@ class QuizSystem:
                 ],
                 correct_answer=1,
                 explanation="select_related() performs a SQL join and includes related objects in a single query, perfect for ForeignKey and OneToOne relationships.",
-                concept="n+1_queries",
-                difficulty="intermediate",
+                concept="n_plus_one_queries",
+                difficulty="beginner",
             ),
             Quiz(
                 question="When would you use prefetch_related() instead of select_related()?",
@@ -112,7 +151,7 @@ class QuizSystem:
                 ],
                 correct_answer=1,
                 explanation="prefetch_related() is designed for ManyToMany and reverse ForeignKey relationships, using separate queries then joining in Python.",
-                concept="n+1_queries",
+                concept="n_plus_one_queries",
                 difficulty="intermediate",
             ),
 
@@ -155,7 +194,7 @@ class QuizSystem:
                 ],
                 correct_answer=1,
                 explanation="iterator() processes results one at a time instead of loading the entire queryset into memory, ideal for large datasets.",
-                concept="memory_management",
+                concept="memory_optimization",
                 difficulty="intermediate",
             ),
             Quiz(
@@ -168,7 +207,7 @@ class QuizSystem:
                 ],
                 correct_answer=1,
                 explanation="Module-level variables persist between requests and accumulate data, causing memory to grow continuously.",
-                concept="memory_management",
+                concept="memory_optimization",
                 difficulty="advanced",
             ),
 
@@ -258,7 +297,7 @@ class QuizSystem:
                 ],
                 correct_answer=1,
                 explanation="iterator(chunk_size=1000) fetches records in batches of 1000 from the database, while iterator() without chunk_size fetches ALL records at once then yields them individually. Using chunk_size is crucial for truly memory-efficient processing of large datasets.",
-                concept="memory_management",
+                concept="memory_optimization",
                 difficulty="advanced",
             ),
 
@@ -489,6 +528,8 @@ class QuizSystem:
 
         if not self.console or not RICH_AVAILABLE:
             # Fallback to basic text output
+            from django_mercury.cli.educational.utils import is_interactive_environment, safe_input
+            
             print("\n" + "=" * 50)
             print("📚 QUIZ TIME!")
             if context:
@@ -497,10 +538,15 @@ class QuizSystem:
             for i, option in enumerate(quiz.options, 1):
                 print(f"{i}) {option}")
 
-            try:
-                answer = int(input("\nYour answer [1-4]: ")) - 1
-            except (ValueError, EOFError):
-                answer = -1
+            if is_interactive_environment():
+                try:
+                    answer_str = safe_input("\nYour answer [1-4]: ")
+                    answer = int(answer_str) - 1 if answer_str.isdigit() else -1
+                except (ValueError, EOFError):
+                    answer = -1
+            else:
+                print("\n(Running in non-interactive mode - skipping quiz)")
+                return False
 
             correct = answer == quiz.correct_answer
             if correct:
@@ -529,14 +575,20 @@ class QuizSystem:
             self.console.print(f"  [cyan]{i})[/cyan] {option}")
 
         # Get answer
-        try:
-            answer = IntPrompt.ask(
-                "\n[bold]Your answer[/bold]",
-                choices=["1", "2", "3", "4"],
-                show_choices=False,
-            ) - 1
-        except (EOFError, KeyboardInterrupt):
-            self.console.print("\n[yellow]Quiz skipped[/yellow]")
+        from django_mercury.cli.educational.utils import is_interactive_environment
+        
+        if is_interactive_environment():
+            try:
+                answer = IntPrompt.ask(
+                    "\n[bold]Your answer[/bold]",
+                    choices=["1", "2", "3", "4"],
+                    show_choices=False,
+                ) - 1
+            except (EOFError, KeyboardInterrupt):
+                self.console.print("\n[yellow]Quiz skipped[/yellow]")
+                return False
+        else:
+            self.console.print("\n[dim](Running in non-interactive mode - quiz skipped)[/dim]")
             return False
 
         # Check answer
@@ -570,6 +622,67 @@ class QuizSystem:
             )
 
         return correct
+
+    def ask_quiz_for_concept(self, concept: str) -> Dict[str, Any]:
+        """Ask a quiz question for a specific concept and return the result.
+
+        This method combines get_quiz_for_concept and ask_quiz to provide
+        the complete interactive quiz experience for a given concept.
+
+        Args:
+            concept: The concept to quiz on (e.g., "n_plus_one_queries")
+
+        Returns:
+            Dictionary with quiz results including:
+            - 'answered': True if quiz was answered, False if skipped
+            - 'correct': True if answered correctly
+            - 'wants_to_learn': True if user wants more information
+            - 'concept': The concept that was tested
+        """
+        # Get a quiz for this concept
+        quiz = self.get_quiz_for_concept(concept)
+        
+        if not quiz:
+            # No quiz available for this concept
+            return {
+                'answered': False,
+                'correct': False,
+                'wants_to_learn': False,
+                'concept': concept,
+                'message': f"No quiz available for concept: {concept}"
+            }
+        
+        # Ask the quiz
+        correct = self.ask_quiz(quiz, context=f"Testing your understanding of {concept.replace('_', ' ')}")
+        
+        # Ask if they want to learn more
+        from django_mercury.cli.educational.utils import is_interactive_environment, safe_confirm
+        
+        wants_to_learn = False
+        if is_interactive_environment():
+            if self.console and RICH_AVAILABLE:
+                try:
+                    from rich.prompt import Confirm
+                    wants_to_learn = Confirm.ask(
+                        "\n[yellow]Would you like to see detailed optimization guidance?[/yellow]",
+                        default=True
+                    )
+                except (EOFError, KeyboardInterrupt):
+                    pass
+            else:
+                # Fallback to basic input
+                wants_to_learn = safe_confirm("\nWould you like to see detailed optimization guidance?", default=True)
+        else:
+            # Non-interactive mode - default to showing guidance
+            wants_to_learn = True
+        
+        return {
+            'answered': True,
+            'correct': correct,
+            'wants_to_learn': wants_to_learn,
+            'concept': concept,
+            'quiz': quiz.question if quiz else None
+        }
 
     def show_session_summary(self) -> None:
         """Display a summary of the quiz session."""
@@ -636,7 +749,7 @@ class QuizSystem:
                     ],
                     correct_answer=1,
                     explanation=f"With {query_count} queries, you have a severe N+1 issue. select_related() performs SQL JOINs to fetch related objects in one query instead of {query_count} separate queries. This is the most immediate and effective fix.",
-                    concept="n+1_queries",
+                    concept="n_plus_one_queries",
                     difficulty="intermediate" if query_count > 50 else "beginner",
                 )
             else:
@@ -650,7 +763,7 @@ class QuizSystem:
                     ],
                     correct_answer=1,
                     explanation=f"For {query_count} queries, start with select_related() to eliminate N+1 queries on ForeignKey relationships. This typically reduces query count by 80-90%.",
-                    concept="n+1_queries",
+                    concept="n_plus_one_queries",
                     difficulty="beginner",
                 )
 
@@ -749,7 +862,7 @@ class QuizSystem:
                     ],
                     correct_answer=1,
                     explanation=f"Using {memory_usage:.1f}MB suggests you're loading too much data at once. iterator() processes results in chunks without caching, reducing memory usage by 90%+ for large datasets.",
-                    concept="memory_management",
+                    concept="memory_optimization",
                     difficulty="intermediate",
                 )
             else:
@@ -763,7 +876,7 @@ class QuizSystem:
                     ],
                     correct_answer=1,
                     explanation=f"Your {memory_usage:.1f}MB is efficient! values() and values_list() return lightweight dictionaries/tuples instead of full model instances, keeping memory usage minimal.",
-                    concept="memory_management", 
+                    concept="memory_optimization", 
                     difficulty="beginner",
                 )
 
