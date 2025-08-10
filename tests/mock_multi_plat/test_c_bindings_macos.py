@@ -29,10 +29,10 @@ class TestMacOSCBindings(unittest.TestCase):
         """Test macOS library configuration."""
         from django_mercury.python_bindings import c_bindings
         
-        # Should use Unix-style library names on macOS (no mocking needed)
+        # Should use Python extension module names for PyPI compatibility
         config = c_bindings.LIBRARY_CONFIG
-        self.assertEqual(config["query_analyzer"]["name"], "libquery_analyzer")
-        self.assertEqual(config["metrics_engine"]["name"], "libmetrics_engine")
+        self.assertEqual(config["query_analyzer"]["name"], "_c_analyzer")
+        self.assertEqual(config["metrics_engine"]["name"], "_c_metrics")
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_system_paths(self):
@@ -135,18 +135,19 @@ class TestMacOSCBindings(unittest.TestCase):
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_codesign_issues(self):
-        """Test handling of macOS code signing issues."""
+        """Test handling of macOS code signing issues with Python extensions."""
         manager = CExtensionManager()
         
-        # Mock code signing error
-        error_msg = "code signature in (libtest.so) not valid for use"
-        with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
+        # Mock import error for Python extension (code signing would prevent import)
+        error_msg = "dlopen() failed: code signature not valid"
+        with patch('importlib.import_module', side_effect=ImportError(error_msg)):
             lib_info = manager._load_library("metrics_engine", {
-                "name": "libmetrics_engine",
+                "name": "_c_metrics",
+                "fallback_name": "django_mercury._c_metrics",
                 "description": "Metrics"
             })
             
-            # When mocked, won't have the specific error message
+            # Python extensions handle codesign differently - should fail to load
             self.assertFalse(lib_info.is_loaded)
             self.assertIsNotNone(lib_info.error_message)
 
@@ -156,17 +157,19 @@ class TestMacOSEdgeCases(unittest.TestCase):
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
     def test_macos_gatekeeper_blocking(self):
-        """Test handling of macOS Gatekeeper blocking."""
+        """Test handling of macOS Gatekeeper blocking with Python extensions."""
         manager = CExtensionManager()
         
-        error_msg = "cannot be opened because the developer cannot be verified"
-        with patch('ctypes.CDLL', side_effect=OSError(error_msg)):
+        # Gatekeeper blocks Python extensions differently
+        error_msg = "dlopen() failed: Library not loaded: developer cannot be verified"
+        with patch('importlib.import_module', side_effect=ImportError(error_msg)):
             lib_info = manager._load_library("test_orchestrator", {
-                "name": "libtest_orchestrator",
+                "name": "_c_orchestrator",
+                "fallback_name": "django_mercury._c_orchestrator",
                 "description": "Orchestrator"
             })
             
-            # When mocked, won't have the specific error message
+            # Python extensions blocked by Gatekeeper should fail to load
             self.assertFalse(lib_info.is_loaded)
             self.assertIsNotNone(lib_info.error_message)
     
