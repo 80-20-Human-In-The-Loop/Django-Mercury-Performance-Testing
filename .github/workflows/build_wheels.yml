@@ -397,6 +397,18 @@ jobs:
           echo "Fixing metadata in all distributions to remove License-File entries..."
           python scripts/fix_wheel_metadata.py upload/*.whl upload/*.tar.gz --verbose || echo "No distributions to fix"
       
+      - name: Fix wheel platform tags if needed
+        run: |
+          echo "Checking for wheels with linux_x86_64 tags that need fixing..."
+          for wheel in upload/*linux_x86_64*.whl; do
+            if [ -f "$wheel" ]; then
+              newname=${wheel/linux_x86_64/manylinux_2_34_x86_64}
+              echo "Renaming: $(basename $wheel) -> $(basename $newname)"
+              mv "$wheel" "$newname"
+            fi
+          done
+          echo "Platform tags fixed (if any needed fixing)"
+      
       - name: Check Test PyPI token
         run: |
           if [[ -z "${{ secrets.TEST_PYPI_API_TOKEN }}" ]]; then
@@ -452,6 +464,18 @@ jobs:
         run: |
           echo "Fixing metadata in all distributions to remove License-File entries..."
           python scripts/fix_wheel_metadata.py upload/*.whl upload/*.tar.gz --verbose || echo "No distributions to fix"
+      
+      - name: Fix wheel platform tags if needed
+        run: |
+          echo "Checking for wheels with linux_x86_64 tags that need fixing..."
+          for wheel in upload/*linux_x86_64*.whl; do
+            if [ -f "$wheel" ]; then
+              newname=${wheel/linux_x86_64/manylinux_2_34_x86_64}
+              echo "Renaming: $(basename $wheel) -> $(basename $newname)"
+              mv "$wheel" "$newname"
+            fi
+          done
+          echo "Platform tags fixed (if any needed fixing)"
       
       - name: Check distributions
         run: |

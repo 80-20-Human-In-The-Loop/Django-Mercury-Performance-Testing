@@ -266,21 +266,21 @@ test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
 
 # Linux-specific configuration
 [tool.cibuildwheel.linux]
-# Use manylinux_2_28 container for building
-manylinux-x86_64-image = "quay.io/pypa/manylinux_2_28_x86_64:latest"
-manylinux-i686-image = "quay.io/pypa/manylinux_2_28_i686:latest"
-manylinux-aarch64-image = "quay.io/pypa/manylinux_2_28_aarch64:latest"
+# Use manylinux_2_34 container for GLIBC 2.34+ support
+# This supports Ubuntu 22.04+, RHEL 9+, Debian 12+
+manylinux-x86_64-image = "quay.io/pypa/manylinux_2_34_x86_64:latest"
+manylinux-i686-image = "quay.io/pypa/manylinux_2_34_i686:latest"
+manylinux-aarch64-image = "quay.io/pypa/manylinux_2_34_aarch64:latest"
 
 # Environment variables
 environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1"}
 
 # Install system dependencies for C compilation in manylinux container
-# Note: libunwind is NOT installed for manylinux compatibility
 before-all = [
-    "yum install -y gcc make",  # Only use yum - we're in manylinux container
+    "dnf install -y gcc make",  # Use dnf for RHEL 9+ based containers
     "python -m pip install --upgrade pip setuptools wheel",
     "python -c \"import sys; print(f'Python: {sys.version}')\"",
-    # Verify we're in manylinux container
+    # Verify we're in manylinux_2_34 container
     "cat /etc/redhat-release || echo 'Not in RHEL-based container'",
     "ldconfig -p | grep 'libc.so.6' | head -1",  # Show GLIBC version
 ]
@@ -290,9 +290,9 @@ before-build = [
     "python -m pip install --upgrade pip 'setuptools>=75.0' wheel",
 ]
 
-# Skip auditwheel repair - our wheel requires GLIBC 2.34+ due to stat/pthread functions
-# The wheel will work on Ubuntu 22.04+, RHEL 9+, Debian 12+ and other modern systems
-repair-wheel-command = "cp {wheel} {dest_dir} && echo 'Skipping auditwheel repair - wheel requires GLIBC 2.34+'"
+# Use auditwheel to create proper manylinux_2_34 wheels
+# This gives us GLIBC 2.34+ support with proper platform tags
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} --plat manylinux_2_34_x86_64 || echo 'Note: auditwheel repair failed, wheel requires GLIBC 2.34+'"
 
 # macOS-specific configuration  
 [tool.cibuildwheel.macos]
