@@ -86,7 +86,26 @@ make clean && make
 
 ## Choose Your Mode
 
-Django Mercury adapts to your needs. Pick the mode that fits you:
+According to the 80-20 [Three Audience Pattern](https://github.com/80-20-Human-In-The-Loop/Community/wiki/Tutorial-How-To-Write-80-20-Tools#three-audiences-pattern) Django Mercury adapts to your needs.
+### 💼 Professional Mode (Default) - For Experts
+Fast, efficient, no hand-holding. You know what you're doing.
+
+**What it does:**
+- ✅ Automatic performance monitoring
+- 📊 Detailed reports and grades (S, A+, A, B, C, D, F)
+- ⚡ Fast execution without interruptions
+- 🎯 Precise performance metrics
+- 🔍 N+1 query detection
+
+**How to use:**
+```python
+from django_mercury import DjangoMercuryAPITestCase
+
+class MyTest(DjangoMercuryAPITestCase):
+    def test_api_performance(self):
+        response = self.client.get('/api/endpoint/')
+        # Automatically monitored!
+```
 
 ### 🎓 Educational Mode - For Learning & Understanding
 Learn while you test! Mercury becomes your performance tutor.
@@ -163,26 +182,6 @@ Your answer: _
 ```
 
 [📖 Full Educational Mode Documentation](docs/EDUCATIONAL_MODE.md)
-
-### 💼 Professional Mode (Default) - For Experts
-Fast, efficient, no hand-holding. You know what you're doing.
-
-**What it does:**
-- ✅ Automatic performance monitoring
-- 📊 Detailed reports and grades (S, A+, A, B, C, D, F)
-- ⚡ Fast execution without interruptions
-- 🎯 Precise performance metrics
-- 🔍 N+1 query detection
-
-**How to use:**
-```python
-from django_mercury import DjangoMercuryAPITestCase
-
-class MyTest(DjangoMercuryAPITestCase):
-    def test_api_performance(self):
-        response = self.client.get('/api/endpoint/')
-        # Automatically monitored!
-```
 
 ### 🤖 Agent Mode (`--agent`) - Coming Soon!
 Let AI help optimize your code while you keep control.
