@@ -9,7 +9,7 @@
 [![Built for: EduLite](https://img.shields.io/badge/Built%20for-EduLite-orange)](https://github.com/ibrahim-sisar/EduLite)
 [![Values: Open](https://img.shields.io/badge/Values-Open%20%7C%20Free%20%7C%20Fair-purple)](https://github.com/80-20-Human-In-The-Loop)
 
-**Part of the [Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem**
+**Part of the [80-20 Human in the Loop](https://github.com/80-20-Human-In-The-Loop) ecosystem**
 
 > Test Django app speed. Learn why it's slow. Fix it.
 
