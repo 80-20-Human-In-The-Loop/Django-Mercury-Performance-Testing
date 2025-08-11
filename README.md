@@ -33,7 +33,9 @@ class MyPerformanceTest(DjangoMercuryAPITestCase):
 
 Mercury started at [EduLite](https://github.com/ibrahim-sisar/EduLite). EduLite helps students learn with slow internet. We found our UserSearchView made **325 database queries** to show one page!
 
-We built Mercury to find these problems and teach you how to fix them. Mercury follows EduLite's values: **Fair**, **Free**, and **Open**. Everyone can use it and learn. Beginners or Students contributing to an open source project that has Mercury in their test pipeline should learn and grow as a developer.
+We built Mercury to find these problems and teach you how to fix them. Mercury follows EduLite's values: **Fair**, **Free**, and **Open**. Everyone can use it and learn. 
+
+Beginners or Students contributing to an open source project that has Mercury in their test pipeline should learn and grow as a developer.
 
 ## 📦 Installation
 
