@@ -1,6 +1,6 @@
 [warning] I am in the process of getting the CI/CD to build a proper Windows version, for now Windows uses python fallbacks which are 900x slower.
 
-# Django Mercury 🚀
+# Django Mercury
 
 [![PyPI version](https://badge.fury.io/py/django-mercury-performance.svg)](https://badge.fury.io/py/django-mercury-performance)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -13,7 +13,7 @@
 
 > Test Django app speed. Learn why it's slow. Fix it.
 
-## 🚀 Quick Install
+## Quick Install
 
 ```bash
 pip install django-mercury-performance
@@ -61,6 +61,7 @@ make clean && make
 ## Choose Your Mode
 
 According to the 80-20 [Three Audience Pattern](https://github.com/80-20-Human-In-The-Loop/Community/wiki/Tutorial-How-To-Write-80-20-Tools#three-audiences-pattern) Django Mercury adapts to your needs.
+
 ### 💼 Professional Mode (Default) - For Experts
 Fast, efficient, no hand-holding. You know what you're doing.
 
