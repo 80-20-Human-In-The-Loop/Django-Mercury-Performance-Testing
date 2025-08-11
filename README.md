@@ -47,7 +47,7 @@ pip install django-mercury-performance
 
 ```bash
 # Clone the repository
-git clone https://github.com/Django-Mercury/Performance-Testing.git
+git clone https://github.com/80-20-Human-In-The-Loop/Django-Mercury-Performance-Testing.git
 cd Django-Mercury-Performance-Testing
 
 # Install in development mode
