@@ -5,6 +5,18 @@ All notable changes to Django Mercury Performance Testing will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.6] - 2025-08-10
+
+### Fixed
+- **Query Counting**: Fixed issue where Django Mercury reported 0 queries even when database operations were performed
+  - Updated `DjangoQueryTracker` to use Django's built-in `connection.queries` as primary source when DEBUG=True
+  - Modified query tracker to sync with Django's query log in the `stop()` method
+  - Fixed fallback metrics to prioritize custom tracker count over Django's total queries
+  - Ensured proper handling of query counts in both C extension and Python fallback paths
+
+### Changed
+- **Query Tracking Priority**: Changed order to use session-specific query counts from custom tracker before falling back to Django's total
+
 ## [0.0.5] - 2025-08-10
 
 ### Added

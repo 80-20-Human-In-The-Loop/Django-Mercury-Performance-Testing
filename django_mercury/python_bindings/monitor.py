@@ -459,20 +459,69 @@ class EnhancedPerformanceMetrics_Python:
                     lib.get_cache_hit_ratio(c_metrics) if hasattr(lib, "get_cache_hit_ratio") else 0.0
                 )
 
-            # Fallback to Python query tracker if C returns 0 and tracker exists
-            if (
-                self.query_count == 0
-                and hasattr(self, "_query_tracker_ref")
-                and self._query_tracker_ref
-            ):
-                python_count = self._query_tracker_ref.query_count
-                if python_count > 0:
-                    self.query_count = python_count
+            # Fallback to Python query tracker or Django's connection.queries
+            if self.query_count == 0:
+                # First try Django's built-in query tracking
+                try:
+                    from django.db import connection
+                    if hasattr(connection, 'queries'):
+                        django_count = len(connection.queries)
+                        if django_count > 0:
+                            self.query_count = django_count
+                except Exception:
+                    pass
+                
+                # Then try our custom query tracker
+                if (
+                    self.query_count == 0
+                    and hasattr(self, "_query_tracker_ref")
+                    and self._query_tracker_ref
+                ):
+                    python_count = self._query_tracker_ref.query_count
+                    if python_count > 0:
+                        self.query_count = python_count
         else:
+            # No lib available - try to get from C struct or use defaults
             self.query_count = 0
             self.cache_hits = 0
             self.cache_misses = 0
             self.cache_hit_ratio = 0.0
+            
+            # Try to extract from C struct if available (for mock metrics)
+            if c_metrics:
+                try:
+                    if hasattr(c_metrics, 'contents'):
+                        contents = c_metrics.contents
+                        if hasattr(contents, 'query_count_end'):
+                            self.query_count = contents.query_count_end - contents.query_count_start
+                        if hasattr(contents, 'cache_hits'):
+                            self.cache_hits = contents.cache_hits
+                        if hasattr(contents, 'cache_misses'):
+                            self.cache_misses = contents.cache_misses
+                except (AttributeError, TypeError):
+                    pass  # Keep defaults
+            
+            # Still apply Django/tracker fallback if query_count is 0
+            if self.query_count == 0:
+                # First try Django's built-in query tracking
+                try:
+                    from django.db import connection
+                    if hasattr(connection, 'queries'):
+                        django_count = len(connection.queries)
+                        if django_count > 0:
+                            self.query_count = django_count
+                except Exception:
+                    pass
+                
+                # Then try our custom query tracker
+                if (
+                    self.query_count == 0
+                    and hasattr(self, "_query_tracker_ref")
+                    and self._query_tracker_ref
+                ):
+                    python_count = self._query_tracker_ref.query_count
+                    if python_count > 0:
+                        self.query_count = python_count
         
         # Final safety check - ensure all metrics are numeric to avoid MagicMock issues
         from unittest.mock import MagicMock
@@ -1514,6 +1563,7 @@ class EnhancedPerformanceMonitor:
                         self._query_tracker.stop()
                     if self._cache_tracker:
                         self._cache_tracker.stop()
+                    self._django_hooks_active = False
 
                 # Free C memory - only if function exists and not MockLib
                 if lib and hasattr(lib, "free_metrics") and lib.__class__.__name__ != "MockLib":
@@ -1533,14 +1583,18 @@ class EnhancedPerformanceMonitor:
         else:
             # C monitoring not available, use Python-only metrics
             logger.debug("No C handle, using Python-only metrics")
+            
+            # Stop Django hooks BEFORE creating fallback metrics so query counts are synced
+            if self._django_hooks_active:
+                if self._query_tracker:
+                    self._query_tracker.stop()
+                if self._cache_tracker:
+                    self._cache_tracker.stop()
+            
             self._create_fallback_metrics()
-
-        # Stop Django hooks if active
-        if self._django_hooks_active:
-            if self._query_tracker:
-                self._query_tracker.stop()
-            if self._cache_tracker:
-                self._cache_tracker.stop()
+            
+            # Mark hooks as stopped so we don't stop them again
+            self._django_hooks_active = False
 
         self.handle = None
 
@@ -1573,9 +1627,22 @@ class EnhancedPerformanceMonitor:
         cache_hits = 0
         cache_misses = 0
         
+        # First try our custom tracker (it has the accurate count for this monitoring session)
         if self._query_tracker:
             try:
-                query_count = len(self._query_tracker.queries)
+                query_count = self._query_tracker.query_count
+                if query_count == 0:
+                    query_count = len(self._query_tracker.queries)
+            except Exception:
+                pass
+        
+        # Only fall back to Django's total if we have no tracker data
+        if query_count == 0:
+            try:
+                from django.db import connection
+                if hasattr(connection, 'queries'):
+                    # This gives total queries, not ideal but better than 0
+                    query_count = len(connection.queries)
             except Exception:
                 pass
                 

@@ -75,11 +75,10 @@ class DjangoQueryTracker:
 
     def start(self) -> None:
         """
-        Starts tracking Django queries by patching the cursor's execute methods.
+        Starts tracking Django queries using Django's built-in query logging.
 
-        This method monkey-patches Django's CursorWrapper to intercept all SQL
-        queries. It's safe to call multiple times - subsequent calls are no-ops
-        if tracking is already active.
+        This method primarily uses Django's connection.queries when DEBUG=True,
+        with a fallback to cursor patching for production environments.
 
         Raises:
             RuntimeError: If Django is not available.
@@ -91,6 +90,12 @@ class DjangoQueryTracker:
         self.queries.clear()
         self.query_count = 0
         self.total_time = 0.0
+        
+        # Store the starting point for Django's query log
+        try:
+            self._start_query_count = len(connection.queries) if hasattr(connection, 'queries') else 0
+        except Exception:
+            self._start_query_count = 0
 
         # Reset C extension query analyzer for fresh test state
         if C_EXTENSIONS_AVAILABLE:
@@ -99,7 +104,15 @@ class DjangoQueryTracker:
             except Exception:
                 pass  # Ignore reset errors
 
-        if not hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
+        # Only patch cursor if Django's DEBUG mode is off
+        # (when DEBUG=True, Django tracks queries automatically)
+        try:
+            from django.conf import settings
+            should_patch = not settings.DEBUG
+        except Exception:
+            should_patch = True  # Default to patching if we can't determine DEBUG mode
+        
+        if should_patch and not hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
             django.db.backends.utils.CursorWrapper._original_execute = (
                 django.db.backends.utils.CursorWrapper.execute
             )
@@ -107,55 +120,76 @@ class DjangoQueryTracker:
                 django.db.backends.utils.CursorWrapper.executemany
             )
 
-        tracker = self
+            tracker = self
 
-        def tracked_execute(
-            self_cursor: CursorWrapper, sql: str, params: Optional[Tuple[Any, ...]] = None
-        ) -> Any:
-            """Wrapper for CursorWrapper.execute to track query execution."""
-            start_time = time.time()
-            try:
-                result = django.db.backends.utils.CursorWrapper._original_execute(
-                    self_cursor, sql, params
-                )
-                execution_time = time.time() - start_time
-                tracker.record_query(sql, params, execution_time, self_cursor.db.alias)
-                return result
-            except Exception as e:
-                execution_time = time.time() - start_time
-                tracker.record_query(f"FAILED: {sql}", params, execution_time, self_cursor.db.alias)
-                raise
+            def tracked_execute(
+                self_cursor: CursorWrapper, sql: str, params: Optional[Tuple[Any, ...]] = None
+            ) -> Any:
+                """Wrapper for CursorWrapper.execute to track query execution."""
+                start_time = time.time()
+                try:
+                    result = django.db.backends.utils.CursorWrapper._original_execute(
+                        self_cursor, sql, params
+                    )
+                    execution_time = time.time() - start_time
+                    tracker.record_query(sql, params, execution_time, self_cursor.db.alias)
+                    return result
+                except Exception as e:
+                    execution_time = time.time() - start_time
+                    tracker.record_query(f"FAILED: {sql}", params, execution_time, self_cursor.db.alias)
+                    raise
 
-        def tracked_executemany(
-            self_cursor: CursorWrapper, sql: str, param_list: List[Tuple[Any, ...]]
-        ) -> Any:
-            """Wrapper for CursorWrapper.executemany to track query execution."""
-            start_time = time.time()
-            try:
-                result = django.db.backends.utils.CursorWrapper._original_executemany(
-                    self_cursor, sql, param_list
-                )
-                execution_time = time.time() - start_time
-                tracker.record_query(f"MANY: {sql}", None, execution_time, self_cursor.db.alias)
-                return result
-            except Exception as e:
-                execution_time = time.time() - start_time
-                tracker.record_query(
-                    f"FAILED MANY: {sql}", None, execution_time, self_cursor.db.alias
-                )
-                raise
+            def tracked_executemany(
+                self_cursor: CursorWrapper, sql: str, param_list: List[Tuple[Any, ...]]
+            ) -> Any:
+                """Wrapper for CursorWrapper.executemany to track query execution."""
+                start_time = time.time()
+                try:
+                    result = django.db.backends.utils.CursorWrapper._original_executemany(
+                        self_cursor, sql, param_list
+                    )
+                    execution_time = time.time() - start_time
+                    tracker.record_query(f"MANY: {sql}", None, execution_time, self_cursor.db.alias)
+                    return result
+                except Exception as e:
+                    execution_time = time.time() - start_time
+                    tracker.record_query(
+                        f"FAILED MANY: {sql}", None, execution_time, self_cursor.db.alias
+                    )
+                    raise
 
-        django.db.backends.utils.CursorWrapper.execute = tracked_execute
-        django.db.backends.utils.CursorWrapper.executemany = tracked_executemany
+            django.db.backends.utils.CursorWrapper.execute = tracked_execute
+            django.db.backends.utils.CursorWrapper.executemany = tracked_executemany
 
     def stop(self) -> None:
         """
-        Stops tracking queries and restores the original cursor methods.
+        Stops tracking queries and syncs with Django's built-in query log.
         """
         if not DJANGO_AVAILABLE or not self.is_active:
             return
 
         self.is_active = False
+        
+        # Sync with Django's built-in query tracking if available
+        try:
+            if hasattr(connection, 'queries'):
+                current_queries = connection.queries[self._start_query_count:]
+                for query in current_queries:
+                    # Convert Django's query format to our QueryInfo format
+                    sql = query.get('sql', '')
+                    time_str = query.get('time', '0')
+                    try:
+                        exec_time = float(time_str)
+                    except (ValueError, TypeError):
+                        exec_time = 0.0
+                    
+                    # Only add if not already tracked (avoid duplicates)
+                    if not any(q.sql == sql for q in self.queries[-10:]):  # Check last 10 to avoid O(n)
+                        self.queries.append(QueryInfo(sql=sql, time=exec_time))
+                        self.query_count += 1
+                        self.total_time += exec_time
+        except Exception:
+            pass  # Ignore sync errors, we still have our tracked queries
 
         if hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
             django.db.backends.utils.CursorWrapper.execute = (
