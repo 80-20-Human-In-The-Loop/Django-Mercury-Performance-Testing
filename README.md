@@ -31,35 +31,9 @@ class MyPerformanceTest(DjangoMercuryAPITestCase):
 
 ## 🌟 Origin Story
 
-Mercury started at [EduLite](https://github.com/ibrahim-sisar/EduLite). EduLite helps students learn with slow internet. We found our UserSearchView made **825 database queries** to show one page!
+Mercury started at [EduLite](https://github.com/ibrahim-sisar/EduLite). EduLite helps students learn with slow internet. We found our UserSearchView made **325 database queries** to show one page!
 
-We built Mercury to find these problems and teach you how to fix them. Mercury follows EduLite's values: **Fair**, **Free**, and **Open**. Everyone can use it and learn.
-
-## 🎯 Current Status: v0.0.2 on PyPI! 🎉
-
-**What Works Now:**
-- ✅ **Install from PyPI** - `pip install django-mercury-performance`
-- ✅ **NEW: Educational Mode (`--edu`)** - Interactive learning while testing
-- ✅ Finds N+1 query problems
-- ✅ Grades speed (S, A+, A, B, C, D, F) 
-- ✅ Two test types: `DjangoMercuryAPITestCase` and `DjangoPerformanceAPITestCase`
-- ✅ Knows what type of code runs
-- ✅ Teaches when tests fail
-- ✅ Fast C code for speed
-- ✅ Tracks time, queries, and memory
-
-**What We Actually Found:**
-```text
-🚨 POTENTIAL N+1 QUERY PROBLEM! 🚨
-Severity: CRITICAL (825 queries)
-```
-
-**Coming Soon:**
-- 🤖 AI Agent Mode (`--agent`) for smart automation
-- 📊 Track speed changes over time
-- 🎯 Test all Django view types
-- 🔍 Find exactly when code gets slower
-- 🛠️ Better testing tools
+We built Mercury to find these problems and teach you how to fix them. Mercury follows EduLite's values: **Fair**, **Free**, and **Open**. Everyone can use it and learn. Beginners or Students contributing to an open source project that has Mercury in their test pipeline should learn and grow as a developer.
 
 ## 📦 Installation
 
@@ -117,9 +91,7 @@ Learn while you test! Mercury becomes your performance tutor.
 - 📈 Tracks your learning progress
 - 🔧 Shows step-by-step fixes
 
-**Three Ways to Enable (Choose Your Favorite):**
-
-#### Option 1: `mercury-test` Command (Easiest! 🌟)
+#### `mercury-test` Command
 ```bash
 # Just use mercury-test instead of python manage.py test
 mercury-test
@@ -132,28 +104,6 @@ mercury-test --level advanced
 
 # Run without pauses (for CI)
 mercury-test --no-pause
-```
-
-#### Option 2: Environment Variable (Great for CI/CD 🤖)
-```bash
-# Set the environment variable
-export MERCURY_EDU=1
-export MERCURY_EDU_LEVEL=intermediate  # optional
-
-# Then run tests normally
-python manage.py test
-```
-
-#### Option 3: Python Configuration (For manage.py 📝)
-```python
-# Add to your manage.py or settings.py
-from django_mercury import enable_educational_testing
-
-# Enable educational mode
-enable_educational_testing('beginner')  # or 'intermediate', 'advanced'
-
-# Then run tests normally
-python manage.py test
 ```
 
 **Example experience:**
