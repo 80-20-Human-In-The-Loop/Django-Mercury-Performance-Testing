@@ -60,7 +60,7 @@ make clean && make
 
 ## Choose Your Mode
 
-According to the 80-20 [Three Audience Pattern](https://github.com/80-20-Human-In-The-Loop/Community/wiki/Tutorial-How-To-Write-80-20-Tools#three-audiences-pattern) Django Mercury adapts to your needs.
+According to [The 80-20 Three Audiences Pattern](https://github.com/80-20-Human-In-The-Loop/Community/wiki/Tutorial-How-To-Write-80-20-Tools#three-audiences-pattern) Django Mercury adapts to your needs.
 
 ### 💼 Professional Mode (Default) - For Experts
 Fast, efficient, no hand-holding. You know what you're doing.
