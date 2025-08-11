@@ -76,12 +76,13 @@ Fast, efficient, no hand-holding. You know what you're doing.
 
 **How to use:**
 ```python
-from django_mercury import DjangoMercuryAPITestCase
-
-class MyTest(DjangoMercuryAPITestCase):
-    def test_api_performance(self):
-        response = self.client.get('/api/endpoint/')
-        # Automatically monitored!
+with monitor_django_view("admin_search") as monitor:
+    response = self.admin_client.get('/api/users/search/?q=perf_user')
+    
+    # Performance assertions
+    self.assertResponseTimeLess(monitor.metrics, 50, "Admin search should be fast")
+    self.assertQueriesLess(monitor.metrics, 5, "Admin search should be optimized")
+    self.assertMemoryLess(monitor.metrics, 150, "Should use reasonable memory")
 ```
 
 ### 🎓 Educational Mode - For Learning & Understanding
