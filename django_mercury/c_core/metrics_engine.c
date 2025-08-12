@@ -26,8 +26,21 @@
 #include <stdlib.h>  /* For malloc, free */
 #include <string.h>  /* For strcpy, strncpy, strlen */
 #include <math.h>    /* For sqrt, fabs */
-#include <unistd.h>  /* For dup, dup2, close */
-#include <fcntl.h>   /* For open, O_WRONLY */
+
+/* Platform-specific includes for file descriptor operations */
+#ifndef _WIN32
+    #include <unistd.h>  /* For dup, dup2, close on Unix */
+    #include <fcntl.h>   /* For open, O_WRONLY */
+#else
+    #include <io.h>      /* For _dup, _dup2, _close on Windows */
+    #include <fcntl.h>   /* For _open, _O_WRONLY */
+    #define STDERR_FILENO 2
+    #define dup _dup
+    #define dup2 _dup2
+    #define close _close
+    #define open _open
+    #define O_WRONLY _O_WRONLY
+#endif
 
 // Platform-specific includes
 #ifdef MERCURY_MACOS
@@ -261,7 +274,11 @@ static int capture_stack_trace(StackFrame* frames, int max_frames) {
     int null_fd = -1;
     if (getenv("SUPPRESS_LIBUNWIND_WARNINGS")) {
         saved_stderr = dup(STDERR_FILENO);
+#ifdef _WIN32
+        null_fd = open("NUL", O_WRONLY);
+#else
         null_fd = open("/dev/null", O_WRONLY);
+#endif
         if (null_fd >= 0) {
             dup2(null_fd, STDERR_FILENO);
         }

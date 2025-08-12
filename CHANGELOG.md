@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Detection**: Added Valgrind suppressions for false positives from libunwind
 - **Benchmark Accuracy**: Fixed query analyzer benchmark to prevent cache hits and show real performance
 - **macOS Compatibility**: Fixed build issues on macOS systems
+- **Windows CI Build Failure**: Fixed metrics_engine.c compilation on Windows by adding conditional includes for Unix-specific headers (unistd.h)
 
 ### Changed
 - **Test Framework Organization**: Reorganized C test headers into modular components (test_base.h, test_simple.h, test_enhanced.h, test_security.h)
