@@ -21,6 +21,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
+def format_time(t: float) -> str:
+    """Format time with appropriate precision (microseconds, milliseconds, or seconds).
+    
+    Args:
+        t: Time in seconds
+        
+    Returns:
+        Formatted time string with appropriate units
+    """
+    if t < 0.001:  # Less than 1ms, show microseconds
+        return f"{t*1000000:.0f}µs"
+    elif t < 1.0:  # Less than 1s, show milliseconds
+        return f"{t*1000:.1f}ms"
+    else:  # 1s or more, show seconds
+        return f"{t:.3f}s"
+
+
 def print_banner():
     """Print the verification banner."""
     print("╔════════════════════════════════════════════════════════════╗")
@@ -39,29 +56,32 @@ def test_query_analyzer() -> Tuple[bool, float, str]:
         # Try to import the C extension directly
         import django_mercury._c_analyzer as analyzer
         
-        start_time = time.perf_counter()
-        
-        # Test basic functionality
+        # Test basic functionality with multiple iterations for accurate timing
         # Note: Python C extensions may have different function names
         # Let's try to call a simple function to verify it works
-        try:
-            # Try different possible function names
-            if hasattr(analyzer, 'reset_analyzer'):
-                analyzer.reset_analyzer()
-            elif hasattr(analyzer, 'init'):
-                analyzer.init()
-            elif hasattr(analyzer, 'analyze_query'):
-                # Try analyzing a dummy query
-                analyzer.analyze_query("SELECT 1", 0.001)
-            else:
-                # List available functions for debugging
-                funcs = [name for name in dir(analyzer) if not name.startswith('_')]
-                if funcs:
-                    # Try calling the first available function
-                    getattr(analyzer, funcs[0])()
-        except TypeError:
-            # Function might need arguments, that's ok
-            pass
+        iterations = 100  # Run multiple times for measurable timing
+        
+        start_time = time.perf_counter()
+        
+        for _ in range(iterations):
+            try:
+                # Try different possible function names
+                if hasattr(analyzer, 'reset_analyzer'):
+                    analyzer.reset_analyzer()
+                elif hasattr(analyzer, 'init'):
+                    analyzer.init()
+                elif hasattr(analyzer, 'analyze_query'):
+                    # Try analyzing a dummy query
+                    analyzer.analyze_query("SELECT 1", 0.001)
+                else:
+                    # List available functions for debugging
+                    funcs = [name for name in dir(analyzer) if not name.startswith('_')]
+                    if funcs:
+                        # Try calling the first available function
+                        getattr(analyzer, funcs[0])()
+            except TypeError:
+                # Function might need arguments, that's ok
+                pass
         
         elapsed = time.perf_counter() - start_time
         
@@ -83,29 +103,32 @@ def test_metrics_engine() -> Tuple[bool, float, str]:
         # Try to import the C extension directly
         import django_mercury._c_metrics as metrics
         
+        # Test basic functionality with multiple iterations for accurate timing
+        iterations = 100  # Run multiple times for measurable timing
+        
         start_time = time.perf_counter()
         
-        # Test basic functionality
-        try:
-            # Try different possible function names
-            if hasattr(metrics, 'init_metrics'):
-                metrics.init_metrics()
-            elif hasattr(metrics, 'start_monitoring'):
-                metrics.start_monitoring("test", "test")
-            elif hasattr(metrics, 'get_metrics'):
-                metrics.get_metrics()
-            else:
-                # List available functions for debugging
-                funcs = [name for name in dir(metrics) if not name.startswith('_')]
-                if funcs:
-                    # Try calling the first available function
-                    try:
-                        getattr(metrics, funcs[0])()
-                    except TypeError:
-                        pass
-        except TypeError:
-            # Function might need arguments, that's ok
-            pass
+        for _ in range(iterations):
+            try:
+                # Try different possible function names
+                if hasattr(metrics, 'init_metrics'):
+                    metrics.init_metrics()
+                elif hasattr(metrics, 'start_monitoring'):
+                    metrics.start_monitoring("test", "test")
+                elif hasattr(metrics, 'get_metrics'):
+                    metrics.get_metrics()
+                else:
+                    # List available functions for debugging
+                    funcs = [name for name in dir(metrics) if not name.startswith('_')]
+                    if funcs:
+                        # Try calling the first available function
+                        try:
+                            getattr(metrics, funcs[0])()
+                        except TypeError:
+                            pass
+            except TypeError:
+                # Function might need arguments, that's ok
+                pass
         
         elapsed = time.perf_counter() - start_time
         
@@ -127,29 +150,32 @@ def test_orchestrator() -> Tuple[bool, float, str]:
         # Try to import the C extension directly
         import django_mercury._c_orchestrator as orchestrator
         
+        # Test basic functionality with multiple iterations for accurate timing
+        iterations = 100  # Run multiple times for measurable timing
+        
         start_time = time.perf_counter()
         
-        # Test basic functionality
-        try:
-            # Try different possible function names
-            if hasattr(orchestrator, 'init_orchestrator'):
-                orchestrator.init_orchestrator()
-            elif hasattr(orchestrator, 'create_context'):
-                orchestrator.create_context("test", "test")
-            elif hasattr(orchestrator, 'initialize'):
-                orchestrator.initialize()
-            else:
-                # List available functions for debugging
-                funcs = [name for name in dir(orchestrator) if not name.startswith('_')]
-                if funcs:
-                    # Try calling the first available function
-                    try:
-                        getattr(orchestrator, funcs[0])()
-                    except TypeError:
-                        pass
-        except TypeError:
-            # Function might need arguments, that's ok
-            pass
+        for _ in range(iterations):
+            try:
+                # Try different possible function names
+                if hasattr(orchestrator, 'init_orchestrator'):
+                    orchestrator.init_orchestrator()
+                elif hasattr(orchestrator, 'create_context'):
+                    orchestrator.create_context("test", "test")
+                elif hasattr(orchestrator, 'initialize'):
+                    orchestrator.initialize()
+                else:
+                    # List available functions for debugging
+                    funcs = [name for name in dir(orchestrator) if not name.startswith('_')]
+                    if funcs:
+                        # Try calling the first available function
+                        try:
+                            getattr(orchestrator, funcs[0])()
+                        except TypeError:
+                            pass
+            except TypeError:
+                # Function might need arguments, that's ok
+                pass
         
         elapsed = time.perf_counter() - start_time
         
@@ -195,7 +221,7 @@ def format_status(name: str, success: bool, elapsed: float, message: str) -> str
     
     # Format time if successful
     if success:
-        time_str = f"(test: {elapsed:.3f}s)"
+        time_str = f"(test: {format_time(elapsed)})"
     else:
         time_str = ""
     
@@ -554,17 +580,9 @@ def format_benchmark_results(name: str, c_time: Optional[float], python_time: Op
         c_bar = GREEN + "█" * c_bar_len + " " * (max_bar - c_bar_len) + RESET
         python_bar = GRAY + "░" * python_bar_len + " " * (max_bar - python_bar_len) + RESET
         
-        # Format time with appropriate precision
-        def format_time(t):
-            if t < 0.001:  # Less than 1ms, show microseconds
-                return f"{t*1000000:6.0f}µs"
-            elif t < 1.0:  # Less than 1s, show milliseconds 
-                return f"{t*1000:6.1f}ms"
-            else:  # 1s or more, show seconds
-                return f"{t:6.3f}s "
-        
-        c_time_str = format_time(c_time)
-        python_time_str = format_time(python_time)
+        # Format times with padding for alignment
+        c_time_str = format_time(c_time).ljust(7)
+        python_time_str = format_time(python_time).ljust(7)
         
         lines.append(f"├─ C Extension:    {c_time_str}  {c_bar}")
         lines.append(f"├─ Pure Python:    {python_time_str}  {python_bar}")

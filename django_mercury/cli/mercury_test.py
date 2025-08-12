@@ -15,7 +15,19 @@ Usage:
 import os
 import sys
 import argparse
+import time
+import random
 from pathlib import Path
+
+# Try to import rich components
+try:
+    from rich.console import Console
+    from rich.rule import Rule
+    from rich.text import Text
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+    Console = None
 
 
 def find_manage_py():
@@ -32,6 +44,77 @@ def find_manage_py():
             break
     
     return None
+
+
+def show_parallel_hint(elapsed_time):
+    """Show hint about using --parallel flag for faster tests."""
+    if RICH_AVAILABLE:
+        console = Console()
+        console.print()
+        console.print(Rule("💡 Performance Tip", style="yellow"))
+        console.print(f"Your tests took {elapsed_time:.1f} seconds to complete.\n")
+        console.print("Speed up your tests by running them in parallel:\n")
+        
+        # Create styled command text
+        text = Text()
+        text.append("  mercury-test ", style="white")
+        text.append("--parallel", style="bold cyan")
+        text.append(" ", style="white")
+        text.append("4", style="bold yellow")
+        console.print(text)
+        
+        console.print("\nWhere the number is how many parallel processes to use")
+        console.print("(typically 2-8 depending on your CPU cores)")
+        console.print(Rule(style="yellow"))
+    else:
+        # Fallback to plain text
+        print("\n" + "=" * 60)
+        print("💡 Performance Tip")
+        print("=" * 60)
+        print(f"Your tests took {elapsed_time:.1f} seconds to complete.\n")
+        print("Speed up your tests by running them in parallel:\n")
+        print("  mercury-test --parallel 4\n")
+        print("Where the number is how many parallel processes to use")
+        print("(typically 2-8 depending on your CPU cores)")
+        print("=" * 60)
+
+
+def show_specific_test_hint(elapsed_time):
+    """Show hint about testing specific modules for faster results."""
+    if RICH_AVAILABLE:
+        console = Console()
+        console.print()
+        console.print(Rule("💡 Performance Tip", style="yellow"))
+        console.print(f"Your tests took {elapsed_time:.1f} seconds to complete.\n")
+        console.print("Test specific modules/files for faster results:\n")
+        
+        # Create styled examples
+        examples = [
+            "  mercury-test users.tests",
+            "  mercury-test users.tests.test_models",
+            "  mercury-test users.tests.TestUserCreation"
+        ]
+        
+        for example in examples:
+            text = Text(example, style="green")
+            console.print(text)
+        
+        console.print("\nYou can specify app names, test modules, or even")
+        console.print("individual test classes to run only what you need!")
+        console.print(Rule(style="yellow"))
+    else:
+        # Fallback to plain text
+        print("\n" + "=" * 60)
+        print("💡 Performance Tip")
+        print("=" * 60)
+        print(f"Your tests took {elapsed_time:.1f} seconds to complete.\n")
+        print("Test specific modules/files for faster results:\n")
+        print("  mercury-test users.tests")
+        print("  mercury-test users.tests.test_models")
+        print("  mercury-test users.tests.TestUserCreation\n")
+        print("You can specify app names, test modules, or even")
+        print("individual test classes to run only what you need!")
+        print("=" * 60)
 
 
 def main():
@@ -177,6 +260,9 @@ def main():
     # Execute Django test command with proper stdin/stdout/stderr handling
     import subprocess
     
+    # Track test execution time
+    start_time = time.time()
+    
     # For interactive mode, we need to preserve TTY
     if not args.no_pause:
         # Pass through stdin/stdout/stderr to preserve TTY
@@ -189,6 +275,21 @@ def main():
     else:
         # Non-interactive mode, normal subprocess
         result = subprocess.run(cmd_args)
+    
+    # Calculate elapsed time
+    elapsed_time = time.time() - start_time
+    
+    # Show performance hint if tests took over 100 seconds
+    if elapsed_time > 100:
+        if args.parallel:
+            # Already using parallel, only show specific test hint
+            show_specific_test_hint(elapsed_time)
+        else:
+            # Randomly choose between the two tips
+            if random.choice([True, False]):
+                show_parallel_hint(elapsed_time)
+            else:
+                show_specific_test_hint(elapsed_time)
     
     sys.exit(result.returncode)
 
