@@ -86,7 +86,7 @@ class UserProgress:
 class LearningPathSystem:
     """Manages structured learning paths for Django performance optimization."""
     
-    def __init__(self, console: Optional[Console] = None):
+    def __init__(self, console: Optional[Console] = None) -> None:
         """Initialize the learning path system."""
         self.console = console or (Console() if RICH_AVAILABLE else None)
         self.learning_paths: Dict[str, LearningPath] = {}
@@ -764,7 +764,7 @@ class LearningPathSystem:
     
     def get_user_progress_summary(self) -> Dict[str, Any]:
         """Get a summary of user progress across all learning paths."""
-        summary = {
+        summary: Dict[str, Any] = {
             'total_concepts': len(self.concepts_db),
             'completed_concepts': len(self.user_progress.completed_concepts),
             'in_progress_concepts': len(self.user_progress.in_progress_concepts),

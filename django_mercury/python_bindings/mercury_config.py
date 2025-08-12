@@ -95,7 +95,7 @@ class MercuryConfigurationManager:
     and provides methods for dynamic adjustments based on project or environment needs.
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None) -> None:
         """
         Initializes the configuration manager.
 
@@ -214,7 +214,7 @@ class ProjectPerformanceStandards:
     Defines and evaluates project-specific performance goals and deployment gates.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the performance standards with default goals."""
         self.standards = {
             "response_time_goals": {
@@ -253,9 +253,10 @@ class ProjectPerformanceStandards:
             str: The performance category (e.g., 'excellent', 'critical').
         """
         goals = self.standards.get(f"{metric_name}_goals", {})
-        for category, threshold in goals.items():
-            if value <= threshold:
-                return category
+        if isinstance(goals, dict):
+            for category, threshold in goals.items():
+                if value <= threshold:
+                    return category
         return "critical"
 
     def should_block_deployment(self, metrics: Dict[str, float]) -> Tuple[bool, List[str]]:

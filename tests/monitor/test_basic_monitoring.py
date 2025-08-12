@@ -14,7 +14,7 @@ from django_mercury.python_bindings.monitor import (
 class TestDeleteOperationScoring(unittest.TestCase):
     """Test DELETE operation specific scoring paths (lines 630-647)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.mock_c_metrics = Mock()
         self.mock_c_metrics.contents.operation_type = b"delete"
@@ -28,7 +28,7 @@ class TestDeleteOperationScoring(unittest.TestCase):
         self.mock_c_metrics.contents.baseline_memory_mb = 50
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_delete_operation_scoring_various_query_counts(self, mock_lib):
+    def test_delete_operation_scoring_various_query_counts(self, mock_lib) -> None:
         """Test DELETE operation scoring with various query counts."""
         # Test specific query count ranges for DELETE operations
         test_cases = [
@@ -73,7 +73,7 @@ class TestDeleteOperationScoring(unittest.TestCase):
 class TestIssueDetectionMethods(unittest.TestCase):
     """Test issue detection methods (lines 1428-1442)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.mock_c_metrics = Mock()
         self.mock_c_metrics.contents.operation_type = b"test"
@@ -87,7 +87,7 @@ class TestIssueDetectionMethods(unittest.TestCase):
         self.mock_c_metrics.contents.baseline_memory_mb = 50
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_detect_slow_serialization_conditions(self, mock_lib):
+    def test_detect_slow_serialization_conditions(self, mock_lib) -> None:
         """Test slow serialization detection with various conditions."""
         test_cases = [
             # (query_count, response_time, expected_result)
@@ -118,7 +118,7 @@ class TestIssueDetectionMethods(unittest.TestCase):
                 self.assertEqual(result, expected)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_detect_inefficient_pagination_basic(self, mock_lib):
+    def test_detect_inefficient_pagination_basic(self, mock_lib) -> None:
         """Test basic inefficient pagination detection."""
         mock_lib.get_elapsed_time_ms.return_value = 200.0
         mock_lib.get_memory_usage_mb.return_value = 100.0
@@ -141,7 +141,7 @@ class TestIssueDetectionMethods(unittest.TestCase):
 class TestErrorHandlingPaths(unittest.TestCase):
     """Test error handling and fallback paths."""
     
-    def test_monitor_with_no_test_info(self):
+    def test_monitor_with_no_test_info(self) -> None:
         """Test monitor behavior when no test info is available."""
         monitor = EnhancedPerformanceMonitor("test_op")
         
@@ -169,7 +169,7 @@ class TestOperationTypeBranches(unittest.TestCase):
     """Test different operation type branches."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_non_delete_operation_scoring(self, mock_lib):
+    def test_non_delete_operation_scoring(self, mock_lib) -> None:
         """Test scoring for non-DELETE operations (hits else branch)."""
         # Set up mock for a VIEW operation (not DELETE)
         mock_c_metrics = Mock()
@@ -205,7 +205,7 @@ class TestContextualOperationTypes(unittest.TestCase):
     """Test various operation types and contexts."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_operation_type_context_variations(self, mock_lib):
+    def test_operation_type_context_variations(self, mock_lib) -> None:
         """Test different operation type contexts."""
         # Set up base mock
         mock_c_metrics = Mock()
@@ -251,7 +251,7 @@ class TestMemoryCalculationEdgeCases(unittest.TestCase):
     """Test memory calculation edge cases."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_memory_overhead_edge_cases(self, mock_lib):
+    def test_memory_overhead_edge_cases(self, mock_lib) -> None:
         """Test memory overhead calculation edge cases."""
         mock_c_metrics = Mock()
         mock_c_metrics.contents.operation_type = b"test"

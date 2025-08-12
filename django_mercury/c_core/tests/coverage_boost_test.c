@@ -18,12 +18,20 @@
 #include <sys/resource.h>
 #include <sys/mman.h>
 #include "../common.h"
-#include "simple_tests.h"
+#include "test_simple.h"
 
 // Global test counters
 int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
+
+// Required by test framework (test_simple.h)
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096] = {0};
+int test_failure_buffer_used = 0;
 
 // Test memory allocation failure paths by exhausting available memory
 int test_memory_allocation_failures(void) {

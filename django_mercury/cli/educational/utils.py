@@ -22,6 +22,17 @@ def is_interactive_environment() -> bool:
     if os.environ.get('MERCURY_NON_INTERACTIVE', '').lower() in ('1', 'true', 'yes'):
         return False
     
+    # Check if we're explicitly in educational mode (override other checks)
+    # This allows mercury-test to force interactive mode
+    if os.environ.get('MERCURY_EDU') == '1' and os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true':
+        # Still check for CI environments though
+        ci_env_vars = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS']
+        if any(os.environ.get(var) for var in ci_env_vars):
+            return False
+        # If not in CI and educational mode is on, assume interactive
+        # Even if stdin.isatty() returns False due to subprocess
+        return True
+    
     # Check for CI environments
     ci_env_vars = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS']
     if any(os.environ.get(var) for var in ci_env_vars):
@@ -42,13 +53,17 @@ def is_interactive_environment() -> bool:
     # Check if we're in pytest with capture enabled
     # pytest captures stdin by default unless --capture=no is used
     if 'pytest' in sys.modules:
-        import pytest
-        config = pytest.config if hasattr(pytest, 'config') else None
-        if config and config.getoption('capture') != 'no':
-            return False
+        try:
+            import pytest
+            config = pytest.config if hasattr(pytest, 'config') else None
+            if config and config.getoption('capture') != 'no':
+                return False
+        except:
+            # If we can't check pytest config, assume non-interactive
+            pass
     
     # Check if stdin is closed or not readable
-    if sys.stdin.closed:
+    if hasattr(sys.stdin, 'closed') and sys.stdin.closed:
         return False
     
     return True

@@ -11,18 +11,24 @@
 #include <limits.h>
 #include "../common.h"
 
-// Use enhanced test framework if available, otherwise fall back to simple
-#ifdef USE_ENHANCED_TESTS
-#include "enhanced_tests.h"
-#include "test_debug_helpers.h"
-#else
-#include "simple_tests.h"
-#endif
+// Use enhanced test framework for comprehensive tests
+#include "test_enhanced.h"
 
 // Global test counters
 int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
+
+// Test context for enhanced error messages
+DEFINE_TEST_CONTEXT();
+
+// Quiet mode support
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
 
 // Function declarations for query analyzer API
 extern int analyze_query(const char* query_text, double execution_time);

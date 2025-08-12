@@ -15,7 +15,7 @@ from django_mercury.python_bindings.metrics import (
 class TestPerformanceStatus(unittest.TestCase):
     """Test cases for the PerformanceStatus enum."""
 
-    def test_performance_status_values(self):
+    def test_performance_status_values(self) -> None:
         """Test that PerformanceStatus enum has all required values."""
         expected_statuses = ['excellent', 'good', 'acceptable', 'slow', 'critical']
         
@@ -23,7 +23,7 @@ class TestPerformanceStatus(unittest.TestCase):
             status = getattr(PerformanceStatus, status_name)
             self.assertIn(status.value, expected_statuses)
 
-    def test_performance_status_enum_consistency(self):
+    def test_performance_status_enum_consistency(self) -> None:
         """Test PerformanceStatus enum consistency."""
         self.assertEqual(PerformanceStatus.EXCELLENT.value, 'excellent')
         self.assertEqual(PerformanceStatus.GOOD.value, 'good')
@@ -35,7 +35,7 @@ class TestPerformanceStatus(unittest.TestCase):
 class TestPerformanceMetrics(unittest.TestCase):
     """Test cases for the PerformanceMetrics class."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.fast_metrics = PerformanceMetrics(
             response_time=45.0,
@@ -58,7 +58,7 @@ class TestPerformanceMetrics(unittest.TestCase):
             operation_name="medium_operation"
         )
 
-    def test_performance_metrics_creation(self):
+    def test_performance_metrics_creation(self) -> None:
         """Test creating PerformanceMetrics instances."""
         metrics = PerformanceMetrics(
             response_time=100.0,
@@ -72,14 +72,14 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertEqual(metrics.query_count, 3)
         self.assertEqual(metrics.operation_name, "test_operation")
 
-    def test_performance_metrics_defaults(self):
+    def test_performance_metrics_defaults(self) -> None:
         """Test default values for PerformanceMetrics."""
         metrics = PerformanceMetrics(response_time=50.0, memory_usage=25.0)
         
         self.assertEqual(metrics.query_count, 0)
         self.assertEqual(metrics.operation_name, "")
 
-    def test_post_init_thresholds_initialization(self):
+    def test_post_init_thresholds_initialization(self) -> None:
         """Test that post_init initializes thresholds correctly."""
         metrics = PerformanceMetrics(response_time=50.0, memory_usage=25.0)
         
@@ -92,7 +92,7 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertIn('excellent', metrics._memory_thresholds)
         self.assertIn('good', metrics._memory_thresholds)
 
-    def test_str_representation(self):
+    def test_str_representation(self) -> None:
         """Test string representation of PerformanceMetrics."""
         str_repr = str(self.fast_metrics)
         
@@ -102,7 +102,7 @@ class TestPerformanceMetrics(unittest.TestCase):
         # Should contain status icon
         self.assertTrue(any(char in str_repr for char in "🚀✅⚠️🐌🚨"))
 
-    def test_repr_representation(self):
+    def test_repr_representation(self) -> None:
         """Test repr representation of PerformanceMetrics."""
         repr_str = repr(self.fast_metrics)
         
@@ -111,43 +111,43 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertIn("memory_usage=30.00", repr_str)
         self.assertIn("operation_name='fast_operation'", repr_str)
 
-    def test_is_fast_property(self):
+    def test_is_fast_property(self) -> None:
         """Test is_fast property."""
         self.assertTrue(self.fast_metrics.is_fast)
         self.assertFalse(self.slow_metrics.is_fast)
         self.assertFalse(self.medium_metrics.is_fast)
 
-    def test_is_slow_property(self):
+    def test_is_slow_property(self) -> None:
         """Test is_slow property."""
         self.assertFalse(self.fast_metrics.is_slow)
         self.assertTrue(self.slow_metrics.is_slow)
         self.assertFalse(self.medium_metrics.is_slow)
 
-    def test_is_memory_intensive_property(self):
+    def test_is_memory_intensive_property(self) -> None:
         """Test is_memory_intensive property."""
         self.assertFalse(self.fast_metrics.is_memory_intensive)
         self.assertTrue(self.slow_metrics.is_memory_intensive)
         self.assertFalse(self.medium_metrics.is_memory_intensive)
 
-    def test_has_query_issues_property(self):
+    def test_has_query_issues_property(self) -> None:
         """Test has_query_issues property."""
         self.assertFalse(self.fast_metrics.has_query_issues)
         self.assertTrue(self.slow_metrics.has_query_issues)
         self.assertFalse(self.medium_metrics.has_query_issues)
 
-    def test_performance_status_property(self):
+    def test_performance_status_property(self) -> None:
         """Test performance_status property assessment."""
         self.assertEqual(self.fast_metrics.performance_status, PerformanceStatus.EXCELLENT)
         self.assertEqual(self.slow_metrics.performance_status, PerformanceStatus.CRITICAL)
         self.assertEqual(self.medium_metrics.performance_status, PerformanceStatus.ACCEPTABLE)
 
-    def test_memory_status_property(self):
+    def test_memory_status_property(self) -> None:
         """Test memory_status property assessment."""
         self.assertEqual(self.fast_metrics.memory_status, PerformanceStatus.GOOD)
         self.assertEqual(self.slow_metrics.memory_status, PerformanceStatus.CRITICAL)
         self.assertEqual(self.medium_metrics.memory_status, PerformanceStatus.ACCEPTABLE)
 
-    def test_performance_status_thresholds(self):
+    def test_performance_status_thresholds(self) -> None:
         """Test performance status threshold boundaries."""
         test_cases = [
             (25.0, PerformanceStatus.EXCELLENT),   # <= 50ms
@@ -166,7 +166,7 @@ class TestPerformanceMetrics(unittest.TestCase):
                 )
                 self.assertEqual(metrics.performance_status, expected_status)
 
-    def test_memory_status_thresholds(self):
+    def test_memory_status_thresholds(self) -> None:
         """Test memory status threshold boundaries."""
         test_cases = [
             (10.0, PerformanceStatus.EXCELLENT),   # <= 20MB
@@ -185,7 +185,7 @@ class TestPerformanceMetrics(unittest.TestCase):
                 )
                 self.assertEqual(metrics.memory_status, expected_status)
 
-    def test_get_status_icon_method(self):
+    def test_get_status_icon_method(self) -> None:
         """Test _get_status_icon method returns appropriate icons."""
         test_cases = [
             (self.fast_metrics, "🚀"),    # Excellent
@@ -198,7 +198,7 @@ class TestPerformanceMetrics(unittest.TestCase):
                 icon = metrics._get_status_icon()
                 self.assertEqual(icon, expected_icon)
 
-    def test_detailed_report_method(self):
+    def test_detailed_report_method(self) -> None:
         """Test detailed_report method."""
         report = self.fast_metrics.detailed_report()
         
@@ -209,7 +209,7 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertIn("2", report)  # query count
         self.assertIn("excellent", report)
 
-    def test_detailed_report_with_recommendations(self):
+    def test_detailed_report_with_recommendations(self) -> None:
         """Test detailed_report includes recommendations for poor performance."""
         report = self.slow_metrics.detailed_report()
         
@@ -218,14 +218,14 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertIn("Review memory usage", report)
         self.assertIn("N+1 query patterns", report)
 
-    def test_detailed_report_no_recommendations(self):
+    def test_detailed_report_no_recommendations(self) -> None:
         """Test detailed_report without recommendations for good performance."""
         report = self.fast_metrics.detailed_report()
         
         # Should not include recommendations section for good performance
         self.assertNotIn("Recommendations", report)
 
-    def test_get_recommendations_method(self):
+    def test_get_recommendations_method(self) -> None:
         """Test _get_recommendations method."""
         fast_recommendations = self.fast_metrics._get_recommendations()
         slow_recommendations = self.slow_metrics._get_recommendations()
@@ -239,7 +239,7 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertTrue(any("memory usage" in rec for rec in slow_recommendations))
         self.assertTrue(any("N+1 query" in rec for rec in slow_recommendations))
 
-    def test_meets_thresholds_method(self):
+    def test_meets_thresholds_method(self) -> None:
         """Test meets_thresholds method."""
         # Fast metrics should meet reasonable thresholds
         self.assertTrue(self.fast_metrics.meets_thresholds(
@@ -255,7 +255,7 @@ class TestPerformanceMetrics(unittest.TestCase):
             max_queries=5
         ))
 
-    def test_meets_thresholds_partial_checks(self):
+    def test_meets_thresholds_partial_checks(self) -> None:
         """Test meets_thresholds with partial threshold checks."""
         # Only check response time
         self.assertTrue(self.fast_metrics.meets_thresholds(max_response_time=100.0))
@@ -269,13 +269,13 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertTrue(self.fast_metrics.meets_thresholds(max_queries=5))
         self.assertFalse(self.slow_metrics.meets_thresholds(max_queries=5))
 
-    def test_meets_thresholds_none_values(self):
+    def test_meets_thresholds_none_values(self) -> None:
         """Test meets_thresholds handles None values correctly."""
         # Should return True when all thresholds are None
         self.assertTrue(self.slow_metrics.meets_thresholds())
         self.assertTrue(self.fast_metrics.meets_thresholds())
 
-    def test_to_dict_method(self):
+    def test_to_dict_method(self) -> None:
         """Test to_dict serialization method."""
         metrics_dict = self.fast_metrics.to_dict()
         
@@ -302,7 +302,7 @@ class TestPerformanceMetrics(unittest.TestCase):
 class TestComparisonReport(unittest.TestCase):
     """Test cases for the ComparisonReport class."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.baseline = PerformanceMetrics(
             response_time=100.0,
@@ -332,14 +332,14 @@ class TestComparisonReport(unittest.TestCase):
             operation_name="minor_change_operation"
         )
 
-    def test_comparison_report_creation(self):
+    def test_comparison_report_creation(self) -> None:
         """Test creating ComparisonReport instances."""
         report = ComparisonReport(baseline=self.baseline, current=self.improved)
         
         self.assertEqual(report.baseline, self.baseline)
         self.assertEqual(report.current, self.improved)
 
-    def test_response_time_change_calculation(self):
+    def test_response_time_change_calculation(self) -> None:
         """Test response time change percentage calculation."""
         improved_report = ComparisonReport(baseline=self.baseline, current=self.improved)
         regressed_report = ComparisonReport(baseline=self.baseline, current=self.regressed)
@@ -347,7 +347,7 @@ class TestComparisonReport(unittest.TestCase):
         self.assertAlmostEqual(improved_report.response_time_change, -20.0, places=1)
         self.assertAlmostEqual(regressed_report.response_time_change, 30.0, places=1)
 
-    def test_memory_change_calculation(self):
+    def test_memory_change_calculation(self) -> None:
         """Test memory usage change percentage calculation."""
         improved_report = ComparisonReport(baseline=self.baseline, current=self.improved)
         regressed_report = ComparisonReport(baseline=self.baseline, current=self.regressed)
@@ -355,7 +355,7 @@ class TestComparisonReport(unittest.TestCase):
         self.assertAlmostEqual(improved_report.memory_change, -20.0, places=1)
         self.assertAlmostEqual(regressed_report.memory_change, 30.0, places=1)
 
-    def test_response_time_change_zero_baseline(self):
+    def test_response_time_change_zero_baseline(self) -> None:
         """Test response time change with zero baseline."""
         zero_baseline = PerformanceMetrics(
             response_time=0.0,
@@ -366,7 +366,7 @@ class TestComparisonReport(unittest.TestCase):
         
         self.assertEqual(report.response_time_change, 0.0)
 
-    def test_memory_change_zero_baseline(self):
+    def test_memory_change_zero_baseline(self) -> None:
         """Test memory change with zero baseline."""
         zero_baseline = PerformanceMetrics(
             response_time=100.0,
@@ -377,7 +377,7 @@ class TestComparisonReport(unittest.TestCase):
         
         self.assertEqual(report.memory_change, 0.0)
 
-    def test_is_regression_property(self):
+    def test_is_regression_property(self) -> None:
         """Test is_regression property detection."""
         improved_report = ComparisonReport(baseline=self.baseline, current=self.improved)
         regressed_report = ComparisonReport(baseline=self.baseline, current=self.regressed)
@@ -387,7 +387,7 @@ class TestComparisonReport(unittest.TestCase):
         self.assertTrue(regressed_report.is_regression)  # 30% > 20% threshold
         self.assertFalse(minor_report.is_regression)     # 5% < 20% threshold
 
-    def test_is_improvement_property(self):
+    def test_is_improvement_property(self) -> None:
         """Test is_improvement property detection."""
         improved_report = ComparisonReport(baseline=self.baseline, current=self.improved)
         regressed_report = ComparisonReport(baseline=self.baseline, current=self.regressed)
@@ -397,7 +397,7 @@ class TestComparisonReport(unittest.TestCase):
         self.assertFalse(regressed_report.is_improvement)
         self.assertFalse(minor_report.is_improvement)    # 5% > -10% threshold
 
-    def test_str_representation(self):
+    def test_str_representation(self) -> None:
         """Test string representation of ComparisonReport."""
         improved_report = ComparisonReport(baseline=self.baseline, current=self.improved)
         regressed_report = ComparisonReport(baseline=self.baseline, current=self.regressed)
@@ -416,7 +416,7 @@ class TestComparisonReport(unittest.TestCase):
         self.assertIn("+30.0%", regressed_str)  # Regression
         self.assertIn("📈", regressed_str)       # Up arrow for regression
 
-    def test_regression_and_improvement_edge_cases(self):
+    def test_regression_and_improvement_edge_cases(self) -> None:
         """Test edge cases for regression and improvement detection."""
         # Exactly 20% regression (should be True)
         exactly_20_regressed = PerformanceMetrics(
@@ -440,7 +440,7 @@ class TestComparisonReport(unittest.TestCase):
 class TestMetricsEdgeCases(unittest.TestCase):
     """Test edge cases and error conditions for metrics."""
 
-    def test_zero_values(self):
+    def test_zero_values(self) -> None:
         """Test metrics with zero values."""
         zero_metrics = PerformanceMetrics(
             response_time=0.0,
@@ -454,7 +454,7 @@ class TestMetricsEdgeCases(unittest.TestCase):
         self.assertEqual(zero_metrics.performance_status, PerformanceStatus.EXCELLENT)
         self.assertEqual(zero_metrics.memory_status, PerformanceStatus.EXCELLENT)
 
-    def test_very_large_values(self):
+    def test_very_large_values(self) -> None:
         """Test metrics with very large values."""
         large_metrics = PerformanceMetrics(
             response_time=10000.0,
@@ -470,7 +470,7 @@ class TestMetricsEdgeCases(unittest.TestCase):
         self.assertEqual(large_metrics.performance_status, PerformanceStatus.CRITICAL)
         self.assertEqual(large_metrics.memory_status, PerformanceStatus.CRITICAL)
 
-    def test_boundary_values(self):
+    def test_boundary_values(self) -> None:
         """Test metrics at exact threshold boundaries."""
         # Test exact threshold boundaries
         boundary_cases = [

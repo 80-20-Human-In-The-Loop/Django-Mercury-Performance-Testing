@@ -24,7 +24,7 @@ from django_mercury.python_bindings.constants import (
 class TestConstants(unittest.TestCase):
     """Test cases for the constants module."""
 
-    def test_response_time_thresholds_structure(self):
+    def test_response_time_thresholds_structure(self) -> None:
         """Test response time thresholds have correct structure."""
         required_keys = ['EXCELLENT', 'GOOD', 'ACCEPTABLE', 'SLOW', 'CRITICAL']
         
@@ -34,7 +34,7 @@ class TestConstants(unittest.TestCase):
             self.assertIsInstance(RESPONSE_TIME_THRESHOLDS[key], (int, float))
             self.assertGreater(RESPONSE_TIME_THRESHOLDS[key], 0)
 
-    def test_response_time_thresholds_ordering(self):
+    def test_response_time_thresholds_ordering(self) -> None:
         """Test response time thresholds are in ascending order."""
         thresholds = RESPONSE_TIME_THRESHOLDS
         self.assertLess(thresholds['EXCELLENT'], thresholds['GOOD'])
@@ -42,7 +42,7 @@ class TestConstants(unittest.TestCase):
         self.assertLess(thresholds['ACCEPTABLE'], thresholds['SLOW'])
         self.assertLess(thresholds['SLOW'], thresholds['CRITICAL'])
 
-    def test_memory_thresholds_structure(self):
+    def test_memory_thresholds_structure(self) -> None:
         """Test memory thresholds have correct structure."""
         required_keys = ['EXCELLENT', 'GOOD', 'ACCEPTABLE', 'HIGH', 'CRITICAL']
         
@@ -52,7 +52,7 @@ class TestConstants(unittest.TestCase):
             self.assertIsInstance(MEMORY_THRESHOLDS[key], (int, float))
             self.assertGreater(MEMORY_THRESHOLDS[key], 0)
 
-    def test_memory_thresholds_ordering(self):
+    def test_memory_thresholds_ordering(self) -> None:
         """Test memory thresholds are in ascending order."""
         thresholds = MEMORY_THRESHOLDS
         self.assertLess(thresholds['EXCELLENT'], thresholds['GOOD'])
@@ -60,7 +60,7 @@ class TestConstants(unittest.TestCase):
         self.assertLess(thresholds['ACCEPTABLE'], thresholds['HIGH'])
         self.assertLess(thresholds['HIGH'], thresholds['CRITICAL'])
 
-    def test_query_count_thresholds_structure(self):
+    def test_query_count_thresholds_structure(self) -> None:
         """Test query count thresholds have correct structure."""
         operation_types = ['list_view', 'detail_view', 'create_view', 'update_view', 'delete_view', 'search_view']
         threshold_levels = ['EXCELLENT', 'GOOD', 'ACCEPTABLE', 'HIGH', 'CRITICAL']
@@ -76,7 +76,7 @@ class TestConstants(unittest.TestCase):
                 self.assertIsInstance(QUERY_COUNT_THRESHOLDS[op_type][level], int)
                 self.assertGreater(QUERY_COUNT_THRESHOLDS[op_type][level], 0)
 
-    def test_query_count_thresholds_ordering(self):
+    def test_query_count_thresholds_ordering(self) -> None:
         """Test query count thresholds are in ascending order for each operation."""
         for op_type, thresholds in QUERY_COUNT_THRESHOLDS.items():
             self.assertLess(thresholds['EXCELLENT'], thresholds['GOOD'])
@@ -84,7 +84,7 @@ class TestConstants(unittest.TestCase):
             self.assertLess(thresholds['ACCEPTABLE'], thresholds['HIGH'])
             self.assertLess(thresholds['HIGH'], thresholds['CRITICAL'])
 
-    def test_n_plus_one_thresholds_structure(self):
+    def test_n_plus_one_thresholds_structure(self) -> None:
         """Test N+1 thresholds have correct structure."""
         required_keys = ['MINIMUM_FOR_DETECTION', 'MILD', 'MODERATE', 'HIGH', 'SEVERE', 'CRITICAL']
         
@@ -94,7 +94,7 @@ class TestConstants(unittest.TestCase):
             self.assertIsInstance(N_PLUS_ONE_THRESHOLDS[key], int)
             self.assertGreater(N_PLUS_ONE_THRESHOLDS[key], 0)
 
-    def test_cache_hit_ratio_thresholds_structure(self):
+    def test_cache_hit_ratio_thresholds_structure(self) -> None:
         """Test cache hit ratio thresholds have correct structure."""
         required_keys = ['EXCELLENT', 'GOOD', 'ACCEPTABLE', 'POOR', 'CRITICAL']
         
@@ -105,7 +105,7 @@ class TestConstants(unittest.TestCase):
             self.assertGreaterEqual(CACHE_HIT_RATIO_THRESHOLDS[key], 0)
             self.assertLessEqual(CACHE_HIT_RATIO_THRESHOLDS[key], 1)
 
-    def test_cache_hit_ratio_thresholds_ordering(self):
+    def test_cache_hit_ratio_thresholds_ordering(self) -> None:
         """Test cache hit ratio thresholds are in descending order (higher is better)."""
         thresholds = CACHE_HIT_RATIO_THRESHOLDS
         self.assertGreater(thresholds['EXCELLENT'], thresholds['GOOD'])
@@ -113,13 +113,13 @@ class TestConstants(unittest.TestCase):
         self.assertGreater(thresholds['ACCEPTABLE'], thresholds['POOR'])
         self.assertGreater(thresholds['POOR'], thresholds['CRITICAL'])
 
-    def test_django_baseline_memory(self):
+    def test_django_baseline_memory(self) -> None:
         """Test Django baseline memory is reasonable."""
         self.assertIsInstance(DJANGO_BASELINE_MEMORY_MB, (int, float))
         self.assertGreater(DJANGO_BASELINE_MEMORY_MB, 0)
         self.assertLess(DJANGO_BASELINE_MEMORY_MB, 1000)  # Should be reasonable
 
-    def test_scoring_weights_structure(self):
+    def test_scoring_weights_structure(self) -> None:
         """Test scoring weights have correct structure."""
         required_keys = ['response_time', 'query_efficiency', 'memory_efficiency', 'cache_performance']
         
@@ -130,12 +130,12 @@ class TestConstants(unittest.TestCase):
             self.assertGreater(SCORING_WEIGHTS[key], 0)
             self.assertLessEqual(SCORING_WEIGHTS[key], 100)
 
-    def test_scoring_weights_sum_to_100(self):
+    def test_scoring_weights_sum_to_100(self) -> None:
         """Test scoring weights sum to 100."""
         total_weight = sum(SCORING_WEIGHTS.values())
         self.assertAlmostEqual(total_weight, 100.0, places=1)
 
-    def test_scoring_penalties_structure(self):
+    def test_scoring_penalties_structure(self) -> None:
         """Test scoring penalties have correct structure."""
         penalty_keys = ['n_plus_one_mild', 'n_plus_one_moderate', 'n_plus_one_high', 'n_plus_one_severe', 'n_plus_one_critical']
         
@@ -145,7 +145,7 @@ class TestConstants(unittest.TestCase):
             self.assertIsInstance(SCORING_PENALTIES[key], (int, float))
             self.assertGreater(SCORING_PENALTIES[key], 0)
 
-    def test_scoring_penalties_ordering(self):
+    def test_scoring_penalties_ordering(self) -> None:
         """Test scoring penalties are in ascending order (more severe = higher penalty)."""
         penalties = SCORING_PENALTIES
         self.assertLess(penalties['n_plus_one_mild'], penalties['n_plus_one_moderate'])
@@ -153,7 +153,7 @@ class TestConstants(unittest.TestCase):
         self.assertLess(penalties['n_plus_one_high'], penalties['n_plus_one_severe'])
         self.assertLess(penalties['n_plus_one_severe'], penalties['n_plus_one_critical'])
 
-    def test_operation_keywords_structure(self):
+    def test_operation_keywords_structure(self) -> None:
         """Test operation keywords have correct structure."""
         operation_types = ['delete_view', 'list_view', 'detail_view', 'create_view', 'update_view', 'search_view']
         
@@ -168,7 +168,7 @@ class TestConstants(unittest.TestCase):
                 self.assertIsInstance(keyword, str)
                 self.assertGreater(len(keyword), 0)
 
-    def test_env_vars_structure(self):
+    def test_env_vars_structure(self) -> None:
         """Test environment variables have correct structure."""
         required_env_vars = ['MERCURY_CONFIG_PATH', 'MERCURY_LOG_LEVEL', 
                            'FORCE_COLOR', 'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE']
@@ -179,7 +179,7 @@ class TestConstants(unittest.TestCase):
             self.assertIsInstance(ENV_VARS[var], str)
             self.assertGreater(len(ENV_VARS[var]), 0)
 
-    def test_default_paths_structure(self):
+    def test_default_paths_structure(self) -> None:
         """Test default paths have correct structure."""
         required_paths = ['MERCURY_CONFIG', 'C_LIBRARY']
         
@@ -189,7 +189,7 @@ class TestConstants(unittest.TestCase):
             self.assertIsInstance(DEFAULT_PATHS[path_key], str)
             self.assertGreater(len(DEFAULT_PATHS[path_key]), 0)
 
-    def test_max_values_structure(self):
+    def test_max_values_structure(self) -> None:
         """Test max values have correct structure."""
         required_max_values = ['RESPONSE_TIME_MS', 'MEMORY_MB', 'QUERY_COUNT', 
                               'OPERATION_NAME_LENGTH', 'ACTIVE_MONITORS']
@@ -200,7 +200,7 @@ class TestConstants(unittest.TestCase):
             self.assertIsInstance(MAX_VALUES[max_key], int)
             self.assertGreater(MAX_VALUES[max_key], 0)
 
-    def test_max_values_reasonable(self):
+    def test_max_values_reasonable(self) -> None:
         """Test max values are reasonable."""
         # Response time shouldn't exceed 1 minute (60000ms)
         self.assertLessEqual(MAX_VALUES['RESPONSE_TIME_MS'], 60000)
@@ -217,7 +217,7 @@ class TestConstants(unittest.TestCase):
         # Active monitors should have reasonable limit
         self.assertLessEqual(MAX_VALUES['ACTIVE_MONITORS'], 10000)
 
-    def test_constants_immutability(self):
+    def test_constants_immutability(self) -> None:
         """Test that constants are properly typed as Final (immutable)."""
         # This test ensures we're using typing.Final correctly
         # We can't actually test immutability at runtime in Python,

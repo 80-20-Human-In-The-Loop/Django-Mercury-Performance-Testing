@@ -78,7 +78,7 @@ class QueryPattern:
     with a series of subsequent, similar queries.
     """
 
-    def __init__(self, base_query: str, related_queries: List[str]):
+    def __init__(self, base_query: str, related_queries: List[str]) -> None:
         """
         Initializes a QueryPattern instance.
 
@@ -124,7 +124,7 @@ class DjangoQueryLogger:
     A thread-safe logger for capturing Django database queries for analysis.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the query logger."""
         self.queries: List[Dict[str, Any]] = []
         self.is_logging = False
@@ -180,7 +180,7 @@ class QueryHandler(logging.Handler):
     A custom logging handler that directs Django query logs to our logger instance.
     """
 
-    def __init__(self, logger_instance: DjangoQueryLogger):
+    def __init__(self, logger_instance: DjangoQueryLogger) -> None:
         """
         Initializes the handler.
 
@@ -216,7 +216,7 @@ class DjangoAnalysisEngine:
     An engine for advanced, Django-specific performance analysis.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the analysis engine."""
         self.query_logger = DjangoQueryLogger()
 
@@ -471,7 +471,7 @@ class PerformanceContextManager:
     A context manager that combines performance monitoring with Django query analysis.
     """
 
-    def __init__(self, operation_name: str):
+    def __init__(self, operation_name: str) -> None:
         """
         Initializes the context manager.
 

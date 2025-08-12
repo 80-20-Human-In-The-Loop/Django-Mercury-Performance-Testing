@@ -27,7 +27,7 @@
 #include <errno.h>
 #include <signal.h>
 #include "../common.h"
-#include "simple_tests.h"
+#include "test_simple.h"
 
 // Global test counters for the enhanced test framework
 int total_tests = 0;
@@ -208,8 +208,6 @@ int test_numeric_boundary_conditions(void) {
     double max_response_time = DBL_MAX;
     double max_memory_usage = DBL_MAX;
     uint32_t max_query_count = UINT32_MAX;
-    uint32_t max_cache_hits = UINT32_MAX;
-    uint32_t max_cache_misses = UINT32_MAX;
     
     printf("Testing maximum numeric values\n");
     int max_result = update_test_context(boundary_context, max_response_time, max_memory_usage,

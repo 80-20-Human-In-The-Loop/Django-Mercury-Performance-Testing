@@ -28,7 +28,7 @@ from django_mercury.python_bindings.monitor import EnhancedPerformanceMetrics_Py
 class TestPerformanceBaseline(unittest.TestCase):
     """Test PerformanceBaseline dataclass functionality."""
     
-    def test_performance_baseline_creation(self):
+    def test_performance_baseline_creation(self) -> None:
         """Test creating a PerformanceBaseline instance."""
         baseline = PerformanceBaseline(
             operation_type="list_view",
@@ -46,7 +46,7 @@ class TestPerformanceBaseline(unittest.TestCase):
         self.assertEqual(baseline.sample_count, 10)
         self.assertEqual(baseline.last_updated, "2023-01-01T00:00:00")
     
-    def test_update_with_new_measurement(self):
+    def test_update_with_new_measurement(self) -> None:
         """Test updating baseline with new measurement."""
         baseline = PerformanceBaseline(
             operation_type="list_view",
@@ -81,7 +81,7 @@ class TestPerformanceBaseline(unittest.TestCase):
 class TestOperationProfile(unittest.TestCase):
     """Test OperationProfile dataclass functionality."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.profile = OperationProfile(
             operation_name="list_view",
@@ -91,7 +91,7 @@ class TestOperationProfile(unittest.TestCase):
             complexity_factors={'pagination': True, 'serialization': 'moderate'}
         )
     
-    def test_operation_profile_creation(self):
+    def test_operation_profile_creation(self) -> None:
         """Test creating an OperationProfile instance."""
         self.assertEqual(self.profile.operation_name, "list_view")
         self.assertEqual(self.profile.expected_query_range, (3, 25))
@@ -99,7 +99,7 @@ class TestOperationProfile(unittest.TestCase):
         self.assertEqual(self.profile.memory_overhead_tolerance, 30.0)
         self.assertEqual(self.profile.complexity_factors, {'pagination': True, 'serialization': 'moderate'})
     
-    def test_calculate_dynamic_thresholds_basic(self):
+    def test_calculate_dynamic_thresholds_basic(self) -> None:
         """Test calculating basic dynamic thresholds without context."""
         thresholds = self.profile.calculate_dynamic_thresholds({})
         
@@ -111,7 +111,7 @@ class TestOperationProfile(unittest.TestCase):
         
         self.assertEqual(thresholds, expected)
     
-    def test_calculate_dynamic_thresholds_with_page_size(self):
+    def test_calculate_dynamic_thresholds_with_page_size(self) -> None:
         """Test calculating thresholds with page size context."""
         context = {'page_size': 50}
         thresholds = self.profile.calculate_dynamic_thresholds(context)
@@ -124,7 +124,7 @@ class TestOperationProfile(unittest.TestCase):
         self.assertEqual(thresholds['memory_usage'], expected_memory_usage)
         self.assertEqual(thresholds['query_count'], 25)
     
-    def test_calculate_dynamic_thresholds_with_relations(self):
+    def test_calculate_dynamic_thresholds_with_relations(self) -> None:
         """Test calculating thresholds with include_relations context."""
         context = {'include_relations': True}
         thresholds = self.profile.calculate_dynamic_thresholds(context)
@@ -137,7 +137,7 @@ class TestOperationProfile(unittest.TestCase):
         self.assertEqual(thresholds['query_count'], expected_query_count)
         self.assertEqual(thresholds['memory_usage'], expected_memory_usage)
     
-    def test_calculate_dynamic_thresholds_with_high_search_complexity(self):
+    def test_calculate_dynamic_thresholds_with_high_search_complexity(self) -> None:
         """Test calculating thresholds with high search complexity."""
         context = {'search_complexity': 'high'}
         thresholds = self.profile.calculate_dynamic_thresholds(context)
@@ -148,7 +148,7 @@ class TestOperationProfile(unittest.TestCase):
         self.assertEqual(thresholds['response_time'], expected_response_time)
         self.assertEqual(thresholds['query_count'], expected_query_count)
     
-    def test_calculate_dynamic_thresholds_combined_context(self):
+    def test_calculate_dynamic_thresholds_combined_context(self) -> None:
         """Test calculating thresholds with multiple context factors."""
         context = {
             'page_size': 20,
@@ -170,7 +170,7 @@ class TestOperationProfile(unittest.TestCase):
 class TestTestExecutionSummary(unittest.TestCase):
     """Test TestExecutionSummary dataclass functionality."""
     
-    def test_test_execution_summary_creation(self):
+    def test_test_execution_summary_creation(self) -> None:
         """Test creating a TestExecutionSummary instance."""
         summary = TestExecutionSummary(
             total_tests=10,
@@ -202,13 +202,13 @@ class TestTestExecutionSummary(unittest.TestCase):
 class TestMercuryThresholdOverride(unittest.TestCase):
     """Test MercuryThresholdOverride context manager functionality."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.mock_test_instance = Mock()
         self.mock_test_instance._per_test_thresholds = {'original': 'threshold'}
         self.override = MercuryThresholdOverride(self.mock_test_instance)
     
-    def test_threshold_override_call(self):
+    def test_threshold_override_call(self) -> None:
         """Test calling the threshold override with thresholds."""
         thresholds = {'response_time_ms': 1000, 'query_count_max': 50}
         result = self.override(thresholds)
@@ -216,7 +216,7 @@ class TestMercuryThresholdOverride(unittest.TestCase):
         self.assertEqual(result, self.override)
         self.assertEqual(self.override.override_thresholds, thresholds)
     
-    def test_context_manager_enter_exit(self):
+    def test_context_manager_enter_exit(self) -> None:
         """Test context manager enter and exit functionality."""
         original_thresholds = {'original': 'threshold'}
         override_thresholds = {'response_time_ms': 1000}
@@ -233,7 +233,7 @@ class TestMercuryThresholdOverride(unittest.TestCase):
         # Test exit (should restore original thresholds)
         self.assertEqual(self.mock_test_instance._per_test_thresholds, original_thresholds)
     
-    def test_context_manager_with_exception(self):
+    def test_context_manager_with_exception(self) -> None:
         """Test context manager behavior when exception occurs."""
         original_thresholds = {'original': 'threshold'}
         override_thresholds = {'response_time_ms': 1000}
@@ -254,7 +254,7 @@ class TestMercuryThresholdOverride(unittest.TestCase):
 class TestDjangoMercuryAPITestCase(unittest.TestCase):
     """Test DjangoMercuryAPITestCase functionality."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
         
@@ -271,7 +271,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         DjangoMercuryAPITestCase._test_failures = []
         DjangoMercuryAPITestCase._optimization_recommendations = []
     
-    def test_test_case_initialization(self):
+    def test_test_case_initialization(self) -> None:
         """Test DjangoMercuryAPITestCase initialization."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -284,7 +284,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
             self.assertIn(profile_name, test_case._operation_profiles)
             self.assertIsInstance(test_case._operation_profiles[profile_name], OperationProfile)
     
-    def test_configure_mercury(self):
+    def test_configure_mercury(self) -> None:
         """Test configure_mercury class method."""
         DjangoMercuryAPITestCase.configure_mercury(
             enabled=False,
@@ -308,7 +308,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         self.assertEqual(DjangoMercuryAPITestCase._optimization_recommendations, [])
         self.assertFalse(DjangoMercuryAPITestCase._summary_generated)
     
-    def test_detect_operation_type_method_name_patterns(self):
+    def test_detect_operation_type_method_name_patterns(self) -> None:
         """Test operation type detection from method names."""
         test_cases = [
             ('test_user_list', None, 'list_view'),
@@ -327,7 +327,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
                 result = self.test_case._detect_operation_type(method_name, test_function)
                 self.assertEqual(result, expected_type)
     
-    def test_detect_operation_type_source_analysis(self):
+    def test_detect_operation_type_source_analysis(self) -> None:
         """Test operation type detection from function source code."""
         # Mock functions with different client method calls
         def mock_get_function():
@@ -352,7 +352,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         result_delete = self.test_case._detect_operation_type('test_generic', mock_delete_function)
         self.assertEqual(result_delete, 'delete_view')
     
-    def test_extract_test_context_basic(self):
+    def test_extract_test_context_basic(self) -> None:
         """Test extracting test context from function source."""
         def mock_function_with_pagination():
             response = self.client.get('/api/users/?page_size=50')
@@ -361,7 +361,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         context = self.test_case._extract_test_context(mock_function_with_pagination)
         self.assertEqual(context.get('page_size'), 50)
     
-    def test_extract_test_context_relations(self):
+    def test_extract_test_context_relations(self) -> None:
         """Test extracting context for relations."""
         def mock_function_with_relations():
             # Test uses select_related
@@ -371,7 +371,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         context = self.test_case._extract_test_context(mock_function_with_relations)
         self.assertTrue(context.get('include_relations'))
     
-    def test_extract_test_context_search_complexity(self):
+    def test_extract_test_context_search_complexity(self) -> None:
         """Test extracting search complexity context."""
         def mock_function_with_complex_search():
             # Complex search with Q objects
@@ -381,7 +381,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         context = self.test_case._extract_test_context(mock_function_with_complex_search)
         self.assertEqual(context.get('search_complexity'), 'high')
     
-    def test_calculate_intelligent_thresholds_per_test_override(self):
+    def test_calculate_intelligent_thresholds_per_test_override(self) -> None:
         """Test threshold calculation with per-test overrides."""
         self.test_case._per_test_thresholds = {
             'response_time_ms': 1000,
@@ -398,7 +398,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         }
         self.assertEqual(thresholds, expected)
     
-    def test_calculate_intelligent_thresholds_custom_class_thresholds(self):
+    def test_calculate_intelligent_thresholds_custom_class_thresholds(self) -> None:
         """Test threshold calculation with custom class thresholds."""
         self.test_case._per_test_thresholds = None
         self.test_case._custom_thresholds = {
@@ -416,7 +416,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         }
         self.assertEqual(thresholds, expected)
     
-    def test_calculate_intelligent_thresholds_operation_profile(self):
+    def test_calculate_intelligent_thresholds_operation_profile(self) -> None:
         """Test threshold calculation using operation profile."""
         self.test_case._per_test_thresholds = None
         self.test_case._custom_thresholds = None
@@ -431,7 +431,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         }
         self.assertEqual(thresholds, expected)
     
-    def test_generate_contextual_recommendations_list_view(self):
+    def test_generate_contextual_recommendations_list_view(self) -> None:
         """Test generating recommendations for list view operations."""
         # Mock metrics with issues
         mock_metrics = Mock()
@@ -448,7 +448,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         list_view_recommendations = [r for r in recommendations if 'List View:' in r]
         self.assertGreater(len(list_view_recommendations), 0)
     
-    def test_generate_contextual_recommendations_create_view(self):
+    def test_generate_contextual_recommendations_create_view(self) -> None:
         """Test generating recommendations for create view operations."""
         mock_metrics = Mock()
         mock_metrics.query_count = 12  # High query count for create
@@ -462,7 +462,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         create_view_recommendations = [r for r in recommendations if 'Create View:' in r]
         self.assertGreater(len(create_view_recommendations), 0)
     
-    def test_generate_contextual_recommendations_n_plus_one_executive(self):
+    def test_generate_contextual_recommendations_n_plus_one_executive(self) -> None:
         """Test generating executive recommendations for critical N+1 issues."""
         mock_metrics = Mock()
         mock_metrics.query_count = 5
@@ -484,7 +484,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         self.assertIn('EXECUTIVE PRIORITY', recommendations[0])
         self.assertIn('Business Impact', recommendations[1])
     
-    def test_set_test_performance_thresholds(self):
+    def test_set_test_performance_thresholds(self) -> None:
         """Test setting per-test performance thresholds."""
         thresholds = {
             'response_time_ms': 1000,
@@ -501,7 +501,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
             mock_logger.info.assert_called()
             self.assertGreater(mock_logger.info.call_count, 1)
     
-    def test_assert_mercury_performance_excellent_success(self):
+    def test_assert_mercury_performance_excellent_success(self) -> None:
         """Test asserting excellent performance (success case)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -516,7 +516,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         # Should not raise any exception
         self.test_case.assert_mercury_performance_excellent(mock_metrics)
     
-    def test_assert_mercury_performance_excellent_failure_score(self):
+    def test_assert_mercury_performance_excellent_failure_score(self) -> None:
         """Test asserting excellent performance (score failure)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -533,7 +533,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         
         self.assertIn("Performance score 75.0 below excellent threshold", str(context.exception))
     
-    def test_assert_mercury_performance_excellent_failure_response_time(self):
+    def test_assert_mercury_performance_excellent_failure_response_time(self) -> None:
         """Test asserting excellent performance (response time failure)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -550,7 +550,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         
         self.assertIn("Response time should be under 100ms", str(context.exception))
     
-    def test_assert_mercury_performance_excellent_failure_n_plus_one(self):
+    def test_assert_mercury_performance_excellent_failure_n_plus_one(self) -> None:
         """Test asserting excellent performance (N+1 failure)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -567,7 +567,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         
         self.assertIn("N+1 queries prevent excellent performance", str(context.exception))
     
-    def test_assert_mercury_performance_production_ready_success(self):
+    def test_assert_mercury_performance_production_ready_success(self) -> None:
         """Test asserting production-ready performance (success case)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -582,7 +582,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         # Should not raise any exception
         self.test_case.assert_mercury_performance_production_ready(mock_metrics)
     
-    def test_assert_mercury_performance_production_ready_failure_score(self):
+    def test_assert_mercury_performance_production_ready_failure_score(self) -> None:
         """Test asserting production-ready performance (score failure)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -599,7 +599,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         
         self.assertIn("Performance score 50.0 below production threshold", str(context.exception))
     
-    def test_assert_mercury_performance_production_ready_failure_response_time(self):
+    def test_assert_mercury_performance_production_ready_failure_response_time(self) -> None:
         """Test asserting production-ready performance (response time failure)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -616,7 +616,7 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
         
         self.assertIn("Response time should be under 300ms", str(context.exception))
     
-    def test_assert_mercury_performance_production_ready_failure_n_plus_one_severity(self):
+    def test_assert_mercury_performance_production_ready_failure_n_plus_one_severity(self) -> None:
         """Test asserting production-ready performance (N+1 severity failure)."""
         mock_metrics = Mock()
         mock_performance_score = Mock()
@@ -640,11 +640,11 @@ class TestDjangoMercuryAPITestCase(unittest.TestCase):
 class TestEdgeCasesAndErrorHandling(unittest.TestCase):
     """Test edge cases and error handling scenarios."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
     
-    def test_operation_profile_with_empty_context(self):
+    def test_operation_profile_with_empty_context(self) -> None:
         """Test OperationProfile with empty context."""
         profile = OperationProfile(
             operation_name="test_op",
@@ -661,7 +661,7 @@ class TestEdgeCasesAndErrorHandling(unittest.TestCase):
         self.assertEqual(thresholds['query_count'], 10)
     
     
-    def test_detect_operation_type_with_exception_in_source_analysis(self):
+    def test_detect_operation_type_with_exception_in_source_analysis(self) -> None:
         """Test operation type detection when source analysis fails."""
         def problematic_function():
             # This function might cause issues in source analysis
@@ -674,7 +674,7 @@ class TestEdgeCasesAndErrorHandling(unittest.TestCase):
             # Should fall back gracefully
             self.assertEqual(result, 'detail_view')
     
-    def test_extract_test_context_with_exception(self):
+    def test_extract_test_context_with_exception(self) -> None:
         """Test context extraction when source analysis fails."""
         def mock_function():
             pass

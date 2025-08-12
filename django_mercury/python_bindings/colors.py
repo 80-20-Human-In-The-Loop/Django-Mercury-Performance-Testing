@@ -14,7 +14,7 @@ try:
     from .logging_config import get_logger
 except ImportError:
     # Fallback for direct execution
-    ENV_VARS = {
+    ENV_VARS = {  # type: ignore[misc]
         "FORCE_COLOR": "FORCE_COLOR",
         "NO_COLOR": "NO_COLOR",
         "CLICOLOR": "CLICOLOR",
@@ -103,7 +103,7 @@ class PerformanceColors:
     A utility class for applying colors to performance data based on the active color mode.
     """
 
-    def __init__(self, mode: ColorMode = ColorMode.AUTO):
+    def __init__(self, mode: ColorMode = ColorMode.AUTO) -> None:
         """
         Initializes the PerformanceColors utility.
 

@@ -17,7 +17,7 @@ from django_mercury.python_bindings.monitor import (
 class TestScoreCalculations(unittest.TestCase):
     """Test all score calculation paths."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.mock_c_metrics = Mock()
         self.mock_c_metrics.contents.operation_type = b"test"
@@ -29,7 +29,7 @@ class TestScoreCalculations(unittest.TestCase):
         self.mock_c_metrics.contents.baseline_memory_mb = 50
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_score_calculation_all_ranges(self, mock_lib):
+    def test_score_calculation_all_ranges(self, mock_lib) -> None:
         """Test score calculation for key boundary values and representative cases."""
         # Test strategic combinations instead of all 2520 permutations
         # This reduces test time from ~3s to ~0.1s while maintaining coverage
@@ -97,7 +97,7 @@ class TestMonitorContextManager(unittest.TestCase):
     """Test monitor context manager edge cases (lines 818, 875, etc)."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_context_manager_with_none_handle(self, mock_lib):
+    def test_context_manager_with_none_handle(self, mock_lib) -> None:
         """Test context manager when start returns None."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -114,7 +114,7 @@ class TestMonitorContextManager(unittest.TestCase):
         self.assertIsNone(result)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_context_manager_with_exception_types(self, mock_lib):
+    def test_context_manager_with_exception_types(self, mock_lib) -> None:
         """Test context manager with different exception types (line 875)."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -166,7 +166,7 @@ class TestThresholdAssertions(unittest.TestCase):
     """Test threshold assertion logic (lines 1339, 1343, 1236)."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_assert_thresholds_no_metrics(self, mock_lib):
+    def test_assert_thresholds_no_metrics(self, mock_lib) -> None:
         """Test _assert_thresholds when no metrics exist (line 1236)."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -181,7 +181,7 @@ class TestThresholdAssertions(unittest.TestCase):
         monitor._assert_thresholds()  # Should still not crash
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_assert_thresholds_multiple_violations(self, mock_lib):
+    def test_assert_thresholds_multiple_violations(self, mock_lib) -> None:
         """Test multiple threshold violations (lines 1339, 1343)."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -211,7 +211,7 @@ class TestThresholdAssertions(unittest.TestCase):
         self.assertIn("Cache hit ratio", error_msg)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_assert_thresholds_partial_violations(self, mock_lib):
+    def test_assert_thresholds_partial_violations(self, mock_lib) -> None:
         """Test partial threshold violations."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -243,7 +243,7 @@ class TestOperationTypes(unittest.TestCase):
     """Test different operation types (lines 776, 780, 686)."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_all_operation_types(self, mock_lib):
+    def test_all_operation_types(self, mock_lib) -> None:
         """Test all possible operation types."""
         operation_types = [
             "general",
@@ -274,7 +274,7 @@ class TestMonitorProperties(unittest.TestCase):
     """Test monitor properties and internal methods."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_monitor_chaining_comprehensive(self, mock_lib):
+    def test_monitor_chaining_comprehensive(self, mock_lib) -> None:
         """Test all chainable methods return self (lines 1224-1225, 1269)."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -304,7 +304,7 @@ class TestMonitorProperties(unittest.TestCase):
         self.assertFalse(monitor._auto_assert)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_monitor_initialization_variants(self, mock_lib):
+    def test_monitor_initialization_variants(self, mock_lib) -> None:
         """Test monitor initialization with various inputs."""
         # Test with bytes operation name
         monitor1 = EnhancedPerformanceMonitor(b"bytes_name")
@@ -322,7 +322,7 @@ class TestMonitorProperties(unittest.TestCase):
 class TestDetectionMethods(unittest.TestCase):
     """Test detection methods comprehensively (lines 1414-1454)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.mock_c_metrics = Mock()
         self.mock_c_metrics.contents.operation_type = b"test"
@@ -334,7 +334,7 @@ class TestDetectionMethods(unittest.TestCase):
         self.mock_c_metrics.contents.baseline_memory_mb = 50
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_detection_methods_comprehensive(self, mock_lib):
+    def test_detection_methods_comprehensive(self, mock_lib) -> None:
         """Test all detection methods with various conditions."""
         # Test all combinations for detection
         test_cases = [
@@ -382,7 +382,7 @@ class TestErrorLocationFormatting(unittest.TestCase):
     """Test error location formatting paths (lines 1371-1396)."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_error_location_all_key_paths(self, mock_lib):
+    def test_error_location_all_key_paths(self, mock_lib) -> None:
         """Test error location with all key directory names."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -418,7 +418,7 @@ class TestMetricsEdgeCases(unittest.TestCase):
     """Test metrics calculation edge cases."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_metrics_with_extreme_values(self, mock_lib):
+    def test_metrics_with_extreme_values(self, mock_lib) -> None:
         """Test metrics with extreme values."""
         mock_c_metrics = Mock()
         mock_c_metrics.contents.operation_type = b"test"

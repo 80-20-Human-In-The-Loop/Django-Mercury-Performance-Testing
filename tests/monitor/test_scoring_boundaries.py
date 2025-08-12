@@ -19,7 +19,7 @@ class TestFactoryFunctionsComplete(unittest.TestCase):
     """Test all factory functions (lines 947-954)."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_factory_functions_complete(self, mock_lib):
+    def test_factory_functions_complete(self, mock_lib) -> None:
         """Test all factory functions."""
         # These factory functions are the easiest to cover
         m1 = monitor_django_view("view1")
@@ -42,7 +42,7 @@ class TestFactoryFunctionsComplete(unittest.TestCase):
 class TestMetricsScoring(unittest.TestCase):
     """Test metrics scoring calculations (lines 241, 245, 247, 759, 761, 763)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.mock_c_metrics = Mock()
         self.mock_c_metrics.contents.operation_type = b"test"
@@ -50,7 +50,7 @@ class TestMetricsScoring(unittest.TestCase):
         self.mock_c_metrics.contents.baseline_memory_mb = 50
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_response_time_scoring_boundaries(self, mock_lib):
+    def test_response_time_scoring_boundaries(self, mock_lib) -> None:
         """Test response time scoring at boundaries (lines 241, 245, 247)."""
         # Test exact boundary values to hit specific lines
         test_cases = [
@@ -96,7 +96,7 @@ class TestMetricsScoring(unittest.TestCase):
                 self.assertLessEqual(score.response_time_score, expected_range[1])
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_memory_scoring_boundaries(self, mock_lib):
+    def test_memory_scoring_boundaries(self, mock_lib) -> None:
         """Test memory scoring at boundaries (lines 759, 761, 763)."""
         # Test memory delta scoring boundaries
         test_cases = [
@@ -145,7 +145,7 @@ class TestMonitorMethods(unittest.TestCase):
     """Test monitor methods (lines 610, 686, 818, 1224-1225, 1269, 1339, 1343)."""
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_monitor_operation_type_line_686(self, mock_lib):
+    def test_monitor_operation_type_line_686(self, mock_lib) -> None:
         """Test monitor operation type setting (line 686)."""
         # Test various operation types
         types = ["view", "query", "serializer", "model", "custom"]
@@ -154,7 +154,7 @@ class TestMonitorMethods(unittest.TestCase):
             self.assertEqual(monitor.operation_type, op_type)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_monitor_enter_with_none_handle_line_818(self, mock_lib):
+    def test_monitor_enter_with_none_handle_line_818(self, mock_lib) -> None:
         """Test __enter__ when handle is None (line 818)."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -166,7 +166,7 @@ class TestMonitorMethods(unittest.TestCase):
         self.assertIsNone(monitor.handle)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_monitor_metrics_line_610(self, mock_lib):
+    def test_monitor_metrics_line_610(self, mock_lib) -> None:
         """Test metrics creation (line 610)."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -201,7 +201,7 @@ class TestMonitorMethods(unittest.TestCase):
         self.assertEqual(monitor._metrics.response_time, 100.0)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_chaining_methods_lines_1224_1225_1269(self, mock_lib):
+    def test_chaining_methods_lines_1224_1225_1269(self, mock_lib) -> None:
         """Test chaining methods (lines 1224-1225, 1269)."""
         monitor = EnhancedPerformanceMonitor("test")
         
@@ -227,7 +227,7 @@ class TestMonitorMethods(unittest.TestCase):
         self.assertEqual(result3, monitor)
     
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_assert_thresholds_violations_lines_1339_1343(self, mock_lib):
+    def test_assert_thresholds_violations_lines_1339_1343(self, mock_lib) -> None:
         """Test threshold violations (lines 1339, 1343)."""
         monitor = EnhancedPerformanceMonitor("test")
         

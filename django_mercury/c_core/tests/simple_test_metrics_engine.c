@@ -8,7 +8,7 @@
 #include <string.h>
 #include <assert.h>
 #include "../common.h"
-#include "simple_tests.h"
+#include "test_simple.h"
 
 // Global test counters
 int total_tests = 0;

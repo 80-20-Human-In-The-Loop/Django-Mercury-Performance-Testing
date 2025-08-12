@@ -3,7 +3,7 @@
  * @brief Test framework implementation
  */
 
-#include "test_framework.h"
+#include "test_security.h"
 
 // Global test statistics
 int total_tests = 0;

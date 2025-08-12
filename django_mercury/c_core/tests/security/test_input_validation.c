@@ -8,7 +8,7 @@
 
 #include "../../common.h"
 #include "../../test_orchestrator.h"
-#include "../test_framework.h"
+#include "../test_security.h"
 #include <limits.h>
 #include <float.h>
 

@@ -83,14 +83,14 @@ def _show_performance_warning():
 class ImplementationLoader:
     """Loader that selects the best available implementation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._performance_monitor_class = None
         self._metrics_engine_class = None
         self._query_analyzer_class = None
         self._test_orchestrator_class = None
         self._loaded = False
 
-    def load(self):
+    def load(self) -> None:
         """Load the appropriate implementation."""
         global IMPLEMENTATION_TYPE, C_EXTENSIONS_AVAILABLE
 
@@ -280,7 +280,7 @@ def check_c_extensions():
     Check if C extensions are available and working.
 
     Returns:
-        Tuple of (available: bool, details: dict)
+        Tuple of (available: bool, details: Dict[str, Any])
     """
     details = get_implementation_info()
     

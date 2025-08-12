@@ -34,7 +34,7 @@ class Quiz:
 
         Args:
             question: The question text
-            options: List of answer options
+            options: List[Any] of answer options
             correct_answer: Index of correct answer (0-based)
             explanation: Explanation of the correct answer
             concept: Concept being tested (e.g., "n+1_queries")

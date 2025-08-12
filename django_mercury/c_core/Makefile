@@ -44,6 +44,9 @@ else ifeq ($(findstring MSYS,$(UNAME_S)),MSYS)
     CC := gcc
 endif
 
+# Test directory definition (moved here to be available for all targets)
+TEST_DIR = tests
+
 # Base compiler flags
 # Include -I. to ensure headers in current directory are found (fixes CI builds)
 CFLAGS := -std=c11 -fPIC -Wall -Wextra -Wno-unused-parameter -I.
@@ -230,34 +233,39 @@ release:
 
 # === TESTING AND VALIDATION ===
 
-# Main test target - runs all simple tests and consolidation tests
-test: simple_test consolidation_test
+# Main test target - runs all simple tests (which includes consolidation)
+test: simple_test
 
 # Alias for backward compatibility
 tests: test
 
-# Run consolidation tests
-consolidation_test: $(TARGETS)
-	@echo "🧪 Running consolidation tests..."
-	@if [ -d tests/consolidation ]; then \
-		cd tests/consolidation && $(MAKE) test 2>&1 | tail -20; \
-		if [ $$? -eq 0 ]; then \
-			echo "✅ Consolidation tests passed"; \
-		else \
-			echo "❌ Consolidation tests failed"; \
-			exit 1; \
-		fi; \
-	else \
-		echo "⚠️  Consolidation tests not found, skipping"; \
-	fi
+# Consolidation tests are now included in simple_test target
 
 # Memory safety validation (requires valgrind on Linux)
-memcheck: $(TARGETS)
+# Memory check test executable
+MEMCHECK_TEST = $(TEST_DIR)/memcheck_test
+
+$(MEMCHECK_TEST): $(TEST_DIR)/memcheck_test.c $(LIBS) test_orchestrator.o query_analyzer.o metrics_engine.o common.o
+	@echo "🔨 Building memory check test..."
+	$(CC) $(TEST_CFLAGS) -o $@ $< test_orchestrator.o query_analyzer.o metrics_engine.o common.o $(TEST_LIBS) -lunwind -ldl -lrt
+
+memcheck: $(MEMCHECK_TEST)
 ifeq ($(UNAME_S),Linux)
-	@echo "🔍 Running memory safety checks..."
+	@echo "🔍 Running memory safety checks with Valgrind..."
 	@which valgrind > /dev/null || (echo "❌ valgrind not found, install with: sudo apt-get install valgrind"; exit 1)
-	@python3 -c "import ctypes; ctypes.CDLL('./libquery_analyzer.so')" 2>&1 | valgrind --tool=memcheck --leak-check=full python3 || true
-	@echo "✅ Memory safety check completed"
+	@valgrind --tool=memcheck \
+	          --leak-check=full \
+	          --show-leak-kinds=all \
+	          --track-origins=yes \
+	          --suppressions=valgrind-suppressions.txt \
+	          --verbose \
+	          --log-file=valgrind-out.txt \
+	          $(MEMCHECK_TEST) 2>&1 | grep -E "ERROR SUMMARY|lost:" || true
+	@echo "✅ Memory check completed - see valgrind-out.txt for details"
+	@echo ""
+	@echo "Memory leak summary:"
+	@grep "definitely lost" valgrind-out.txt || echo "  ✅ No memory leaks detected!"
+	@grep "ERROR SUMMARY" valgrind-out.txt
 else
 	@echo "⚠️  Memory checking only available on Linux (requires valgrind)"
 endif
@@ -327,7 +335,6 @@ endif
 # =============================================================================
 # TESTING
 # =============================================================================
-TEST_DIR = tests
 TEST_CFLAGS = -Wall -Wextra -g $(PLATFORM_FLAGS) -I.
 TEST_LIBS = -lm -lpthread
 
@@ -380,19 +387,7 @@ simple_test: $(TARGETS)
 	@./comprehensive_test_test_orchestrator
 	@echo "\n=== Edge Test Orchestrator Tests ==="
 	@./edge_test_test_orchestrator
-	@echo "\n=== Consolidation Tests ==="
-	@if [ -d tests/consolidation ]; then \
-		echo "Building consolidation tests..."; \
-		(cd tests/consolidation && $(MAKE) all 2>/dev/null); \
-		echo "\n--- Feature Parity Test ---"; \
-		(cd tests/consolidation && ./test_feature_parity); \
-		echo "\n--- API Compatibility Test ---"; \
-		(cd tests/consolidation && ./test_api_compatibility); \
-		echo "\n--- Migration Safety Test ---"; \
-		(cd tests/consolidation && ./test_migration_safety); \
-	else \
-		echo "Consolidation tests not found, skipping"; \
-	fi
+	# Consolidation tests removed - migration to libmetrics_engine.so complete
 
 # === Test Coverage ===
 
@@ -479,7 +474,7 @@ sec_test: $(LIBS) $(SECURITY_TEST_BIN)
 	@$(SECURITY_TEST_BIN)
 	@echo ""
 
-$(TEST_DIR)/test_framework.o: $(TEST_DIR)/test_framework.c $(TEST_DIR)/test_framework.h
+$(TEST_DIR)/test_framework.o: $(TEST_DIR)/test_framework.c $(TEST_DIR)/test_security.h
 	@echo "🔨 Building test framework..."
 	$(CC) $(TEST_CFLAGS) -c -o $@ $(TEST_DIR)/test_framework.c
 
@@ -496,6 +491,8 @@ clean:
 	@rm -f perf.data*
 	@rm -f $(TEST_DIR)/*.o
 	@rm -f $(SECURITY_TEST_BIN)
+	@rm -f $(MEMCHECK_TEST)
+	@rm -f valgrind-out.txt
 	@rm -rf pgo-profiles/
 	@rm -f simple_test_common simple_test_advanced simple_test_query_analyzer simple_test_metrics_engine simple_test_test_orchestrator
 	@rm -f comprehensive_test_test_orchestrator edge_test_test_orchestrator

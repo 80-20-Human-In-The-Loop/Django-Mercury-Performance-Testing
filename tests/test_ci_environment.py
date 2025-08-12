@@ -20,7 +20,7 @@ from django_mercury.python_bindings import c_bindings
 class TestCIEnvironment(unittest.TestCase):
     """Test CI-specific functionality."""
     
-    def test_environment_detection(self):
+    def test_environment_detection(self) -> None:
         """Test that we can detect CI environment."""
         # Check if we're in CI
         is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
@@ -32,7 +32,7 @@ class TestCIEnvironment(unittest.TestCase):
         else:
             print("ℹ️  Not running in CI environment")
     
-    def test_pure_python_mode(self):
+    def test_pure_python_mode(self) -> None:
         """Test that pure Python mode can be forced."""
         pure_python = os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '0') == '1'
         
@@ -43,7 +43,7 @@ class TestCIEnvironment(unittest.TestCase):
         else:
             print(f"ℹ️  Pure Python mode: {c_bindings.is_pure_python_mode()}")
     
-    def test_library_search_paths(self):
+    def test_library_search_paths(self) -> None:
         """Test that library search paths are correct."""
         paths = c_bindings.get_library_paths()
         
@@ -55,7 +55,7 @@ class TestCIEnvironment(unittest.TestCase):
             exists = "✓" if path.exists() else "✗"
             print(f"  {i}. [{exists}] {path}")
     
-    def test_c_extension_availability(self):
+    def test_c_extension_availability(self) -> None:
         """Test C extension availability reporting."""
         available = c_bindings.are_c_extensions_available()
         pure_python = c_bindings.is_pure_python_mode()
@@ -67,7 +67,7 @@ class TestCIEnvironment(unittest.TestCase):
         if os.environ.get('DJANGO_MERCURY_PURE_PYTHON') == '1':
             self.assertTrue(pure_python, "Should be in pure Python mode when forced")
     
-    def test_library_loading_graceful_failure(self):
+    def test_library_loading_graceful_failure(self) -> None:
         """Test that library loading fails gracefully."""
         # Try to initialize C extensions
         result = c_bindings.initialize_c_extensions()
@@ -80,7 +80,7 @@ class TestCIEnvironment(unittest.TestCase):
         else:
             print("✓ Gracefully fell back to pure Python")
     
-    def test_individual_library_availability(self):
+    def test_individual_library_availability(self) -> None:
         """Test individual library availability."""
         libraries = {
             'query_analyzer': c_bindings.c_extensions.query_analyzer,
@@ -93,7 +93,7 @@ class TestCIEnvironment(unittest.TestCase):
             status = "Loaded" if lib is not None else "Not Available"
             print(f"  - {name}: {status}")
     
-    def test_ci_specific_paths(self):
+    def test_ci_specific_paths(self) -> None:
         """Test CI-specific library paths are included."""
         if not (os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')):
             self.skipTest("Not in CI environment")
@@ -116,7 +116,7 @@ class TestCIEnvironment(unittest.TestCase):
         os.environ.get('DJANGO_MERCURY_PURE_PYTHON') == '1',
         "Skipping library file check in pure Python mode"
     )
-    def test_library_files_exist(self):
+    def test_library_files_exist(self) -> None:
         """Test that library files exist in expected locations."""
         expected_libs = [
             'libquery_analyzer.so',
@@ -157,7 +157,7 @@ class TestCIEnvironment(unittest.TestCase):
         # We don't assert here because libraries might not be built in CI
         # This is informational to help debug
     
-    def test_error_messages_helpful(self):
+    def test_error_messages_helpful(self) -> None:
         """Test that error messages are helpful when libraries can't load."""
         # Force a library load attempt
         lib_info = c_bindings.c_extensions.get_library_info('query_analyzer')
@@ -173,7 +173,7 @@ class TestCIEnvironment(unittest.TestCase):
 class TestCIWorkflowIntegration(unittest.TestCase):
     """Test CI workflow integration."""
     
-    def test_github_env_variables(self):
+    def test_github_env_variables(self) -> None:
         """Test GitHub Actions environment variables."""
         if not os.environ.get('GITHUB_ACTIONS'):
             self.skipTest("Not running in GitHub Actions")
@@ -192,7 +192,7 @@ class TestCIWorkflowIntegration(unittest.TestCase):
             else:
                 print(f"  - {var}: Not set")
     
-    def test_build_artifacts_location(self):
+    def test_build_artifacts_location(self) -> None:
         """Test that build artifacts are in expected locations."""
         if not (os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')):
             self.skipTest("Not in CI environment")

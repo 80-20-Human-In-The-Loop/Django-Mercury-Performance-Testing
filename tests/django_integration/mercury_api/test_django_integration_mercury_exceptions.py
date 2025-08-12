@@ -16,14 +16,14 @@ class TestMonitorExceptionHandling(unittest.TestCase):
     """Test exception handling in the monitor wrapper."""
     
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Set up class-level thresholds."""
         # Increase memory threshold to accommodate test memory usage
         DjangoMercuryAPITestCase.set_performance_thresholds({
             'memory_overhead_mb': 210
         })
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
         # Enable Mercury
@@ -34,7 +34,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     @patch('time.perf_counter')
-    def test_monitor_exception_with_threshold_exceeded(self, mock_time, mock_monitor_class):
+    def test_monitor_exception_with_threshold_exceeded(self, mock_time, mock_monitor_class) -> None:
         """Test handling when monitor raises threshold exceeded exception."""
         # Set up time mock
         mock_time.side_effect = [0, 0.5]  # 500ms elapsed
@@ -46,7 +46,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
         mock_monitor.__exit__ = Mock(return_value=False)
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_example"
         
@@ -72,7 +72,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     @patch('time.perf_counter')
-    def test_monitor_exception_non_threshold(self, mock_time, mock_monitor_class):
+    def test_monitor_exception_non_threshold(self, mock_time, mock_monitor_class) -> None:
         """Test handling when monitor raises non-threshold exception."""
         # Set up time mock
         mock_time.side_effect = [0, 0.1]
@@ -84,7 +84,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
         mock_monitor.__exit__ = Mock(return_value=False)
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_monitor_fail"
         
@@ -108,7 +108,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     @patch('django_mercury.python_bindings.django_integration_mercury.logger')
-    def test_metrics_extraction_after_threshold_failure(self, mock_logger, mock_monitor_class):
+    def test_metrics_extraction_after_threshold_failure(self, mock_logger, mock_monitor_class) -> None:
         """Test attempting to extract metrics after threshold failure."""
         # Set up main monitor to fail with thresholds
         mock_monitor = Mock()
@@ -126,7 +126,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
         mock_monitor.__exit__ = Mock(side_effect=Exception("Performance thresholds exceeded"))
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_threshold_fail"
         
@@ -151,7 +151,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     @patch('builtins.print')
-    def test_educational_guidance_on_threshold_failure(self, mock_print, mock_monitor_class):
+    def test_educational_guidance_on_threshold_failure(self, mock_print, mock_monitor_class) -> None:
         """Test educational guidance is provided on threshold failures."""
         self.test_case._educational_guidance = True
         
@@ -162,7 +162,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
         mock_monitor.__exit__ = Mock(return_value=False)
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_slow_operation"
         
@@ -188,7 +188,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
             self.assertIn("EDUCATIONAL", printed)
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
-    def test_metrics_fallback_when_monitor_fails(self, mock_monitor_class):
+    def test_metrics_fallback_when_monitor_fails(self, mock_monitor_class) -> None:
         """Test fallback metrics collection when monitor fails to get metrics."""
         # Set up monitor that works but fails to get metrics
         mock_monitor = Mock()
@@ -198,7 +198,7 @@ class TestMonitorExceptionHandling(unittest.TestCase):
         mock_monitor.get_metrics = Mock(side_effect=AttributeError("No metrics available"))
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_no_metrics"
         
@@ -213,12 +213,12 @@ class TestMonitorExceptionHandling(unittest.TestCase):
 class TestThresholdViolationReporting(unittest.TestCase):
     """Test threshold violation reporting functions."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
     
     @patch('builtins.print')
-    def test_response_time_threshold_violation_reporting(self, mock_print):
+    def test_response_time_threshold_violation_reporting(self, mock_print) -> None:
         """Test reporting of response time threshold violations."""
         error_msg = "Performance thresholds exceeded: Response time 500.5ms > 200ms"
         
@@ -235,7 +235,7 @@ class TestThresholdViolationReporting(unittest.TestCase):
         self.assertTrue(mock_print.called)
     
     @patch('builtins.print')
-    def test_query_count_threshold_violation_reporting(self, mock_print):
+    def test_query_count_threshold_violation_reporting(self, mock_print) -> None:
         """Test reporting of query count threshold violations."""
         error_msg = "Performance thresholds exceeded: Query count 150 > 50"
         
@@ -251,7 +251,7 @@ class TestThresholdViolationReporting(unittest.TestCase):
         self.assertTrue(mock_print.called)
     
     @patch('builtins.print')
-    def test_memory_usage_threshold_violation_reporting(self, mock_print):
+    def test_memory_usage_threshold_violation_reporting(self, mock_print) -> None:
         """Test reporting of memory usage threshold violations."""
         error_msg = "Performance thresholds exceeded: Memory usage 150.5MB > 100MB"
         
@@ -267,7 +267,7 @@ class TestThresholdViolationReporting(unittest.TestCase):
         self.assertTrue(mock_print.called)
     
     @patch('builtins.print')
-    def test_multiple_threshold_violations(self, mock_print):
+    def test_multiple_threshold_violations(self, mock_print) -> None:
         """Test reporting multiple threshold violations."""
         error_msg = "Performance thresholds exceeded: Response time 500ms > 200ms, Query count 100 > 50, Memory usage 200MB > 100MB"
         
@@ -289,14 +289,14 @@ class TestExceptionRecovery(unittest.TestCase):
     """Test exception recovery and fallback mechanisms."""
     
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Set up class-level thresholds."""
         # Increase memory threshold to accommodate test memory usage
         DjangoMercuryAPITestCase.set_performance_thresholds({
             'memory_overhead_mb': 210
         })
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
         DjangoMercuryAPITestCase._mercury_enabled = True
@@ -304,7 +304,7 @@ class TestExceptionRecovery(unittest.TestCase):
         DjangoMercuryAPITestCase._test_failures = []
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
-    def test_monitor_partial_failure_recovery(self, mock_monitor_class):
+    def test_monitor_partial_failure_recovery(self, mock_monitor_class) -> None:
         """Test recovery when monitor partially fails."""
         # Set up monitor that enters but fails on exit
         mock_monitor = Mock()
@@ -321,7 +321,7 @@ class TestExceptionRecovery(unittest.TestCase):
         mock_monitor.__exit__ = Mock(return_value=False)
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "success"
         test_method.__name__ = "test_partial"
         
@@ -336,7 +336,7 @@ class TestExceptionRecovery(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     @patch('django_mercury.python_bindings.django_integration_mercury.logger')
-    def test_secondary_metrics_extraction_failure(self, mock_logger, mock_monitor_class):
+    def test_secondary_metrics_extraction_failure(self, mock_logger, mock_monitor_class) -> None:
         """Test when secondary metrics extraction also fails."""
         # Set up monitor to fail completely
         mock_monitor = Mock()
@@ -348,7 +348,7 @@ class TestExceptionRecovery(unittest.TestCase):
         mock_monitor.monitor_django_view = Mock(side_effect=Exception("Complete failure"))
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_complete_fail"
         
@@ -372,7 +372,7 @@ class TestExceptionRecovery(unittest.TestCase):
             mock_logger.warning.assert_called()
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
-    def test_test_function_exception_propagation(self, mock_monitor_class):
+    def test_test_function_exception_propagation(self, mock_monitor_class) -> None:
         """Test that exceptions from the test function are properly propagated."""
         # Set up working monitor
         mock_monitor = Mock()
@@ -381,7 +381,7 @@ class TestExceptionRecovery(unittest.TestCase):
         mock_monitor.__exit__ = Mock(return_value=False)
         
         # Create test method that raises
-        def test_method(self):
+        def test_method(self) -> None:
             raise ValueError("Test assertion failed")
         test_method.__name__ = "test_assertion"
         
@@ -401,14 +401,14 @@ class TestMetricsRecordingOnFailure(unittest.TestCase):
     """Test that metrics are still recorded even when tests fail."""
     
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Set up class-level thresholds."""
         # Increase memory threshold to accommodate test memory usage
         DjangoMercuryAPITestCase.set_performance_thresholds({
             'memory_overhead_mb': 210
         })
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
         DjangoMercuryAPITestCase._mercury_enabled = True
@@ -417,7 +417,7 @@ class TestMetricsRecordingOnFailure(unittest.TestCase):
         DjangoMercuryAPITestCase._test_failures = []
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
-    def test_metrics_recorded_on_threshold_failure(self, mock_monitor_class):
+    def test_metrics_recorded_on_threshold_failure(self, mock_monitor_class) -> None:
         """Test that metrics are recorded even when thresholds are exceeded."""
         # Set up monitor with metrics
         mock_monitor = Mock()
@@ -440,7 +440,7 @@ class TestMetricsRecordingOnFailure(unittest.TestCase):
         mock_monitor.__exit__ = Mock(side_effect=Exception("Performance thresholds exceeded"))
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_slow"
         
@@ -467,7 +467,7 @@ class TestMetricsRecordingOnFailure(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
     @patch('time.perf_counter')
-    def test_fallback_timing_on_monitor_failure(self, mock_time, mock_monitor_class):
+    def test_fallback_timing_on_monitor_failure(self, mock_time, mock_monitor_class) -> None:
         """Test fallback to Python timing when monitor fails."""
         # Set up time mock to return specific values
         mock_time.side_effect = [0, 0.25]  # 250ms elapsed
@@ -478,7 +478,7 @@ class TestMetricsRecordingOnFailure(unittest.TestCase):
         mock_monitor.__enter__ = Mock(side_effect=RuntimeError("Monitor failed"))
         
         # Create test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "result"
         test_method.__name__ = "test_timing_fallback"
         
@@ -506,13 +506,13 @@ class TestMetricsRecordingOnFailure(unittest.TestCase):
 class TestEducationalGuidanceException(unittest.TestCase):
     """Test educational guidance in exception scenarios."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
         DjangoMercuryAPITestCase._educational_guidance = True
     
     @patch('builtins.print')
-    def test_educational_guidance_with_context(self, mock_print):
+    def test_educational_guidance_with_context(self, mock_print) -> None:
         """Test educational guidance with operation context."""
         context = {
             'response_time': 500,
@@ -533,7 +533,7 @@ class TestEducationalGuidanceException(unittest.TestCase):
         self.assertIn("EDUCATIONAL", printed)
     
     @patch('builtins.print')
-    def test_technical_diagnostics_on_failure(self, mock_print):
+    def test_technical_diagnostics_on_failure(self, mock_print) -> None:
         """Test technical diagnostics are provided on failures."""
         self.test_case._provide_technical_diagnostics(
             "test_complex_query",
@@ -548,7 +548,7 @@ class TestEducationalGuidanceException(unittest.TestCase):
         self.assertIn("Performance Issue", printed)
     
     @patch('builtins.print')
-    def test_educational_guidance_disabled(self, mock_print):
+    def test_educational_guidance_disabled(self, mock_print) -> None:
         """Test that guidance is not shown when disabled."""
         DjangoMercuryAPITestCase._educational_guidance = False
         

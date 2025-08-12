@@ -10,12 +10,23 @@
 #include <unistd.h>
 #include <math.h>
 #include "../common.h"
-#include "simple_tests.h"
+#include "test_enhanced.h"
 
 // Global test counters
 int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
+
+// Test context for enhanced error messages
+DEFINE_TEST_CONTEXT();
+
+// Quiet mode support
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096];
+int test_failure_buffer_used = 0;
 
 // Function declarations for metrics engine API
 extern int64_t start_performance_monitoring_enhanced(const char* operation_name, const char* operation_type);
@@ -90,17 +101,10 @@ int test_error_conditions(void) {
     ASSERT(start_performance_monitoring_enhanced(NULL, "test") == -1, 
            "Should fail with NULL operation name");
     
-    // Test NULL operation type (should succeed with default)
+    // Test NULL operation type (should fail - both parameters required)
     int64_t null_type_handle = start_performance_monitoring_enhanced("test", NULL);
-    ASSERT(null_type_handle > 0,
-           "Should succeed with NULL operation type (uses default)");
-    // Clean up the handle
-    if (null_type_handle > 0) {
-        MercuryMetrics* metrics = stop_performance_monitoring_enhanced(null_type_handle);
-        if (metrics) {
-            test_free_metrics(metrics);
-        }
-    }
+    ASSERT(null_type_handle == -1,
+           "Should fail with NULL operation type");
     
     // Test invalid session ID
     ASSERT(stop_performance_monitoring_enhanced(-1) == NULL,

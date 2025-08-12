@@ -2,13 +2,13 @@
 Minimal Django settings for testing Django Mercury Performance Testing.
 """
 
-SECRET_KEY = 'django-mercury-test-secret-key-not-for-production'
+SECRET_KEY : str = 'django-mercury-test-secret-key-not-for-production'
 
-DEBUG = True
+DEBUG : bool = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS : List[str] = ['*']
 
-INSTALLED_APPS = [
+INSTALLED_APPS : List[str] = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
     'rest_framework',
@@ -32,7 +32,7 @@ REST_FRAMEWORK = {
 }
 
 # Minimal middleware
-MIDDLEWARE = []
+MIDDLEWARE: List[str] = []
 
 # URL Configuration
 ROOT_URLCONF = 'tests.urls'

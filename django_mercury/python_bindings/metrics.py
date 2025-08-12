@@ -41,10 +41,10 @@ class PerformanceMetrics:
     query_count: int = 0
     operation_name: str = ""
 
-    _response_time_thresholds: Dict[str, float] = None
-    _memory_thresholds: Dict[str, float] = None
+    _response_time_thresholds: Optional[Dict[str, float]] = None
+    _memory_thresholds: Optional[Dict[str, float]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initializes default performance thresholds after the object is created."""
         if self._response_time_thresholds is None:
             self._response_time_thresholds = {
@@ -79,16 +79,22 @@ class PerformanceMetrics:
     @property
     def is_fast(self) -> bool:
         """Returns True if the response time is considered fast (under 100ms)."""
+        if self._response_time_thresholds is None:
+            return False
         return self.response_time < self._response_time_thresholds["good"]
 
     @property
     def is_slow(self) -> bool:
         """Returns True if the response time is considered slow (over 500ms)."""
+        if self._response_time_thresholds is None:
+            return True
         return self.response_time > self._response_time_thresholds["slow"]
 
     @property
     def is_memory_intensive(self) -> bool:
         """Returns True if memory usage is high (over 100MB)."""
+        if self._memory_thresholds is None:
+            return False
         return self.memory_usage > self._memory_thresholds["acceptable"]
 
     @property
@@ -99,6 +105,8 @@ class PerformanceMetrics:
     @property
     def performance_status(self) -> PerformanceStatus:
         """Assesses and returns the overall performance status based on response time."""
+        if self._response_time_thresholds is None:
+            return PerformanceStatus.CRITICAL
         if self.response_time <= self._response_time_thresholds["excellent"]:
             return PerformanceStatus.EXCELLENT
         if self.response_time <= self._response_time_thresholds["good"]:
@@ -112,6 +120,8 @@ class PerformanceMetrics:
     @property
     def memory_status(self) -> PerformanceStatus:
         """Assesses and returns the memory usage status."""
+        if self._memory_thresholds is None:
+            return PerformanceStatus.CRITICAL
         if self.memory_usage <= self._memory_thresholds["excellent"]:
             return PerformanceStatus.EXCELLENT
         if self.memory_usage <= self._memory_thresholds["good"]:

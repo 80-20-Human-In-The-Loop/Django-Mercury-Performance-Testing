@@ -24,7 +24,7 @@ from django_mercury.python_bindings.mercury_config import (
 class TestPerformanceThresholds(unittest.TestCase):
     """Test cases for PerformanceThresholds class."""
 
-    def test_performance_thresholds_initialization(self):
+    def test_performance_thresholds_initialization(self) -> None:
         """Test PerformanceThresholds dataclass initialization."""
         thresholds = PerformanceThresholds(
             response_time_ms=200.0,
@@ -38,7 +38,7 @@ class TestPerformanceThresholds(unittest.TestCase):
         self.assertEqual(thresholds.query_count_max, 10)
         self.assertEqual(thresholds.cache_hit_ratio_min, 0.8)
 
-    def test_performance_thresholds_defaults(self):
+    def test_performance_thresholds_defaults(self) -> None:
         """Test PerformanceThresholds can be created with keyword args."""
         thresholds = PerformanceThresholds(
             response_time_ms=100.0,
@@ -56,7 +56,7 @@ class TestPerformanceThresholds(unittest.TestCase):
 class TestMercuryConfiguration(unittest.TestCase):
     """Test cases for MercuryConfiguration class."""
 
-    def test_mercury_configuration_initialization_defaults(self):
+    def test_mercury_configuration_initialization_defaults(self) -> None:
         """Test MercuryConfiguration initialization with defaults."""
         config = MercuryConfiguration()
         
@@ -72,7 +72,7 @@ class TestMercuryConfiguration(unittest.TestCase):
         self.assertTrue(config.include_business_impact)
         self.assertTrue(config.show_optimization_potential)
 
-    def test_mercury_configuration_custom_values(self):
+    def test_mercury_configuration_custom_values(self) -> None:
         """Test MercuryConfiguration with custom values."""
         thresholds = {
             'list_view': PerformanceThresholds(100.0, 20.0, 5, 0.85),
@@ -103,7 +103,7 @@ class TestMercuryConfiguration(unittest.TestCase):
         self.assertEqual(config.scoring_weights, scoring_weights)
         self.assertEqual(config.n_plus_one_sensitivity, "strict")
 
-    def test_mercury_configuration_sensitivity_options(self):
+    def test_mercury_configuration_sensitivity_options(self) -> None:
         """Test different sensitivity options."""
         for sensitivity in ["strict", "normal", "lenient"]:
             config = MercuryConfiguration(n_plus_one_sensitivity=sensitivity)
@@ -113,15 +113,15 @@ class TestMercuryConfiguration(unittest.TestCase):
 class TestMercuryConfigurationManager(unittest.TestCase):
     """Test cases for MercuryConfigurationManager class."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.manager = MercuryConfigurationManager()
 
-    def test_manager_initialization(self):
+    def test_manager_initialization(self) -> None:
         """Test MercuryConfigurationManager initialization."""
         self.assertIsInstance(self.manager, MercuryConfigurationManager)
 
-    def test_load_configuration_from_file(self):
+    def test_load_configuration_from_file(self) -> None:
         """Test loading configuration from file."""
         # Create a temporary config file
         mock_config = {
@@ -154,7 +154,7 @@ class TestMercuryConfigurationManager(unittest.TestCase):
             os.unlink(temp_path)
 
     @patch('django_mercury.python_bindings.mercury_config.Path.exists')
-    def test_load_configuration_file_not_found(self, mock_exists):
+    def test_load_configuration_file_not_found(self, mock_exists) -> None:
         """Test loading configuration when file doesn't exist."""
         mock_exists.return_value = False
         
@@ -164,7 +164,7 @@ class TestMercuryConfigurationManager(unittest.TestCase):
         self.assertIsInstance(config, MercuryConfiguration)
         self.assertTrue(config.enabled)
 
-    def test_load_configuration_invalid_json(self):
+    def test_load_configuration_invalid_json(self) -> None:
         """Test loading configuration with invalid JSON."""
         # Create a file with invalid JSON
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
@@ -181,7 +181,7 @@ class TestMercuryConfigurationManager(unittest.TestCase):
         finally:
             os.unlink(temp_path)
 
-    def test_save_configuration(self):
+    def test_save_configuration(self) -> None:
         """Test saving configuration to file."""
         config = MercuryConfiguration(
             enabled=False,
@@ -208,7 +208,7 @@ class TestMercuryConfigurationManager(unittest.TestCase):
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
 
-    def test_update_thresholds_for_project_large(self):
+    def test_update_thresholds_for_project_large(self) -> None:
         """Test updating thresholds for large project."""
         project_characteristics = {
             'project_size': 'large',
@@ -219,14 +219,14 @@ class TestMercuryConfigurationManager(unittest.TestCase):
         # Should not raise an exception
         self.manager.update_thresholds_for_project(project_characteristics)
 
-    def test_create_environment_specific_config_development(self):
+    def test_create_environment_specific_config_development(self) -> None:
         """Test creating development environment configuration."""
         dev_config = self.manager.create_environment_specific_config("development")
         
         self.assertIsInstance(dev_config, MercuryConfiguration)
         self.assertTrue(dev_config.verbose_reporting)
 
-    def test_create_environment_specific_config_production(self):
+    def test_create_environment_specific_config_production(self) -> None:
         """Test creating production environment configuration."""
         prod_config = self.manager.create_environment_specific_config("production")
         
@@ -234,20 +234,20 @@ class TestMercuryConfigurationManager(unittest.TestCase):
         self.assertEqual(prod_config.n_plus_one_sensitivity, "strict")
         self.assertTrue(prod_config.include_business_impact)
 
-    def test_create_environment_specific_config_staging(self):
+    def test_create_environment_specific_config_staging(self) -> None:
         """Test creating staging environment configuration."""
         staging_config = self.manager.create_environment_specific_config("staging")
         
         self.assertIsInstance(staging_config, MercuryConfiguration)
 
-    def test_update_thresholds_postgresql(self):
+    def test_update_thresholds_postgresql(self) -> None:
         """Test updating thresholds for PostgreSQL database."""
         project_characteristics = {'database_type': 'postgresql'}
         
         # Should not raise an exception
         self.manager.update_thresholds_for_project(project_characteristics)
 
-    def test_update_thresholds_with_caching(self):
+    def test_update_thresholds_with_caching(self) -> None:
         """Test updating thresholds for project with caching."""
         project_characteristics = {'has_caching': True}
         
@@ -258,11 +258,11 @@ class TestMercuryConfigurationManager(unittest.TestCase):
 class TestProjectPerformanceStandards(unittest.TestCase):
     """Test cases for ProjectPerformanceStandards class."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.standards = ProjectPerformanceStandards()
 
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test ProjectPerformanceStandards initialization."""
         self.assertIsInstance(self.standards.standards, dict)
         self.assertIn('response_time_goals', self.standards.standards)
@@ -270,7 +270,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         self.assertIn('memory_efficiency_goals', self.standards.standards)
         self.assertIn('n_plus_one_tolerance', self.standards.standards)
 
-    def test_get_performance_category_response_time(self):
+    def test_get_performance_category_response_time(self) -> None:
         """Test categorizing response time performance."""
         # Test excellent performance
         category = self.standards.get_performance_category('response_time', 25.0)
@@ -288,7 +288,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         category = self.standards.get_performance_category('response_time', 450.0)
         self.assertEqual(category, 'poor')
 
-    def test_get_performance_category_database_query(self):
+    def test_get_performance_category_database_query(self) -> None:
         """Test categorizing database query performance."""
         # Test excellent performance
         category = self.standards.get_performance_category('database_query', 1.0)
@@ -302,7 +302,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         category = self.standards.get_performance_category('database_query', 4.0)
         self.assertEqual(category, 'acceptable')
 
-    def test_get_performance_category_memory_efficiency(self):
+    def test_get_performance_category_memory_efficiency(self) -> None:
         """Test categorizing memory efficiency performance."""
         # Test excellent performance
         category = self.standards.get_performance_category('memory_efficiency', 5.0)
@@ -312,12 +312,12 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         category = self.standards.get_performance_category('memory_efficiency', 15.0)
         self.assertEqual(category, 'good')
 
-    def test_get_performance_category_unknown_metric(self):
+    def test_get_performance_category_unknown_metric(self) -> None:
         """Test categorizing unknown metric type."""
         category = self.standards.get_performance_category('unknown_metric', 100.0)
         self.assertEqual(category, 'critical')
 
-    def test_should_block_deployment_acceptable(self):
+    def test_should_block_deployment_acceptable(self) -> None:
         """Test deployment blocking with acceptable metrics."""
         metrics = {
             'response_time': 200.0,
@@ -331,7 +331,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         self.assertFalse(should_block)
         self.assertEqual(len(blocking_issues), 0)
 
-    def test_should_block_deployment_slow_response(self):
+    def test_should_block_deployment_slow_response(self) -> None:
         """Test deployment blocking with slow response time."""
         metrics = {
             'response_time': 1500.0,  # Over 1000ms threshold
@@ -346,7 +346,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         self.assertGreater(len(blocking_issues), 0)
         self.assertIn("Response time exceeds 1 second", blocking_issues[0])
 
-    def test_should_block_deployment_excessive_queries(self):
+    def test_should_block_deployment_excessive_queries(self) -> None:
         """Test deployment blocking with excessive queries."""
         metrics = {
             'response_time': 200.0,
@@ -361,7 +361,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         self.assertGreater(len(blocking_issues), 0)
         self.assertIn("Excessive database queries", blocking_issues[0])
 
-    def test_should_block_deployment_high_memory(self):
+    def test_should_block_deployment_high_memory(self) -> None:
         """Test deployment blocking with high memory usage."""
         metrics = {
             'response_time': 200.0,
@@ -376,7 +376,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         self.assertGreater(len(blocking_issues), 0)
         self.assertIn("Excessive memory overhead", blocking_issues[0])
 
-    def test_should_block_deployment_critical_n_plus_one(self):
+    def test_should_block_deployment_critical_n_plus_one(self) -> None:
         """Test deployment blocking with critical N+1 issues."""
         metrics = {
             'response_time': 200.0,
@@ -391,7 +391,7 @@ class TestProjectPerformanceStandards(unittest.TestCase):
         self.assertGreater(len(blocking_issues), 0)
         self.assertIn("Critical N+1 query issues", blocking_issues[0])
 
-    def test_should_block_deployment_multiple_issues(self):
+    def test_should_block_deployment_multiple_issues(self) -> None:
         """Test deployment blocking with multiple issues."""
         metrics = {
             'response_time': 1500.0,  # Over threshold
@@ -409,19 +409,19 @@ class TestProjectPerformanceStandards(unittest.TestCase):
 class TestModuleFunctions(unittest.TestCase):
     """Test cases for module-level functions."""
 
-    def test_get_mercury_config(self):
+    def test_get_mercury_config(self) -> None:
         """Test get_mercury_config function."""
         config = get_mercury_config()
         self.assertIsInstance(config, MercuryConfiguration)
 
-    def test_update_mercury_config(self):
+    def test_update_mercury_config(self) -> None:
         """Test update_mercury_config function."""
         new_config = MercuryConfiguration(enabled=False)
         
         # Should not raise an exception
         update_mercury_config(new_config)
 
-    def test_configure_for_project(self):
+    def test_configure_for_project(self) -> None:
         """Test configure_for_project function."""
         project_characteristics = {
             "project_size": "large",
@@ -432,24 +432,24 @@ class TestModuleFunctions(unittest.TestCase):
         # Should not raise an exception
         configure_for_project(project_characteristics)
 
-    def test_configure_for_environment_development(self):
+    def test_configure_for_environment_development(self) -> None:
         """Test configure_for_environment function with development."""
         config = configure_for_environment("development")
         self.assertIsInstance(config, MercuryConfiguration)
         self.assertTrue(config.verbose_reporting)
 
-    def test_configure_for_environment_production(self):
+    def test_configure_for_environment_production(self) -> None:
         """Test configure_for_environment function with production."""
         config = configure_for_environment("production")
         self.assertIsInstance(config, MercuryConfiguration)
         self.assertEqual(config.n_plus_one_sensitivity, "strict")
 
-    def test_configure_for_environment_staging(self):
+    def test_configure_for_environment_staging(self) -> None:
         """Test configure_for_environment function with staging."""
         config = configure_for_environment("staging")
         self.assertIsInstance(config, MercuryConfiguration)
 
-    def test_configure_for_environment_unknown(self):
+    def test_configure_for_environment_unknown(self) -> None:
         """Test configure_for_environment function with unknown environment."""
         config = configure_for_environment("unknown_env")
         self.assertIsInstance(config, MercuryConfiguration)
@@ -458,7 +458,7 @@ class TestModuleFunctions(unittest.TestCase):
 class TestConfigurationSerialization(unittest.TestCase):
     """Test configuration serialization and deserialization."""
 
-    def test_configuration_to_dict(self):
+    def test_configuration_to_dict(self) -> None:
         """Test converting configuration to dictionary."""
         config = MercuryConfiguration(
             enabled=True,
@@ -475,7 +475,7 @@ class TestConfigurationSerialization(unittest.TestCase):
         self.assertFalse(config_dict["auto_scoring"])
         self.assertEqual(config_dict["n_plus_one_sensitivity"], "strict")
 
-    def test_configuration_json_serialization(self):
+    def test_configuration_json_serialization(self) -> None:
         """Test JSON serialization of configuration."""
         thresholds = {
             'test_view': PerformanceThresholds(100.0, 20.0, 5, 0.8)
@@ -496,7 +496,7 @@ class TestConfigurationSerialization(unittest.TestCase):
         self.assertIsInstance(json_str, str)
         self.assertIn('"enabled": true', json_str)
 
-    def test_configuration_from_dict(self):
+    def test_configuration_from_dict(self) -> None:
         """Test creating configuration from dictionary."""
         config_dict = {
             "enabled": False,
@@ -519,7 +519,7 @@ class TestConfigurationSerialization(unittest.TestCase):
 class TestEdgeCases(unittest.TestCase):
     """Test edge cases and error conditions."""
 
-    def test_performance_thresholds_with_zero_values(self):
+    def test_performance_thresholds_with_zero_values(self) -> None:
         """Test PerformanceThresholds with edge case values."""
         thresholds = PerformanceThresholds(
             response_time_ms=0.0,
@@ -531,7 +531,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(thresholds.response_time_ms, 0.0)
         self.assertEqual(thresholds.cache_hit_ratio_min, 0.0)
 
-    def test_performance_thresholds_with_high_values(self):
+    def test_performance_thresholds_with_high_values(self) -> None:
         """Test PerformanceThresholds with very high values."""
         thresholds = PerformanceThresholds(
             response_time_ms=10000.0,
@@ -545,7 +545,7 @@ class TestEdgeCases(unittest.TestCase):
 
     @patch('builtins.open', new_callable=mock_open)
     @patch('django_mercury.python_bindings.mercury_config.Path.exists')
-    def test_configuration_manager_corrupted_file(self, mock_exists, mock_file):
+    def test_configuration_manager_corrupted_file(self, mock_exists, mock_file) -> None:
         """Test handling of corrupted configuration file."""
         mock_exists.return_value = True
         mock_file.side_effect = OSError("Permission denied")
@@ -556,7 +556,7 @@ class TestEdgeCases(unittest.TestCase):
         # Should gracefully handle file read errors
         self.assertIsInstance(config, MercuryConfiguration)
 
-    def test_configuration_manager_empty_file(self):
+    def test_configuration_manager_empty_file(self) -> None:
         """Test handling of empty configuration file."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             f.write("")

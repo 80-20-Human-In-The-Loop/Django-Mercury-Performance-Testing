@@ -27,7 +27,7 @@ IS_CI = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 't
 class TestCIEnvironmentPaths(unittest.TestCase):
     """Test CI environment detection and paths (lines 174-201)."""
     
-    def test_github_actions_detection(self):
+    def test_github_actions_detection(self) -> None:
         """Test GitHub Actions environment detection (line 174)."""
         # Test with GitHub Actions environment
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
@@ -41,7 +41,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
     
     @unittest.skipIf(not IS_CI, "Test requires CI environment (GitHub Actions)")
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_github_actions_linux_paths(self):
+    def test_github_actions_linux_paths(self) -> None:
         """Test GitHub Actions Linux runner paths (lines 193-196)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             paths = get_library_paths()
@@ -58,7 +58,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
                               f"Expected path {expected} not found in {paths_str}")
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_github_actions_windows_paths(self):
+    def test_github_actions_windows_paths(self) -> None:
         """Test GitHub Actions Windows runner paths (lines 186-190)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             paths = get_library_paths()
@@ -78,7 +78,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
             self.assertTrue(found, f"No Windows CI paths found in {paths_str}")
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_github_actions_macos_paths(self):
+    def test_github_actions_macos_paths(self) -> None:
         """Test GitHub Actions macOS runner paths."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             # macOS uses similar paths to Linux
@@ -89,7 +89,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
             # But the code defaults to Linux-style paths
             self.assertGreater(len(paths), 0)
     
-    def test_ci_workspace_root_detection(self):
+    def test_ci_workspace_root_detection(self) -> None:
         """Test CI workspace root detection (line 176)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             # Mock current working directory
@@ -108,7 +108,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
                     # These paths should be considered
                     self.assertIsInstance(wp, Path)
     
-    def test_ci_path_exists_check(self):
+    def test_ci_path_exists_check(self) -> None:
         """Test CI path existence checking (lines 198-201)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             # Mock path existence
@@ -125,7 +125,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
                 self.assertGreater(len(paths), 0)
     
     @unittest.skipIf(IS_CI, "Test requires non-CI environment (skipping when running in CI)")
-    def test_non_ci_environment(self):
+    def test_non_ci_environment(self) -> None:
         """Test behavior when not in CI environment."""
         # Remove CI environment variables
         with patch.dict('os.environ', {}, clear=True):
@@ -140,7 +140,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
             self.assertFalse(any('/home/runner/work' in p for p in paths_str))
             self.assertFalse(any('D:/a' in p for p in paths_str))
     
-    def test_ci_environment_logging(self):
+    def test_ci_environment_logging(self) -> None:
         """Test CI environment logging (line 201)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             with patch('django_mercury.python_bindings.c_bindings.logger') as mock_logger:
@@ -153,7 +153,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
                     # Note: Actual logging depends on implementation
                     self.assertIsNotNone(paths)
     
-    def test_ci_build_verbosity(self):
+    def test_ci_build_verbosity(self) -> None:
         """Test CI build verbosity settings."""
         with patch.dict('os.environ', {'CIBUILDWHEEL': '1', 'CIBW_BUILD_VERBOSITY': '1'}):
             # Check that CI build flags are recognized
@@ -164,7 +164,7 @@ class TestCIEnvironmentPaths(unittest.TestCase):
 class TestDifferentCIPlatforms(unittest.TestCase):
     """Test different CI platforms beyond GitHub Actions."""
     
-    def test_travis_ci_detection(self):
+    def test_travis_ci_detection(self) -> None:
         """Test Travis CI environment detection."""
         with patch.dict('os.environ', {'CI': 'true', 'TRAVIS': 'true', 'TRAVIS_BUILD_DIR': '/home/travis/build/user/repo'}):
             self.assertEqual(os.environ.get('TRAVIS'), 'true')
@@ -172,21 +172,21 @@ class TestDifferentCIPlatforms(unittest.TestCase):
             build_dir = os.environ.get('TRAVIS_BUILD_DIR')
             self.assertIn('travis', build_dir)
     
-    def test_jenkins_ci_detection(self):
+    def test_jenkins_ci_detection(self) -> None:
         """Test Jenkins CI environment detection."""
         with patch.dict('os.environ', {'JENKINS_HOME': '/var/jenkins', 'WORKSPACE': '/var/jenkins/workspace/job'}):
             self.assertIsNotNone(os.environ.get('JENKINS_HOME'))
             workspace = os.environ.get('WORKSPACE')
             self.assertIn('jenkins', workspace.lower())
     
-    def test_gitlab_ci_detection(self):
+    def test_gitlab_ci_detection(self) -> None:
         """Test GitLab CI environment detection."""
         with patch.dict('os.environ', {'CI': 'true', 'GITLAB_CI': 'true', 'CI_PROJECT_DIR': '/builds/user/project'}):
             self.assertEqual(os.environ.get('GITLAB_CI'), 'true')
             project_dir = os.environ.get('CI_PROJECT_DIR')
             self.assertIn('builds', project_dir)
     
-    def test_azure_pipelines_detection(self):
+    def test_azure_pipelines_detection(self) -> None:
         """Test Azure Pipelines environment detection."""
         with patch.dict('os.environ', {'TF_BUILD': 'True', 'AGENT_BUILDDIRECTORY': 'D:\\a\\1\\s'}):
             self.assertEqual(os.environ.get('TF_BUILD'), 'True')
@@ -198,7 +198,7 @@ class TestDifferentCIPlatforms(unittest.TestCase):
 class TestCIPathPriority(unittest.TestCase):
     """Test CI path priority and ordering."""
     
-    def test_ci_paths_added_to_front(self):
+    def test_ci_paths_added_to_front(self) -> None:
         """Test that CI paths are prioritized in search order."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             paths = get_library_paths()
@@ -207,7 +207,7 @@ class TestCIPathPriority(unittest.TestCase):
             # (after current directory but before system paths)
             self.assertGreater(len(paths), 3)
     
-    def test_ci_path_deduplication(self):
+    def test_ci_path_deduplication(self) -> None:
         """Test that duplicate CI paths are not added (line 199)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             # Mock a path that already exists in the list

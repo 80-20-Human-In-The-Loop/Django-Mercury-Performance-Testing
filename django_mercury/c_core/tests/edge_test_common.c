@@ -21,7 +21,7 @@
 #include <signal.h>
 #include <setjmp.h>
 #include "../common.h"
-#include "simple_tests.h"
+#include "test_simple.h"
 
 // Signal handling for safer RDTSC testing
 static jmp_buf segfault_env;
@@ -39,6 +39,14 @@ void rdtsc_segfault_handler(int sig) {
 int total_tests = 0;
 int passed_tests = 0;
 int failed_tests = 0;
+
+// Required by test framework (test_simple.h)
+int quiet_mode = 0;
+int test_assertions = 0;
+int test_passed = 0;
+int test_failed = 0;
+char test_failure_buffer[4096] = {0};
+int test_failure_buffer_used = 0;
 
 // Test SIMD Boyer-Moore with complex chunk calculations to hit line 583
 int test_simd_boyer_moore_chunk_calculations(void) {

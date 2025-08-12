@@ -8,6 +8,7 @@ currently rejects as unrecognized.
 """
 
 import os
+from typing import List, Any
 import sys
 import zipfile
 import tarfile
@@ -18,7 +19,7 @@ from pathlib import Path
 import re
 
 
-def fix_metadata_lines(lines: list, verbose: bool = False) -> tuple:
+def fix_metadata_lines(lines: List[Any], verbose: bool = False) -> tuple:
     """
     Fix metadata lines by removing License-File and fixing Dynamic fields.
     

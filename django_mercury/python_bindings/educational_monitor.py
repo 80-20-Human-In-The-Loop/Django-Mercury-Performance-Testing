@@ -8,7 +8,7 @@ implementing the 80-20 Human-in-the-Loop philosophy.
 import os
 import sys
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 try:
     from rich.console import Console
@@ -49,7 +49,7 @@ class EducationalMonitor:
         self.quiz_system = quiz_system
         self.progress_tracker = progress_tracker
         self.interactive_mode = interactive_mode
-        self.issues_found = []
+        self.issues_found: List[Dict[str, str]] = []
         self.current_test = None
     
     def handle_performance_issue(self, test, error_msg: str):
@@ -530,7 +530,7 @@ for item in items:
     
     def get_session_summary(self) -> Dict[str, Any]:
         """Get summary of educational session."""
-        issue_types = {}
+        issue_types: Dict[str, int] = {}
         for issue in self.issues_found:
             issue_type = issue['type']
             issue_types[issue_type] = issue_types.get(issue_type, 0) + 1

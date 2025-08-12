@@ -5,6 +5,29 @@ All notable changes to Django Mercury Performance Testing will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2025-08-12
+
+### Added
+- **Extension Verification Command**: New `mercury-test --ext` command to verify C extensions are loaded and working
+- **Performance Benchmarking**: New `mercury-test --benchmark` command to compare C extension vs pure Python performance
+- **Memory Safety Testing**: Added comprehensive Valgrind memcheck tests for C extensions
+- **Microsecond Precision Display**: Benchmark results now show microseconds (µs) for very fast operations
+
+### Fixed
+- **C Extension Build Issues**: Fixed Makefile TEST_DIR variable ordering that caused build failures
+- **Memory Leak Detection**: Added Valgrind suppressions for false positives from libunwind
+- **Benchmark Accuracy**: Fixed query analyzer benchmark to prevent cache hits and show real performance
+- **macOS Compatibility**: Fixed build issues on macOS systems
+
+### Changed
+- **Test Framework Organization**: Reorganized C test headers into modular components (test_base.h, test_simple.h, test_enhanced.h, test_security.h)
+- **Benchmark Display**: Added explanations of what each implementation does (e.g., C does basic tracking, Python does full monitoring)
+- **Query Generation**: Benchmark now uses deterministic seeds for consistent performance comparisons
+
+### Developer Notes
+- Test Orchestrator benchmark shows 787-1186x speedup because implementations have different features (C: basic tracking, Python: full performance monitoring with GC)
+- This will be addressed in v0.0.8 with feature parity improvements
+
 ## [0.0.6] - 2025-08-10
 
 ### Fixed

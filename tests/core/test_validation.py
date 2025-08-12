@@ -23,7 +23,7 @@ from django_mercury.python_bindings.validation import (
 class TestMercuryConfigValidation(unittest.TestCase):
     """Test cases for Mercury configuration validation."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.valid_config = {
             "enabled": True,
@@ -50,14 +50,14 @@ class TestMercuryConfigValidation(unittest.TestCase):
             }
         }
 
-    def test_validate_valid_config(self):
+    def test_validate_valid_config(self) -> None:
         """Test validation of a valid Mercury configuration."""
         is_valid, errors = validate_mercury_config(self.valid_config)
         
         self.assertTrue(is_valid)
         self.assertIsNone(errors)
 
-    def test_validate_config_missing_required_fields(self):
+    def test_validate_config_missing_required_fields(self) -> None:
         """Test validation handles missing optional fields gracefully."""
         # Note: The schema doesn't have required fields, so missing fields are allowed
         invalid_config = self.valid_config.copy()
@@ -69,7 +69,7 @@ class TestMercuryConfigValidation(unittest.TestCase):
         self.assertTrue(is_valid)
         self.assertIsNone(errors)
 
-    def test_validate_config_invalid_types(self):
+    def test_validate_config_invalid_types(self) -> None:
         """Test validation fails with invalid field types."""
         invalid_config = self.valid_config.copy()
         invalid_config['enabled'] = "not_a_boolean"
@@ -79,7 +79,7 @@ class TestMercuryConfigValidation(unittest.TestCase):
         self.assertFalse(is_valid)
         self.assertIsNotNone(errors)
 
-    def test_validate_config_invalid_enum_values(self):
+    def test_validate_config_invalid_enum_values(self) -> None:
         """Test validation fails with invalid enum values."""
         invalid_config = self.valid_config.copy()
         invalid_config['n_plus_one_sensitivity'] = "invalid_value"
@@ -89,7 +89,7 @@ class TestMercuryConfigValidation(unittest.TestCase):
         self.assertFalse(is_valid)
         self.assertIsNotNone(errors)
 
-    def test_validate_config_scoring_weights_sum_check(self):
+    def test_validate_config_scoring_weights_sum_check(self) -> None:
         """Test validation enforces scoring weights sum to 100."""
         invalid_config = self.valid_config.copy()
         invalid_config['scoring_weights'] = {
@@ -105,7 +105,7 @@ class TestMercuryConfigValidation(unittest.TestCase):
         self.assertIsNotNone(errors)
         self.assertTrue(any("must sum to 100" in str(error) for error in errors))
 
-    def test_validate_config_scoring_weights_sum_floating_point_tolerance(self):
+    def test_validate_config_scoring_weights_sum_floating_point_tolerance(self) -> None:
         """Test validation allows small floating point errors in weight sum."""
         valid_config = self.valid_config.copy()
         valid_config['scoring_weights'] = {
@@ -120,7 +120,7 @@ class TestMercuryConfigValidation(unittest.TestCase):
         self.assertTrue(is_valid)
         self.assertIsNone(errors)
 
-    def test_validate_config_threshold_structure(self):
+    def test_validate_config_threshold_structure(self) -> None:
         """Test validation of threshold structure within config."""
         invalid_config = self.valid_config.copy()
         invalid_config['thresholds']['invalid_view'] = {
@@ -134,7 +134,7 @@ class TestMercuryConfigValidation(unittest.TestCase):
         self.assertFalse(is_valid)
         self.assertIsNotNone(errors)
 
-    def test_validate_config_additional_properties(self):
+    def test_validate_config_additional_properties(self) -> None:
         """Test validation rejects additional properties."""
         invalid_config = self.valid_config.copy()
         invalid_config['unknown_property'] = "should_not_be_allowed"
@@ -149,7 +149,7 @@ class TestMercuryConfigValidation(unittest.TestCase):
 class TestThresholdValidation(unittest.TestCase):
     """Test cases for threshold validation."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.valid_thresholds = {
             "response_time_ms": 200.0,
@@ -158,14 +158,14 @@ class TestThresholdValidation(unittest.TestCase):
             "cache_hit_ratio_min": 0.8
         }
 
-    def test_validate_valid_thresholds(self):
+    def test_validate_valid_thresholds(self) -> None:
         """Test validation of valid thresholds."""
         is_valid, errors = validate_thresholds(self.valid_thresholds)
         
         self.assertTrue(is_valid)
         self.assertIsNone(errors)
 
-    def test_validate_thresholds_missing_fields(self):
+    def test_validate_thresholds_missing_fields(self) -> None:
         """Test validation handles missing threshold fields gracefully."""
         partial_thresholds = {
             "response_time_ms": 200.0,
@@ -177,7 +177,7 @@ class TestThresholdValidation(unittest.TestCase):
         self.assertTrue(is_valid)  # Missing fields should be allowed
         self.assertIsNone(errors)
 
-    def test_validate_thresholds_negative_values(self):
+    def test_validate_thresholds_negative_values(self) -> None:
         """Test validation rejects negative threshold values."""
         invalid_thresholds = self.valid_thresholds.copy()
         invalid_thresholds['response_time_ms'] = -100.0
@@ -187,7 +187,7 @@ class TestThresholdValidation(unittest.TestCase):
         self.assertFalse(is_valid)
         self.assertIsNotNone(errors)
 
-    def test_validate_thresholds_cache_ratio_bounds(self):
+    def test_validate_thresholds_cache_ratio_bounds(self) -> None:
         """Test validation of cache hit ratio bounds."""
         test_cases = [
             (-0.1, False),  # Below minimum
@@ -205,7 +205,7 @@ class TestThresholdValidation(unittest.TestCase):
                 is_valid, errors = validate_thresholds(thresholds)
                 self.assertEqual(is_valid, should_be_valid)
 
-    def test_validate_thresholds_maximum_bounds(self):
+    def test_validate_thresholds_maximum_bounds(self) -> None:
         """Test validation respects maximum value bounds."""
         # Test with extremely large values that exceed MAX_VALUES
         large_thresholds = {
@@ -223,7 +223,7 @@ class TestThresholdValidation(unittest.TestCase):
 class TestOperationNameValidation(unittest.TestCase):
     """Test cases for operation name validation."""
 
-    def test_validate_valid_operation_name(self):
+    def test_validate_valid_operation_name(self) -> None:
         """Test validation of valid operation names."""
         valid_names = [
             "UserListView",
@@ -238,7 +238,7 @@ class TestOperationNameValidation(unittest.TestCase):
                 self.assertTrue(is_valid)
                 self.assertIsNone(error)
 
-    def test_validate_empty_operation_name(self):
+    def test_validate_empty_operation_name(self) -> None:
         """Test validation rejects empty operation names."""
         is_valid, error = validate_operation_name("")
         
@@ -246,7 +246,7 @@ class TestOperationNameValidation(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("cannot be empty", error)
 
-    def test_validate_operation_name_too_long(self):
+    def test_validate_operation_name_too_long(self) -> None:
         """Test validation rejects operation names that are too long."""
         long_name = "a" * 300  # Exceeds maximum length
         
@@ -256,7 +256,7 @@ class TestOperationNameValidation(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("exceeds maximum length", error)
 
-    def test_validate_operation_name_dangerous_characters(self):
+    def test_validate_operation_name_dangerous_characters(self) -> None:
         """Test validation rejects operation names with dangerous characters."""
         dangerous_names = [
             "operation<script>",
@@ -280,7 +280,7 @@ class TestOperationNameValidation(unittest.TestCase):
 class TestMetricsValuesValidation(unittest.TestCase):
     """Test cases for metrics values validation."""
 
-    def test_validate_valid_metrics_values(self):
+    def test_validate_valid_metrics_values(self) -> None:
         """Test validation of valid metrics values."""
         is_valid, errors = validate_metrics_values(
             response_time=100.0,
@@ -291,7 +291,7 @@ class TestMetricsValuesValidation(unittest.TestCase):
         self.assertTrue(is_valid)
         self.assertIsNone(errors)
 
-    def test_validate_metrics_negative_values(self):
+    def test_validate_metrics_negative_values(self) -> None:
         """Test validation rejects negative metrics values."""
         test_cases = [
             (-10.0, 50.0, 5),   # Negative response time
@@ -308,7 +308,7 @@ class TestMetricsValuesValidation(unittest.TestCase):
                 self.assertIsInstance(errors, list)
                 self.assertGreater(len(errors), 0)
 
-    def test_validate_metrics_maximum_bounds(self):
+    def test_validate_metrics_maximum_bounds(self) -> None:
         """Test validation respects maximum value bounds."""
         test_cases = [
             (100000.0, 50.0, 5),    # Excessive response time
@@ -324,7 +324,7 @@ class TestMetricsValuesValidation(unittest.TestCase):
                 self.assertIsNotNone(errors)
                 self.assertTrue(any("exceeds maximum" in error for error in errors))
 
-    def test_validate_metrics_zero_values(self):
+    def test_validate_metrics_zero_values(self) -> None:
         """Test validation allows zero values."""
         is_valid, errors = validate_metrics_values(
             response_time=0.0,
@@ -335,7 +335,7 @@ class TestMetricsValuesValidation(unittest.TestCase):
         self.assertTrue(is_valid)
         self.assertIsNone(errors)
 
-    def test_validate_metrics_boundary_values(self):
+    def test_validate_metrics_boundary_values(self) -> None:
         """Test validation at exact boundary values."""
         # These should be valid (at maximum bounds)
         is_valid, errors = validate_metrics_values(
@@ -351,7 +351,7 @@ class TestMetricsValuesValidation(unittest.TestCase):
 class TestOperationNameSanitization(unittest.TestCase):
     """Test cases for operation name sanitization."""
 
-    def test_sanitize_clean_operation_name(self):
+    def test_sanitize_clean_operation_name(self) -> None:
         """Test sanitization of clean operation names."""
         clean_names = [
             "UserListView",
@@ -364,7 +364,7 @@ class TestOperationNameSanitization(unittest.TestCase):
                 sanitized = sanitize_operation_name(name)
                 self.assertEqual(sanitized, name)
 
-    def test_sanitize_operation_name_dangerous_characters(self):
+    def test_sanitize_operation_name_dangerous_characters(self) -> None:
         """Test sanitization replaces dangerous characters."""
         # Note: Current implementation has a bug where & is replaced first,
         # causing double-escaping of < and > characters
@@ -383,7 +383,7 @@ class TestOperationNameSanitization(unittest.TestCase):
                 sanitized = sanitize_operation_name(original)
                 self.assertEqual(sanitized, expected)
 
-    def test_sanitize_operation_name_too_long(self):
+    def test_sanitize_operation_name_too_long(self) -> None:
         """Test sanitization truncates long operation names."""
         long_name = "a" * 300
         
@@ -392,7 +392,7 @@ class TestOperationNameSanitization(unittest.TestCase):
         self.assertLessEqual(len(sanitized), 256)  # MAX_VALUES['OPERATION_NAME_LENGTH']
         self.assertTrue(sanitized.endswith("..."))
 
-    def test_sanitize_operation_name_preserves_useful_content(self):
+    def test_sanitize_operation_name_preserves_useful_content(self) -> None:
         """Test sanitization preserves useful content while fixing issues."""
         test_name = "UserListView<script>alert('test')</script>"
         
@@ -407,7 +407,7 @@ class TestOperationNameSanitization(unittest.TestCase):
 class TestConfigFileLoading(unittest.TestCase):
     """Test cases for configuration file loading and validation."""
 
-    def test_load_valid_config_file(self):
+    def test_load_valid_config_file(self) -> None:
         """Test loading a valid configuration file."""
         valid_config = {
             "enabled": True,
@@ -433,7 +433,7 @@ class TestConfigFileLoading(unittest.TestCase):
         finally:
             Path(config_path).unlink()
 
-    def test_load_nonexistent_config_file(self):
+    def test_load_nonexistent_config_file(self) -> None:
         """Test loading a nonexistent configuration file."""
         config, errors = load_and_validate_config("/nonexistent/path/config.json")
         
@@ -441,7 +441,7 @@ class TestConfigFileLoading(unittest.TestCase):
         self.assertIsNotNone(errors)
         self.assertTrue(any("not found" in error for error in errors))
 
-    def test_load_invalid_json_config_file(self):
+    def test_load_invalid_json_config_file(self) -> None:
         """Test loading a configuration file with invalid JSON."""
         invalid_json = '{"enabled": true, "auto_scoring": invalid_json}'
         
@@ -458,7 +458,7 @@ class TestConfigFileLoading(unittest.TestCase):
         finally:
             Path(config_path).unlink()
 
-    def test_load_config_file_with_validation_errors(self):
+    def test_load_config_file_with_validation_errors(self) -> None:
         """Test loading a configuration file that fails validation."""
         invalid_config = {
             "enabled": "not_a_boolean",  # Should be boolean
@@ -482,7 +482,7 @@ class TestConfigFileLoading(unittest.TestCase):
             Path(config_path).unlink()
 
 
-    def test_load_config_pathlib_path(self):
+    def test_load_config_pathlib_path(self) -> None:
         """Test loading configuration using pathlib.Path object."""
         valid_config = {"enabled": True}
         
@@ -502,21 +502,21 @@ class TestConfigFileLoading(unittest.TestCase):
 class TestValidationSchemas(unittest.TestCase):
     """Test cases for validation schemas themselves."""
 
-    def test_mercury_config_schema_structure(self):
+    def test_mercury_config_schema_structure(self) -> None:
         """Test Mercury config schema has required structure."""
         self.assertIn("$schema", MERCURY_CONFIG_SCHEMA)
         self.assertIn("type", MERCURY_CONFIG_SCHEMA)
         self.assertIn("properties", MERCURY_CONFIG_SCHEMA)
         self.assertEqual(MERCURY_CONFIG_SCHEMA["type"], "object")
 
-    def test_threshold_schema_structure(self):
+    def test_threshold_schema_structure(self) -> None:
         """Test threshold schema has required structure."""
         self.assertIn("$schema", THRESHOLD_SCHEMA)
         self.assertIn("type", THRESHOLD_SCHEMA)
         self.assertIn("properties", THRESHOLD_SCHEMA)
         self.assertEqual(THRESHOLD_SCHEMA["type"], "object")
 
-    def test_mercury_config_schema_required_properties(self):
+    def test_mercury_config_schema_required_properties(self) -> None:
         """Test Mercury config schema defines expected properties."""
         expected_properties = [
             "enabled", "auto_scoring", "auto_threshold_adjustment",
@@ -527,7 +527,7 @@ class TestValidationSchemas(unittest.TestCase):
         for prop in expected_properties:
             self.assertIn(prop, MERCURY_CONFIG_SCHEMA["properties"])
 
-    def test_threshold_schema_properties(self):
+    def test_threshold_schema_properties(self) -> None:
         """Test threshold schema defines expected properties."""
         expected_properties = [
             "response_time_ms", "memory_overhead_mb",
@@ -542,7 +542,7 @@ class TestValidationLogging(unittest.TestCase):
     """Test cases for validation logging."""
 
     @patch('django_mercury.python_bindings.validation.logger')
-    def test_validation_success_logging(self, mock_logger):
+    def test_validation_success_logging(self, mock_logger) -> None:
         """Test that successful validations are logged."""
         valid_config = {"enabled": True}
         
@@ -551,7 +551,7 @@ class TestValidationLogging(unittest.TestCase):
         mock_logger.info.assert_called()
 
     @patch('django_mercury.python_bindings.validation.logger')
-    def test_validation_failure_logging(self, mock_logger):
+    def test_validation_failure_logging(self, mock_logger) -> None:
         """Test that validation failures are logged."""
         invalid_config = {"enabled": "not_a_boolean"}
         
@@ -560,7 +560,7 @@ class TestValidationLogging(unittest.TestCase):
         mock_logger.error.assert_called()
 
     @patch('django_mercury.python_bindings.validation.logger')
-    def test_threshold_validation_logging(self, mock_logger):
+    def test_threshold_validation_logging(self, mock_logger) -> None:
         """Test that threshold validations are logged."""
         valid_thresholds = {"response_time_ms": 100.0}
         
@@ -569,14 +569,14 @@ class TestValidationLogging(unittest.TestCase):
         mock_logger.debug.assert_called()
 
     @patch('django_mercury.python_bindings.validation.logger')
-    def test_metrics_validation_logging(self, mock_logger):
+    def test_metrics_validation_logging(self, mock_logger) -> None:
         """Test that metrics validation failures are logged."""
         validate_metrics_values(-10.0, 50.0, 5)  # Negative response time
         
         mock_logger.warning.assert_called()
 
     @patch('django_mercury.python_bindings.validation.logger')
-    def test_sanitization_logging(self, mock_logger):
+    def test_sanitization_logging(self, mock_logger) -> None:
         """Test that sanitization is logged."""
         sanitize_operation_name("test<script>")
         

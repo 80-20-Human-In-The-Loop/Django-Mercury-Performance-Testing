@@ -37,7 +37,7 @@ except ImportError:
 class EducationalTestResult(TextTestResult):
     """Custom test result that tracks educational metrics."""
     
-    def __init__(self, *args, educational_monitor=None, **kwargs):
+    def __init__(self, *args, educational_monitor=None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.educational_monitor = educational_monitor
         self.performance_issues = []
@@ -84,7 +84,7 @@ class EducationalTestRunner(DiscoverRunner):
     helping developers learn about performance optimization while testing.
     """
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         """Initialize the educational test runner."""
         # Check for --edu flag OR MERCURY_EDU environment variable
         self.educational_mode = '--edu' in sys.argv or os.environ.get('MERCURY_EDU') == '1'
@@ -162,7 +162,7 @@ class EducationalTestRunner(DiscoverRunner):
                     f"📊 Progress Tracking: [green]{'Enabled' if self.progress_tracker else 'Disabled'}[/green]\n\n"
                     "[italic]Tests will pause at learning moments to help you understand\n"
                     "performance issues and learn optimization techniques.[/italic]\n\n"
-                    "[dim]Tip: Set MERCURY_EDU_LEVEL=intermediate or advanced for more depth[/dim]"
+                    "[dim]Tip: Set[Any] MERCURY_EDU_LEVEL=intermediate or advanced for more depth[/dim]"
                 ),
                 title="[bold]Welcome to Educational Testing[/bold]",
                 border_style="cyan",
@@ -206,7 +206,7 @@ class EducationalTestRunner(DiscoverRunner):
             
             # Create a custom test result that includes educational monitor
             class CustomEducationalTestResult(EducationalTestResult):
-                def __init__(self, stream, descriptions, verbosity):
+                def __init__(self, stream, descriptions, verbosity) -> None:
                     super().__init__(stream, descriptions, verbosity, 
                                    educational_monitor=educational_monitor)
             

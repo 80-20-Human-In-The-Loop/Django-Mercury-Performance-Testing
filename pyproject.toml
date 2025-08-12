@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-mercury-performance"
-version = "0.0.6"
+version = "0.0.7"
 description = "A performance testing framework for Django that helps you understand and fix performance issues, not just detect them"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -65,7 +65,10 @@ dev = [
     "pytest-cov>=3.0.0",
     "black>=22.0.0",
     "isort>=5.10.0",
-    "mypy>=0.950",
+    "mypy>=1.0.0",
+    "django-stubs[compatible-mypy]>=4.2.0",
+    "djangorestframework-stubs>=3.14.0",
+    "types-psutil>=5.9.0",
     "rich>=12.0.0",
     "flake8>=4.0.0",
     "ruff>=0.1.0",
@@ -147,18 +150,102 @@ sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLD
 
 [tool.mypy]
 python_version = "3.10"
+
+# Strict mode settings (gradually enable)
+strict = false  # Will enable per-module below
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+# Type checking strictness (gradual adoption)
+disallow_untyped_defs = false  # Start permissive, enable per-module
+disallow_any_unimported = false
+disallow_any_expr = false
+disallow_any_decorated = false
+disallow_any_explicit = false
+disallow_any_generics = false
+disallow_subclassing_any = false
+disallow_incomplete_defs = false
+check_untyped_defs = true  # Still check logic in untyped functions
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+
+# None handling
+no_implicit_optional = true
+strict_optional = true
+
+# Error output settings
+pretty = false  # Disable pretty mode for cleaner CI/CD output
+show_error_codes = true
+show_error_context = true
+show_column_numbers = true
+show_absolute_path = false
+
+# Import handling
 ignore_missing_imports = true
+follow_imports = "normal"
+follow_imports_for_stubs = true
+no_site_packages = false
+
+# Miscellaneous strictness
+allow_redefinition = false
+local_partial_types = false
+strict_equality = true
+strict_concatenate = true
+
+# Performance
+cache_dir = ".mypy_cache"
+incremental = true
+
+# Exclusions
 exclude = [
     "venv/",
     ".venv/",
     "build/",
     "dist/",
-    "tests/",
     "migrations/",
+    "__pycache__/",
+    "\\.git/",
 ]
+
+# Per-module configuration for gradual adoption
+
+# Strict mode for fully-typed modules only
+[[tool.mypy.overrides]]
+module = [
+    "django_mercury.python_bindings.constants",
+]
+strict = true
+disallow_untyped_defs = true
+
+# Less strict for legacy code (gradual migration)
+[[tool.mypy.overrides]]
+module = [
+    "django_mercury.python_bindings.monitor",
+    "django_mercury.python_bindings.django_hooks",
+    "django_mercury.python_bindings.django_integration",
+    "django_mercury.python_bindings.django_integration_mercury",
+    "django_mercury.cli.*",
+    "examples.*",
+]
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
+
+# Ignore third-party libraries without stubs
+[[tool.mypy.overrides]]
+module = [
+    "psutil.*",
+    "memory_profiler.*",
+    "colorlog.*",
+    "rich.*",
+    "django.*",
+    "rest_framework.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

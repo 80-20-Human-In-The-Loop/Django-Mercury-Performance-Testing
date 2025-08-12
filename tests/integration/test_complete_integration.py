@@ -28,14 +28,14 @@ from django_mercury.python_bindings.loader import (
 class TestImplementationLoading(unittest.TestCase):
     """Test that the correct implementation loads."""
     
-    def test_implementation_info(self):
+    def test_implementation_info(self) -> None:
         """Test that we can get implementation info."""
         info = get_implementation_info()
         self.assertIn('type', info)
         self.assertIn('platform', info)
         self.assertIn('python_version', info)
         
-    def test_check_c_extensions(self):
+    def test_check_c_extensions(self) -> None:
         """Test C extension checking."""
         available, details = check_c_extensions()
         self.assertIsInstance(available, bool)
@@ -49,10 +49,10 @@ class TestImplementationLoading(unittest.TestCase):
 class TestPerformanceMonitor(unittest.TestCase):
     """Test PerformanceMonitor with both implementations."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         self.Monitor = get_performance_monitor()
         
-    def test_basic_monitoring(self):
+    def test_basic_monitoring(self) -> None:
         """Test basic monitoring functionality."""
         monitor = self.Monitor()
         
@@ -70,7 +70,7 @@ class TestPerformanceMonitor(unittest.TestCase):
         if 'response_time_ms' in metrics:
             self.assertGreater(metrics['response_time_ms'], 0)
     
-    def test_query_tracking(self):
+    def test_query_tracking(self) -> None:
         """Test query tracking."""
         monitor = self.Monitor()
         
@@ -82,7 +82,7 @@ class TestPerformanceMonitor(unittest.TestCase):
         if 'query_count' in metrics:
             self.assertEqual(metrics['query_count'], 2)
     
-    def test_cache_tracking(self):
+    def test_cache_tracking(self) -> None:
         """Test cache tracking."""
         monitor = self.Monitor()
         
@@ -97,7 +97,7 @@ class TestPerformanceMonitor(unittest.TestCase):
         if 'cache_misses' in metrics:
             self.assertEqual(metrics['cache_misses'], 1)
     
-    def test_reset(self):
+    def test_reset(self) -> None:
         """Test reset functionality."""
         monitor = self.Monitor()
         
@@ -114,10 +114,10 @@ class TestPerformanceMonitor(unittest.TestCase):
 class TestMetricsEngine(unittest.TestCase):
     """Test MetricsEngine with both implementations."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         self.Engine = get_metrics_engine()
         
-    def test_add_metrics(self):
+    def test_add_metrics(self) -> None:
         """Test adding metrics."""
         engine = self.Engine()
         
@@ -136,7 +136,7 @@ class TestMetricsEngine(unittest.TestCase):
         self.assertIsInstance(stats, dict)
         self.assertIn('implementation', stats)
     
-    def test_statistics_calculation(self):
+    def test_statistics_calculation(self) -> None:
         """Test statistics calculation."""
         engine = self.Engine()
         
@@ -161,7 +161,7 @@ class TestMetricsEngine(unittest.TestCase):
         if 'total_queries' in stats:
             self.assertEqual(stats['total_queries'], sum(range(10)))
     
-    def test_n_plus_one_detection(self):
+    def test_n_plus_one_detection(self) -> None:
         """Test N+1 query detection."""
         engine = self.Engine()
         
@@ -181,10 +181,10 @@ class TestMetricsEngine(unittest.TestCase):
 class TestQueryAnalyzer(unittest.TestCase):
     """Test QueryAnalyzer with both implementations."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         self.Analyzer = get_query_analyzer()
         
-    def test_analyze_select(self):
+    def test_analyze_select(self) -> None:
         """Test analyzing SELECT queries."""
         analyzer = self.Analyzer()
         
@@ -195,7 +195,7 @@ class TestQueryAnalyzer(unittest.TestCase):
         if 'query_type' in analysis:
             self.assertEqual(analysis['query_type'], 'SELECT')
     
-    def test_analyze_complex_query(self):
+    def test_analyze_complex_query(self) -> None:
         """Test analyzing complex queries."""
         analyzer = self.Analyzer()
         
@@ -216,7 +216,7 @@ class TestQueryAnalyzer(unittest.TestCase):
         if 'complexity_score' in analysis:
             self.assertGreater(analysis['complexity_score'], 10)
     
-    def test_performance_issues_detection(self):
+    def test_performance_issues_detection(self) -> None:
         """Test detection of performance issues."""
         analyzer = self.Analyzer()
         
@@ -234,10 +234,10 @@ class TestQueryAnalyzer(unittest.TestCase):
 class TestTestOrchestrator(unittest.TestCase):
     """Test TestOrchestrator with both implementations."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         self.Orchestrator = get_test_orchestrator()
         
-    def test_test_tracking(self):
+    def test_test_tracking(self) -> None:
         """Test tracking test execution."""
         orchestrator = self.Orchestrator()
         
@@ -250,7 +250,7 @@ class TestTestOrchestrator(unittest.TestCase):
         if 'duration_ms' in result:
             self.assertGreater(result['duration_ms'], 0)
     
-    def test_summary_generation(self):
+    def test_summary_generation(self) -> None:
         """Test summary generation."""
         orchestrator = self.Orchestrator()
         
@@ -279,7 +279,7 @@ class TestTestOrchestrator(unittest.TestCase):
 class TestFallbackMechanism(unittest.TestCase):
     """Test fallback from C to Python."""
     
-    def test_force_pure_python(self):
+    def test_force_pure_python(self) -> None:
         """Test forcing pure Python implementation."""
         # Save original env
         original = os.environ.get('DJANGO_MERCURY_PURE_PYTHON')
@@ -308,7 +308,7 @@ class TestFallbackMechanism(unittest.TestCase):
 class TestPerformanceComparison(unittest.TestCase):
     """Compare performance between implementations."""
     
-    def test_c_extension_performance(self):
+    def test_c_extension_performance(self) -> None:
         """Test that C extensions are faster when available."""
         # Check if C extensions are truly available and functional
         available, details = check_c_extensions()

@@ -17,16 +17,16 @@ from django_mercury.python_bindings.pure_python import PythonQueryAnalyzer
 class TestPythonQueryAnalyzer(unittest.TestCase):
     """Test the PythonQueryAnalyzer class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.analyzer = PythonQueryAnalyzer()
     
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test analyzer initializes correctly."""
         self.assertEqual(self.analyzer.queries, [])
         self.assertEqual(self.analyzer.analysis_cache, {})
     
-    def test_analyze_simple_select(self):
+    def test_analyze_simple_select(self) -> None:
         """Test analyzing a simple SELECT query."""
         sql = "SELECT * FROM users"
         result = self.analyzer.analyze_query(sql)
@@ -40,7 +40,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertEqual(result['estimated_complexity'], 1)
         self.assertEqual(result['implementation'], 'pure_python')
     
-    def test_analyze_select_with_limit_recommendation(self):
+    def test_analyze_select_with_limit_recommendation(self) -> None:
         """Test that SELECT without LIMIT gets recommendation."""
         sql = "SELECT * FROM posts"
         result = self.analyzer.analyze_query(sql)
@@ -48,7 +48,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertEqual(result['type'], 'SELECT')
         self.assertIn('Consider adding LIMIT for large result sets', result['recommendations'])
     
-    def test_analyze_select_with_limit_no_recommendation(self):
+    def test_analyze_select_with_limit_no_recommendation(self) -> None:
         """Test that SELECT with LIMIT doesn't get limit recommendation."""
         sql = "SELECT * FROM posts LIMIT 10"
         result = self.analyzer.analyze_query(sql)
@@ -56,7 +56,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertEqual(result['type'], 'SELECT')
         self.assertNotIn('Consider adding LIMIT for large result sets', result['recommendations'])
     
-    def test_analyze_insert_query(self):
+    def test_analyze_insert_query(self) -> None:
         """Test analyzing an INSERT query."""
         sql = "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')"
         result = self.analyzer.analyze_query(sql)
@@ -65,7 +65,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         # INSERT queries are parsed differently, may not extract table from VALUES
         self.assertEqual(result['estimated_complexity'], 1)
     
-    def test_analyze_update_query(self):
+    def test_analyze_update_query(self) -> None:
         """Test analyzing an UPDATE query."""
         sql = "UPDATE users SET active = 1 WHERE id = 123"
         result = self.analyzer.analyze_query(sql)
@@ -73,7 +73,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertEqual(result['type'], 'UPDATE')
         self.assertEqual(result['estimated_complexity'], 1)
     
-    def test_analyze_delete_query(self):
+    def test_analyze_delete_query(self) -> None:
         """Test analyzing a DELETE query."""
         sql = "DELETE FROM users WHERE created_at < '2020-01-01'"
         result = self.analyzer.analyze_query(sql)
@@ -81,14 +81,14 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertEqual(result['type'], 'DELETE')
         self.assertEqual(result['tables'], ['users'])
     
-    def test_analyze_other_query_type(self):
+    def test_analyze_other_query_type(self) -> None:
         """Test analyzing non-standard query type."""
         sql = "CREATE TABLE test (id INT)"
         result = self.analyzer.analyze_query(sql)
         
         self.assertEqual(result['type'], 'OTHER')
     
-    def test_analyze_query_with_join(self):
+    def test_analyze_query_with_join(self) -> None:
         """Test analyzing query with JOIN."""
         sql = "SELECT * FROM users JOIN posts ON users.id = posts.user_id"
         result = self.analyzer.analyze_query(sql)
@@ -99,7 +99,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertIn('posts', result['tables'])
         self.assertGreater(result['estimated_complexity'], 1)
     
-    def test_analyze_query_with_multiple_joins(self):
+    def test_analyze_query_with_multiple_joins(self) -> None:
         """Test analyzing query with multiple JOINs."""
         sql = """
             SELECT * FROM users 
@@ -113,7 +113,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertEqual(len(result['tables']), 4)  # users, posts, comments, likes
         self.assertGreaterEqual(result['estimated_complexity'], 4)  # Base + 3 joins
     
-    def test_analyze_query_with_subquery(self):
+    def test_analyze_query_with_subquery(self) -> None:
         """Test analyzing query with subquery."""
         sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM posts WHERE active = 1)"
         result = self.analyzer.analyze_query(sql)
@@ -122,7 +122,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertIn('Consider using JOINs instead of subqueries', result['recommendations'])
         self.assertGreater(result['estimated_complexity'], 2)
     
-    def test_analyze_query_with_order_by(self):
+    def test_analyze_query_with_order_by(self) -> None:
         """Test analyzing query with ORDER BY."""
         sql = "SELECT * FROM posts ORDER BY created_at DESC"
         result = self.analyzer.analyze_query(sql)
@@ -130,7 +130,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertTrue(result['has_order_by'])
         self.assertEqual(result['estimated_complexity'], 2)  # Base + ORDER BY
     
-    def test_analyze_query_with_group_by(self):
+    def test_analyze_query_with_group_by(self) -> None:
         """Test analyzing query with GROUP BY."""
         sql = "SELECT user_id, COUNT(*) FROM posts GROUP BY user_id"
         result = self.analyzer.analyze_query(sql)
@@ -138,7 +138,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertTrue(result['has_group_by'])
         self.assertGreater(result['estimated_complexity'], 1)
     
-    def test_analyze_complex_query(self):
+    def test_analyze_complex_query(self) -> None:
         """Test analyzing a complex query."""
         sql = """
             SELECT DISTINCT u.name, COUNT(p.id) as post_count
@@ -157,7 +157,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertGreater(result['estimated_complexity'], 4)
         self.assertIn('Query appears complex, consider optimization', result['recommendations'])
     
-    def test_analyze_query_with_union(self):
+    def test_analyze_query_with_union(self) -> None:
         """Test analyzing query with UNION."""
         sql = """
             SELECT name FROM users
@@ -169,7 +169,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         complexity = result['estimated_complexity']
         self.assertGreaterEqual(complexity, 3)  # Base + UNION complexity
     
-    def test_query_caching(self):
+    def test_query_caching(self) -> None:
         """Test that query analysis results are cached."""
         sql = "SELECT * FROM users WHERE id = 1"
         
@@ -185,7 +185,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertTrue(result2.get('cached', False))
         self.assertEqual(result1['type'], result2['type'])
     
-    def test_query_truncation(self):
+    def test_query_truncation(self) -> None:
         """Test that long queries are truncated in results."""
         # Create a very long SQL query
         long_sql = "SELECT " + ", ".join([f"column_{i}" for i in range(100)]) + " FROM very_long_table"
@@ -195,14 +195,14 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         # Query should be truncated to 200 characters
         self.assertLessEqual(len(result['query']), 200)
     
-    def test_extract_tables_from_clause(self):
+    def test_extract_tables_from_clause(self) -> None:
         """Test table extraction from FROM clause."""
         sql = "SELECT * FROM customers WHERE id > 100"
         result = self.analyzer.analyze_query(sql)
         
         self.assertEqual(result['tables'], ['customers'])
     
-    def test_extract_tables_multiple_joins(self):
+    def test_extract_tables_multiple_joins(self) -> None:
         """Test table extraction with multiple JOIN types."""
         sql = """
             SELECT * FROM orders o
@@ -218,7 +218,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertIn('products', tables)
         self.assertIn('categories', tables)
     
-    def test_extract_tables_case_insensitive(self):
+    def test_extract_tables_case_insensitive(self) -> None:
         """Test table extraction is case insensitive."""
         sql = "select * FROM Users join Posts on users.id = posts.user_id"
         result = self.analyzer.analyze_query(sql)
@@ -227,7 +227,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertIn('Users', result['tables'])
         self.assertIn('Posts', result['tables'])
     
-    def test_get_query_type_various_cases(self):
+    def test_get_query_type_various_cases(self) -> None:
         """Test query type detection with various cases and spacing."""
         test_cases = [
             ("  SELECT * FROM users", "SELECT"),
@@ -244,7 +244,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
             result = self.analyzer.analyze_query(sql)
             self.assertEqual(result['type'], expected_type, f"Failed for SQL: {sql}")
     
-    def test_estimate_complexity_cap(self):
+    def test_estimate_complexity_cap(self) -> None:
         """Test that complexity is capped at 10."""
         # Create a query that would have complexity > 10
         sql = """
@@ -266,7 +266,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         # Complexity should be capped at 10
         self.assertEqual(result['estimated_complexity'], 10)
     
-    def test_recommendations_combinations(self):
+    def test_recommendations_combinations(self) -> None:
         """Test different recommendation combinations."""
         # Query with subquery but has LIMIT
         sql1 = "SELECT * FROM users WHERE id IN (SELECT user_id FROM posts) LIMIT 10"
@@ -288,7 +288,7 @@ class TestPythonQueryAnalyzer(unittest.TestCase):
         self.assertIn('Query appears complex, consider optimization', result2['recommendations'])
         self.assertIn('Consider adding LIMIT for large result sets', result2['recommendations'])
     
-    def test_empty_and_whitespace_queries(self):
+    def test_empty_and_whitespace_queries(self) -> None:
         """Test handling of empty and whitespace-only queries."""
         test_cases = ["", "   ", "\n", "\t\n  "]
         

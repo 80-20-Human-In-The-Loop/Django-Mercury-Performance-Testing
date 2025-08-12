@@ -24,7 +24,7 @@ from django_mercury.python_bindings.pure_python import (
 class TestPurePythonIntegration(unittest.TestCase):
     """Integration tests for pure Python components."""
     
-    def test_monitor_and_metrics_engine_integration(self):
+    def test_monitor_and_metrics_engine_integration(self) -> None:
         """Test monitor working with metrics engine."""
         monitor = PythonPerformanceMonitor()
         engine = PythonMetricsEngine()
@@ -49,7 +49,7 @@ class TestPurePythonIntegration(unittest.TestCase):
         self.assertGreater(stats['mean'], 0)
         self.assertEqual(stats['implementation'], 'pure_python')
     
-    def test_monitor_and_query_analyzer_integration(self):
+    def test_monitor_and_query_analyzer_integration(self) -> None:
         """Test monitor tracking queries analyzed by analyzer."""
         monitor = PythonPerformanceMonitor()
         analyzer = PythonQueryAnalyzer()
@@ -76,7 +76,7 @@ class TestPurePythonIntegration(unittest.TestCase):
         self.assertEqual(metrics['query_count'], 3)
         self.assertEqual(len(monitor.metrics.queries), 3)
     
-    def test_orchestrator_full_workflow(self):
+    def test_orchestrator_full_workflow(self) -> None:
         """Test orchestrator managing complete test workflow."""
         orchestrator = PythonTestOrchestrator()
         analyzer = PythonQueryAnalyzer()
@@ -110,7 +110,7 @@ class TestPurePythonIntegration(unittest.TestCase):
         self.assertEqual(summary['passed'], 2)
         self.assertEqual(summary['failed'], 1)
     
-    def test_n_plus_one_detection_workflow(self):
+    def test_n_plus_one_detection_workflow(self) -> None:
         """Test N+1 query detection in a realistic workflow."""
         monitor = PythonPerformanceMonitor()
         engine = PythonMetricsEngine()
@@ -138,7 +138,7 @@ class TestPurePythonIntegration(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.TRACEMALLOC_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.psutil')
     @patch('django_mercury.python_bindings.pure_python.tracemalloc')
-    def test_full_monitoring_with_dependencies(self, mock_tracemalloc, mock_psutil):
+    def test_full_monitoring_with_dependencies(self, mock_tracemalloc, mock_psutil) -> None:
         """Test full monitoring with all optional dependencies available."""
         # Set up mocks
         mock_process = Mock()
@@ -179,7 +179,7 @@ class TestPurePythonIntegration(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.PSUTIL_AVAILABLE', False)
     @patch('django_mercury.python_bindings.pure_python.TRACEMALLOC_AVAILABLE', False)
-    def test_fallback_without_dependencies(self):
+    def test_fallback_without_dependencies(self) -> None:
         """Test that monitoring works without optional dependencies."""
         with python_performance_monitor() as monitor:
             monitor.track_query("SELECT * FROM users", 0.01)
@@ -197,7 +197,7 @@ class TestPurePythonIntegration(unittest.TestCase):
         self.assertEqual(metrics['memory_usage_mb'], 0.0)
         self.assertEqual(metrics['cpu_percent'], 0.0)
     
-    def test_complex_sql_analysis_workflow(self):
+    def test_complex_sql_analysis_workflow(self) -> None:
         """Test analyzing complex SQL queries through the workflow."""
         analyzer = PythonQueryAnalyzer()
         engine = PythonMetricsEngine()
@@ -249,7 +249,7 @@ class TestPurePythonIntegration(unittest.TestCase):
         self.assertEqual(stats['count'], 2)
         self.assertGreater(stats['mean'], 0)
     
-    def test_test_suite_simulation(self):
+    def test_test_suite_simulation(self) -> None:
         """Simulate running a test suite with pure Python components."""
         orchestrator = PythonTestOrchestrator()
         
@@ -288,7 +288,7 @@ class TestPurePythonIntegration(unittest.TestCase):
         self.assertGreater(summary['total_duration'], 0)
         self.assertGreater(summary['avg_response_time_ms'], 0)
     
-    def test_error_handling_integration(self):
+    def test_error_handling_integration(self) -> None:
         """Test error handling across components."""
         monitor = PythonPerformanceMonitor()
         analyzer = PythonQueryAnalyzer()
@@ -308,7 +308,7 @@ class TestPurePythonIntegration(unittest.TestCase):
         # Should handle gracefully
         self.assertEqual(stats['count'], 1)
     
-    def test_performance_comparison_workflow(self):
+    def test_performance_comparison_workflow(self) -> None:
         """Test comparing performance across multiple runs."""
         engine = PythonMetricsEngine()
         

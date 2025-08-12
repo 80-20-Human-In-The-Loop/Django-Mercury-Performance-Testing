@@ -1,0 +1,3412 @@
+        -:    0:Source:test_orchestrator.c
+        -:    0:Source is newer than graph
+        -:    1:/**
+        -:    2: * @file test_orchestrator.c
+        -:    3: * @brief High-Performance Test Orchestration Engine
+        -:    4: * 
+        -:    5: * This library implements a high-performance test orchestration engine for the
+        -:    6: * Mercury Performance Testing Framework. It replaces the Python-based test
+        -:    7: * orchestration in django_integration_mercury.py with optimized C implementations.
+        -:    8: *
+        -:    9: * Key Features:
+        -:   10: * - Binary configuration format replacing JSON parsing
+        -:   11: * - Memory-mapped history tracking replacing SQLite operations
+        -:   12: * - Lock-free data structures with atomic operations
+        -:   13: * - Pre-allocated object pools for context management
+        -:   14: * - Efficient test result aggregation and reporting
+        -:   15: *
+        -:   16: * Performance Target: 75% reduction in test orchestration overhead
+        -:   17: * Memory Usage: Memory-mapped files for zero-copy history access
+        -:   18: *
+        -:   19: * @author EduLite Performance Team
+        -:   20: * @version 2.0.0
+        -:   21: * @date 2024
+        -:   22: */
+        -:   23:
+        -:   24:/* Suppress deprecation warnings on Windows */
+        -:   25:#ifdef _MSC_VER
+        -:   26:    #define _CRT_SECURE_NO_WARNINGS
+        -:   27:#endif
+        -:   28:
+        -:   29:#include "common.h"
+        -:   30:#include "test_orchestrator.h"
+        -:   31:#include <stdlib.h>  /* For malloc, free */
+        -:   32:#include <string.h>  /* For strcpy, strncpy, memcpy, memmove */
+        -:   33:#include <inttypes.h>
+        -:   34:#include <errno.h>
+        -:   35:
+        -:   36:#ifdef _WIN32
+        -:   37:    #include <sys/types.h>
+        -:   38:    #include <sys/stat.h>
+        -:   39:#else
+        -:   40:    #include <sys/stat.h>
+        -:   41:#endif
+        -:   42:
+        -:   43:#ifdef MERCURY_LINUX
+        -:   44:#include <sys/mman.h>
+        -:   45:#include <fcntl.h>
+        -:   46:#include <unistd.h>
+        -:   47:#endif
+        -:   48:
+        -:   49:/* Windows compatibility for POSIX functions */
+        -:   50:#ifdef _WIN32
+        -:   51:    #include <windows.h>
+        -:   52:    #include <io.h>
+        -:   53:    
+        -:   54:    /* File access constants */
+        -:   55:    #ifndef F_OK
+        -:   56:        #define F_OK 0
+        -:   57:    #endif
+        -:   58:    #define access _access
+        -:   59:    
+        -:   60:    /* Memory mapping constants */
+        -:   61:    #ifndef MAP_FAILED
+        -:   62:        #define MAP_FAILED ((void*)-1)
+        -:   63:    #endif
+        -:   64:    #ifndef MS_SYNC
+        -:   65:        #define MS_SYNC 0
+        -:   66:        #define MS_ASYNC 0
+        -:   67:    #endif
+        -:   68:    
+        -:   69:    /* Stub functions for Windows - memory mapping not supported */
+        -:   70:    static inline int msync(void* addr, size_t len, int flags) {
+        -:   71:        (void)addr; (void)len; (void)flags;
+        -:   72:        return 0; /* No-op on Windows */
+        -:   73:    }
+        -:   74:    
+        -:   75:    static inline int munmap(void* addr, size_t len) {
+        -:   76:        (void)addr; (void)len;
+        -:   77:        return 0; /* No-op on Windows */
+        -:   78:    }
+        -:   79:    
+        -:   80:    /* mmap stub - not implemented on Windows */
+        -:   81:    static inline void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset) {
+        -:   82:        (void)addr; (void)length; (void)prot; (void)flags; (void)fd; (void)offset;
+        -:   83:        return MAP_FAILED; /* Always fail on Windows */
+        -:   84:    }
+        -:   85:    
+        -:   86:    /* Protection flags (unused on Windows) */
+        -:   87:    #define PROT_READ 0
+        -:   88:    #define PROT_WRITE 0
+        -:   89:    #define MAP_SHARED 0
+        -:   90:#endif
+        -:   91:
+        -:   92:// === CONSTANTS ===
+        -:   93:
+        -:   94:#define MAX_TEST_CONTEXTS 256
+        -:   95:#define MAX_HISTORY_ENTRIES 10000
+        -:   96:#define CONFIG_MAGIC 0x4D455243  // 'MERC'
+        -:   97:#define CONFIG_VERSION 1
+        -:   98:#define HISTORY_MAGIC 0x48495354 // 'HIST'
+        -:   99:
+        -:  100:// Violation flags (bit field) - copied from metrics_engine.c
+        -:  101:#define VIOLATION_RESPONSE_TIME  (1ULL << 0)
+        -:  102:#define VIOLATION_MEMORY_USAGE   (1ULL << 1)
+        -:  103:#define VIOLATION_QUERY_COUNT    (1ULL << 2)
+        -:  104:#define VIOLATION_CACHE_RATIO    (1ULL << 3)
+        -:  105:#define VIOLATION_N_PLUS_ONE     (1ULL << 4)
+        -:  106:
+        -:  107:// === DATA STRUCTURES ===
+        -:  108:
+        -:  109:/**
+        -:  110: * @struct ConfigHeader
+        -:  111: * @brief Binary configuration file header
+        -:  112: */
+        -:  113:typedef struct MERCURY_PACKED {
+        -:  114:    uint32_t magic;
+        -:  115:    uint16_t version;
+        -:  116:    uint16_t flags;
+        -:  117:    uint32_t config_size;
+        -:  118:    uint32_t checksum;
+        -:  119:} ConfigHeader;
+        -:  120:
+        -:  121:// TestConfig - using anonymous struct from TestContext in header
+        -:  122:
+        -:  123:// History entry for memory-mapped storage
+        -:  124:typedef struct MERCURY_PACKED {
+        -:  125:    uint64_t timestamp_ns;
+        -:  126:    char test_class[128];
+        -:  127:    char test_method[128];
+        -:  128:    char operation_name[128];
+        -:  129:    double response_time_ms;
+        -:  130:    double memory_usage_mb;
+        -:  131:    uint32_t query_count;
+        -:  132:    double performance_score;
+        -:  133:    char grade[4];
+        -:  134:    uint8_t has_n_plus_one;
+        -:  135:    uint8_t severity_level;
+        -:  136:    uint32_t context_data_size;
+        -:  137:    // Variable length context data follows
+        -:  138:} HistoryEntry;
+        -:  139:
+        -:  140:// Memory-mapped history file structure
+        -:  141:typedef struct MERCURY_PACKED {
+        -:  142:    uint32_t magic;
+        -:  143:    uint32_t version;
+        -:  144:    uint64_t entry_count;
+        -:  145:    uint64_t max_entries;
+        -:  146:    uint64_t next_offset;
+        -:  147:    // HistoryEntry entries follow
+        -:  148:} HistoryHeader;
+        -:  149:
+        -:  150:// TestContext is defined in test_orchestrator.h
+        -:  151:// We use the public API version for consistency
+        -:  152:
+        -:  153:// Main orchestrator structure
+        -:  154:typedef struct {
+        -:  155:    // Context pool
+        -:  156:    TestContext* contexts;
+        -:  157:    size_t context_count;
+        -:  158:    size_t max_contexts;
+        -:  159:    
+        -:  160:    // Configuration management
+        -:  161:    void* default_configs;  // Reserved for future use
+        -:  162:    size_t config_count;
+        -:  163:    
+        -:  164:    // Memory-mapped history
+        -:  165:    int history_fd;
+        -:  166:    void* history_mapping;
+        -:  167:    size_t history_file_size;
+        -:  168:    HistoryHeader* history_header;
+        -:  169:    
+        -:  170:    // Statistics
+        -:  171:    MERCURY_ATOMIC(uint64_t) total_tests_executed;
+        -:  172:    MERCURY_ATOMIC(uint64_t) total_violations;
+        -:  173:    MERCURY_ATOMIC(uint64_t) total_n_plus_one_detected;
+        -:  174:    
+        -:  175:    // Lock-free context management
+        -:  176:    MERCURY_ATOMIC(int64_t) next_context_id;
+        -:  177:    
+        -:  178:} TestOrchestrator;
+        -:  179:
+        -:  180:// Global orchestrator instance
+        -:  181:static TestOrchestrator* g_orchestrator = NULL;
+        -:  182:
+        -:  183:// === UTILITY FUNCTIONS ===
+        -:  184:
+        -:  185:// Calculate simple checksum for configuration validation
+        -:  186:#ifdef ENABLE_UNUSED_FUNCTIONS
+        -:  187:static uint32_t calculate_checksum(const void* data, size_t size) {
+        -:  188:    const uint8_t* bytes = (const uint8_t*)data;
+        -:  189:    uint32_t checksum = 0;
+        -:  190:    
+        -:  191:    for (size_t i = 0; i < size; i++) {
+        -:  192:        checksum = ((checksum << 1) | (checksum >> 31)) ^ bytes[i];
+        -:  193:    }
+        -:  194:    
+        -:  195:    return checksum;
+        -:  196:}
+        -:  197:#endif
+        -:  198:
+        -:  199:// Initialize memory-mapped history file
+        3:  200:static MercuryError init_history_file(const char* history_path) {
+        3:  201:    if (!history_path) {
+    #####:  202:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "History path cannot be NULL");
+    #####:  203:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  204:    }
+        -:  205:    
+        -:  206:#ifdef _WIN32
+        -:  207:    // Memory mapping not implemented on Windows
+        -:  208:    MERCURY_WARN("Memory-mapped history not available on Windows - using in-memory only");
+        -:  209:    g_orchestrator->history_mapping = NULL;
+        -:  210:    g_orchestrator->history_header = NULL;
+        -:  211:    g_orchestrator->history_fd = -1;
+        -:  212:    g_orchestrator->history_file_size = 0;
+        -:  213:    return MERCURY_SUCCESS;
+        -:  214:#else
+        -:  215:    
+        -:  216:    // Calculate required file size
+        -:  217:    size_t header_size = sizeof(HistoryHeader);
+        -:  218:    size_t entries_size = MAX_HISTORY_ENTRIES * sizeof(HistoryEntry);
+        -:  219:    size_t total_size = header_size + entries_size + (64 * 1024); // Extra space for context data
+        -:  220:    
+        3:  221:    g_orchestrator->history_file_size = total_size;
+        -:  222:    
+        -:  223:    // Open or create history file
+        3:  224:    g_orchestrator->history_fd = open(history_path, O_RDWR | O_CREAT, 0644);
+        3:  225:    if (g_orchestrator->history_fd == -1) {
+    #####:  226:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to open history file");
+    #####:  227:        return MERCURY_ERROR_IO_ERROR;
+        -:  228:    }
+        -:  229:    
+        -:  230:    // Check if file exists and has correct size
+        -:  231:    struct stat st;
+        3:  232:    if (fstat(g_orchestrator->history_fd, &st) != 0) {
+    #####:  233:        close(g_orchestrator->history_fd);
+    #####:  234:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to stat history file");
+    #####:  235:        return MERCURY_ERROR_IO_ERROR;
+        -:  236:    }
+        -:  237:    
+        -:  238:    // Extend file if necessary
+        3:  239:    if (st.st_size < (off_t)total_size) {
+    #####:  240:        if (ftruncate(g_orchestrator->history_fd, total_size) != 0) {
+    #####:  241:            close(g_orchestrator->history_fd);
+    #####:  242:            MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to extend history file");
+    #####:  243:            return MERCURY_ERROR_IO_ERROR;
+        -:  244:        }
+        -:  245:    }
+        -:  246:    
+        -:  247:    // Memory map the file
+        6:  248:    g_orchestrator->history_mapping = mmap(NULL, total_size, PROT_READ | PROT_WRITE, 
+        3:  249:                                          MAP_SHARED, g_orchestrator->history_fd, 0);
+        3:  250:    if (g_orchestrator->history_mapping == MAP_FAILED) {
+        -:  251:        char error_msg[256];
+    #####:  252:        snprintf(error_msg, sizeof(error_msg), "Failed to map history file: %s", strerror(errno));
+    #####:  253:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, error_msg);
+    #####:  254:        close(g_orchestrator->history_fd);
+    #####:  255:        g_orchestrator->history_fd = -1;
+    #####:  256:        g_orchestrator->history_mapping = NULL;
+        -:  257:        return MERCURY_ERROR_IO_ERROR;
+        -:  258:    }
+        -:  259:    
+        3:  260:    g_orchestrator->history_header = (HistoryHeader*)g_orchestrator->history_mapping;
+        -:  261:    
+        -:  262:    // Initialize header if new file
+        3:  263:    if (st.st_size < (off_t)sizeof(HistoryHeader) || 
+        3:  264:        g_orchestrator->history_header->magic != HISTORY_MAGIC) {
+        -:  265:        
+    #####:  266:        g_orchestrator->history_header->magic = HISTORY_MAGIC;
+    #####:  267:        g_orchestrator->history_header->version = 1;
+    #####:  268:        g_orchestrator->history_header->entry_count = 0;
+    #####:  269:        g_orchestrator->history_header->max_entries = MAX_HISTORY_ENTRIES;
+    #####:  270:        g_orchestrator->history_header->next_offset = sizeof(HistoryHeader);
+        -:  271:        
+        -:  272:        // Sync to disk
+    #####:  273:        if (msync(g_orchestrator->history_mapping, sizeof(HistoryHeader), MS_SYNC) != 0) {
+    #####:  274:            MERCURY_WARN("Failed to sync history header");
+        -:  275:        }
+        -:  276:    }
+        -:  277:    
+        3:  278:    MERCURY_INFO("History file initialized: %s (%zu bytes, %llu entries)", 
+        -:  279:                 history_path, total_size, g_orchestrator->history_header->entry_count);
+        -:  280:    
+        -:  281:    return MERCURY_SUCCESS;
+        -:  282:#endif  // !_WIN32
+        -:  283:}
+------------------
+init_history_file:
+function init_history_file called 1 returned 100% blocks executed 46%
+        1:  200:static MercuryError init_history_file(const char* history_path) {
+        1:  201:    if (!history_path) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  202:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "History path cannot be NULL");
+    #####:  203:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  204:    }
+        -:  205:    
+        -:  206:#ifdef _WIN32
+        -:  207:    // Memory mapping not implemented on Windows
+        -:  208:    MERCURY_WARN("Memory-mapped history not available on Windows - using in-memory only");
+        -:  209:    g_orchestrator->history_mapping = NULL;
+        -:  210:    g_orchestrator->history_header = NULL;
+        -:  211:    g_orchestrator->history_fd = -1;
+        -:  212:    g_orchestrator->history_file_size = 0;
+        -:  213:    return MERCURY_SUCCESS;
+        -:  214:#else
+        -:  215:    
+        -:  216:    // Calculate required file size
+        -:  217:    size_t header_size = sizeof(HistoryHeader);
+        -:  218:    size_t entries_size = MAX_HISTORY_ENTRIES * sizeof(HistoryEntry);
+        -:  219:    size_t total_size = header_size + entries_size + (64 * 1024); // Extra space for context data
+        -:  220:    
+        1:  221:    g_orchestrator->history_file_size = total_size;
+call    0 returned 100%
+        -:  222:    
+        -:  223:    // Open or create history file
+        1:  224:    g_orchestrator->history_fd = open(history_path, O_RDWR | O_CREAT, 0644);
+        1:  225:    if (g_orchestrator->history_fd == -1) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  226:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to open history file");
+    #####:  227:        return MERCURY_ERROR_IO_ERROR;
+        -:  228:    }
+        -:  229:    
+        -:  230:    // Check if file exists and has correct size
+        -:  231:    struct stat st;
+        1:  232:    if (fstat(g_orchestrator->history_fd, &st) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  233:        close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  234:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to stat history file");
+    #####:  235:        return MERCURY_ERROR_IO_ERROR;
+        -:  236:    }
+        -:  237:    
+        -:  238:    // Extend file if necessary
+        1:  239:    if (st.st_size < (off_t)total_size) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  240:        if (ftruncate(g_orchestrator->history_fd, total_size) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  241:            close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  242:            MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to extend history file");
+    #####:  243:            return MERCURY_ERROR_IO_ERROR;
+        -:  244:        }
+        -:  245:    }
+        -:  246:    
+        -:  247:    // Memory map the file
+        2:  248:    g_orchestrator->history_mapping = mmap(NULL, total_size, PROT_READ | PROT_WRITE, 
+        1:  249:                                          MAP_SHARED, g_orchestrator->history_fd, 0);
+call    0 returned 100%
+        1:  250:    if (g_orchestrator->history_mapping == MAP_FAILED) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  251:        char error_msg[256];
+    #####:  252:        snprintf(error_msg, sizeof(error_msg), "Failed to map history file: %s", strerror(errno));
+call    0 never executed
+    #####:  253:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, error_msg);
+    #####:  254:        close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  255:        g_orchestrator->history_fd = -1;
+    #####:  256:        g_orchestrator->history_mapping = NULL;
+        -:  257:        return MERCURY_ERROR_IO_ERROR;
+        -:  258:    }
+        -:  259:    
+        1:  260:    g_orchestrator->history_header = (HistoryHeader*)g_orchestrator->history_mapping;
+        -:  261:    
+        -:  262:    // Initialize header if new file
+        1:  263:    if (st.st_size < (off_t)sizeof(HistoryHeader) || 
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  264:        g_orchestrator->history_header->magic != HISTORY_MAGIC) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  265:        
+    #####:  266:        g_orchestrator->history_header->magic = HISTORY_MAGIC;
+    #####:  267:        g_orchestrator->history_header->version = 1;
+    #####:  268:        g_orchestrator->history_header->entry_count = 0;
+    #####:  269:        g_orchestrator->history_header->max_entries = MAX_HISTORY_ENTRIES;
+    #####:  270:        g_orchestrator->history_header->next_offset = sizeof(HistoryHeader);
+        -:  271:        
+        -:  272:        // Sync to disk
+    #####:  273:        if (msync(g_orchestrator->history_mapping, sizeof(HistoryHeader), MS_SYNC) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  274:            MERCURY_WARN("Failed to sync history header");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  275:        }
+        -:  276:    }
+        -:  277:    
+        1:  278:    MERCURY_INFO("History file initialized: %s (%zu bytes, %llu entries)", 
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  279:                 history_path, total_size, g_orchestrator->history_header->entry_count);
+        -:  280:    
+        -:  281:    return MERCURY_SUCCESS;
+        -:  282:#endif  // !_WIN32
+        -:  283:}
+------------------
+init_history_file:
+function init_history_file called 1 returned 100% blocks executed 46%
+        1:  200:static MercuryError init_history_file(const char* history_path) {
+        1:  201:    if (!history_path) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  202:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "History path cannot be NULL");
+    #####:  203:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  204:    }
+        -:  205:    
+        -:  206:#ifdef _WIN32
+        -:  207:    // Memory mapping not implemented on Windows
+        -:  208:    MERCURY_WARN("Memory-mapped history not available on Windows - using in-memory only");
+        -:  209:    g_orchestrator->history_mapping = NULL;
+        -:  210:    g_orchestrator->history_header = NULL;
+        -:  211:    g_orchestrator->history_fd = -1;
+        -:  212:    g_orchestrator->history_file_size = 0;
+        -:  213:    return MERCURY_SUCCESS;
+        -:  214:#else
+        -:  215:    
+        -:  216:    // Calculate required file size
+        -:  217:    size_t header_size = sizeof(HistoryHeader);
+        -:  218:    size_t entries_size = MAX_HISTORY_ENTRIES * sizeof(HistoryEntry);
+        -:  219:    size_t total_size = header_size + entries_size + (64 * 1024); // Extra space for context data
+        -:  220:    
+        1:  221:    g_orchestrator->history_file_size = total_size;
+call    0 returned 100%
+        -:  222:    
+        -:  223:    // Open or create history file
+        1:  224:    g_orchestrator->history_fd = open(history_path, O_RDWR | O_CREAT, 0644);
+        1:  225:    if (g_orchestrator->history_fd == -1) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  226:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to open history file");
+    #####:  227:        return MERCURY_ERROR_IO_ERROR;
+        -:  228:    }
+        -:  229:    
+        -:  230:    // Check if file exists and has correct size
+        -:  231:    struct stat st;
+        1:  232:    if (fstat(g_orchestrator->history_fd, &st) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  233:        close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  234:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to stat history file");
+    #####:  235:        return MERCURY_ERROR_IO_ERROR;
+        -:  236:    }
+        -:  237:    
+        -:  238:    // Extend file if necessary
+        1:  239:    if (st.st_size < (off_t)total_size) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  240:        if (ftruncate(g_orchestrator->history_fd, total_size) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  241:            close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  242:            MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to extend history file");
+    #####:  243:            return MERCURY_ERROR_IO_ERROR;
+        -:  244:        }
+        -:  245:    }
+        -:  246:    
+        -:  247:    // Memory map the file
+        2:  248:    g_orchestrator->history_mapping = mmap(NULL, total_size, PROT_READ | PROT_WRITE, 
+        1:  249:                                          MAP_SHARED, g_orchestrator->history_fd, 0);
+call    0 returned 100%
+        1:  250:    if (g_orchestrator->history_mapping == MAP_FAILED) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  251:        char error_msg[256];
+    #####:  252:        snprintf(error_msg, sizeof(error_msg), "Failed to map history file: %s", strerror(errno));
+call    0 never executed
+    #####:  253:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, error_msg);
+    #####:  254:        close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  255:        g_orchestrator->history_fd = -1;
+    #####:  256:        g_orchestrator->history_mapping = NULL;
+        -:  257:        return MERCURY_ERROR_IO_ERROR;
+        -:  258:    }
+        -:  259:    
+        1:  260:    g_orchestrator->history_header = (HistoryHeader*)g_orchestrator->history_mapping;
+        -:  261:    
+        -:  262:    // Initialize header if new file
+        1:  263:    if (st.st_size < (off_t)sizeof(HistoryHeader) || 
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  264:        g_orchestrator->history_header->magic != HISTORY_MAGIC) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  265:        
+    #####:  266:        g_orchestrator->history_header->magic = HISTORY_MAGIC;
+    #####:  267:        g_orchestrator->history_header->version = 1;
+    #####:  268:        g_orchestrator->history_header->entry_count = 0;
+    #####:  269:        g_orchestrator->history_header->max_entries = MAX_HISTORY_ENTRIES;
+    #####:  270:        g_orchestrator->history_header->next_offset = sizeof(HistoryHeader);
+        -:  271:        
+        -:  272:        // Sync to disk
+    #####:  273:        if (msync(g_orchestrator->history_mapping, sizeof(HistoryHeader), MS_SYNC) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  274:            MERCURY_WARN("Failed to sync history header");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  275:        }
+        -:  276:    }
+        -:  277:    
+        1:  278:    MERCURY_INFO("History file initialized: %s (%zu bytes, %llu entries)", 
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  279:                 history_path, total_size, g_orchestrator->history_header->entry_count);
+        -:  280:    
+        -:  281:    return MERCURY_SUCCESS;
+        -:  282:#endif  // !_WIN32
+        -:  283:}
+------------------
+init_history_file:
+function init_history_file called 1 returned 100% blocks executed 46%
+        1:  200:static MercuryError init_history_file(const char* history_path) {
+        1:  201:    if (!history_path) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  202:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "History path cannot be NULL");
+    #####:  203:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  204:    }
+        -:  205:    
+        -:  206:#ifdef _WIN32
+        -:  207:    // Memory mapping not implemented on Windows
+        -:  208:    MERCURY_WARN("Memory-mapped history not available on Windows - using in-memory only");
+        -:  209:    g_orchestrator->history_mapping = NULL;
+        -:  210:    g_orchestrator->history_header = NULL;
+        -:  211:    g_orchestrator->history_fd = -1;
+        -:  212:    g_orchestrator->history_file_size = 0;
+        -:  213:    return MERCURY_SUCCESS;
+        -:  214:#else
+        -:  215:    
+        -:  216:    // Calculate required file size
+        -:  217:    size_t header_size = sizeof(HistoryHeader);
+        -:  218:    size_t entries_size = MAX_HISTORY_ENTRIES * sizeof(HistoryEntry);
+        -:  219:    size_t total_size = header_size + entries_size + (64 * 1024); // Extra space for context data
+        -:  220:    
+        1:  221:    g_orchestrator->history_file_size = total_size;
+call    0 returned 100%
+        -:  222:    
+        -:  223:    // Open or create history file
+        1:  224:    g_orchestrator->history_fd = open(history_path, O_RDWR | O_CREAT, 0644);
+        1:  225:    if (g_orchestrator->history_fd == -1) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  226:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to open history file");
+    #####:  227:        return MERCURY_ERROR_IO_ERROR;
+        -:  228:    }
+        -:  229:    
+        -:  230:    // Check if file exists and has correct size
+        -:  231:    struct stat st;
+        1:  232:    if (fstat(g_orchestrator->history_fd, &st) != 0) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  233:        close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  234:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to stat history file");
+    #####:  235:        return MERCURY_ERROR_IO_ERROR;
+        -:  236:    }
+        -:  237:    
+        -:  238:    // Extend file if necessary
+        1:  239:    if (st.st_size < (off_t)total_size) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  240:        if (ftruncate(g_orchestrator->history_fd, total_size) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  241:            close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  242:            MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, "Failed to extend history file");
+    #####:  243:            return MERCURY_ERROR_IO_ERROR;
+        -:  244:        }
+        -:  245:    }
+        -:  246:    
+        -:  247:    // Memory map the file
+        2:  248:    g_orchestrator->history_mapping = mmap(NULL, total_size, PROT_READ | PROT_WRITE, 
+        1:  249:                                          MAP_SHARED, g_orchestrator->history_fd, 0);
+call    0 returned 100%
+        1:  250:    if (g_orchestrator->history_mapping == MAP_FAILED) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  251:        char error_msg[256];
+    #####:  252:        snprintf(error_msg, sizeof(error_msg), "Failed to map history file: %s", strerror(errno));
+call    0 never executed
+    #####:  253:        MERCURY_SET_ERROR(MERCURY_ERROR_IO_ERROR, error_msg);
+    #####:  254:        close(g_orchestrator->history_fd);
+call    0 never executed
+    #####:  255:        g_orchestrator->history_fd = -1;
+    #####:  256:        g_orchestrator->history_mapping = NULL;
+        -:  257:        return MERCURY_ERROR_IO_ERROR;
+        -:  258:    }
+        -:  259:    
+        1:  260:    g_orchestrator->history_header = (HistoryHeader*)g_orchestrator->history_mapping;
+        -:  261:    
+        -:  262:    // Initialize header if new file
+        1:  263:    if (st.st_size < (off_t)sizeof(HistoryHeader) || 
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  264:        g_orchestrator->history_header->magic != HISTORY_MAGIC) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  265:        
+    #####:  266:        g_orchestrator->history_header->magic = HISTORY_MAGIC;
+    #####:  267:        g_orchestrator->history_header->version = 1;
+    #####:  268:        g_orchestrator->history_header->entry_count = 0;
+    #####:  269:        g_orchestrator->history_header->max_entries = MAX_HISTORY_ENTRIES;
+    #####:  270:        g_orchestrator->history_header->next_offset = sizeof(HistoryHeader);
+        -:  271:        
+        -:  272:        // Sync to disk
+    #####:  273:        if (msync(g_orchestrator->history_mapping, sizeof(HistoryHeader), MS_SYNC) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  274:            MERCURY_WARN("Failed to sync history header");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  275:        }
+        -:  276:    }
+        -:  277:    
+        1:  278:    MERCURY_INFO("History file initialized: %s (%zu bytes, %llu entries)", 
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  279:                 history_path, total_size, g_orchestrator->history_header->entry_count);
+        -:  280:    
+        -:  281:    return MERCURY_SUCCESS;
+        -:  282:#endif  // !_WIN32
+        -:  283:}
+------------------
+        -:  284:
+        -:  285:// Cleanup memory-mapped history
+        3:  286:static void cleanup_history_file(void) {
+        -:  287:#ifdef _WIN32
+        -:  288:    // No-op on Windows - memory mapping not implemented
+        -:  289:    return;
+        -:  290:#else
+        3:  291:    if (g_orchestrator->history_mapping && g_orchestrator->history_mapping != MAP_FAILED) {
+        3:  292:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_SYNC);
+        3:  293:        munmap(g_orchestrator->history_mapping, g_orchestrator->history_file_size);
+        3:  294:        g_orchestrator->history_mapping = NULL;
+        -:  295:    }
+        -:  296:    
+        3:  297:    if (g_orchestrator->history_fd >= 0) {
+        3:  298:        close(g_orchestrator->history_fd);
+        3:  299:        g_orchestrator->history_fd = -1;
+        -:  300:    }
+        -:  301:#endif
+        3:  302:}
+------------------
+cleanup_history_file:
+function cleanup_history_file called 1 returned 100% blocks executed 100%
+        1:  286:static void cleanup_history_file(void) {
+        -:  287:#ifdef _WIN32
+        -:  288:    // No-op on Windows - memory mapping not implemented
+        -:  289:    return;
+        -:  290:#else
+        1:  291:    if (g_orchestrator->history_mapping && g_orchestrator->history_mapping != MAP_FAILED) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  292:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_SYNC);
+call    0 returned 100%
+        1:  293:        munmap(g_orchestrator->history_mapping, g_orchestrator->history_file_size);
+call    0 returned 100%
+        1:  294:        g_orchestrator->history_mapping = NULL;
+        -:  295:    }
+        -:  296:    
+        1:  297:    if (g_orchestrator->history_fd >= 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  298:        close(g_orchestrator->history_fd);
+call    0 returned 100%
+        1:  299:        g_orchestrator->history_fd = -1;
+        -:  300:    }
+        -:  301:#endif
+        1:  302:}
+------------------
+cleanup_history_file:
+function cleanup_history_file called 1 returned 100% blocks executed 100%
+        1:  286:static void cleanup_history_file(void) {
+        -:  287:#ifdef _WIN32
+        -:  288:    // No-op on Windows - memory mapping not implemented
+        -:  289:    return;
+        -:  290:#else
+        1:  291:    if (g_orchestrator->history_mapping && g_orchestrator->history_mapping != MAP_FAILED) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  292:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_SYNC);
+call    0 returned 100%
+        1:  293:        munmap(g_orchestrator->history_mapping, g_orchestrator->history_file_size);
+call    0 returned 100%
+        1:  294:        g_orchestrator->history_mapping = NULL;
+        -:  295:    }
+        -:  296:    
+        1:  297:    if (g_orchestrator->history_fd >= 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  298:        close(g_orchestrator->history_fd);
+call    0 returned 100%
+        1:  299:        g_orchestrator->history_fd = -1;
+        -:  300:    }
+        -:  301:#endif
+        1:  302:}
+------------------
+cleanup_history_file:
+function cleanup_history_file called 1 returned 100% blocks executed 100%
+        1:  286:static void cleanup_history_file(void) {
+        -:  287:#ifdef _WIN32
+        -:  288:    // No-op on Windows - memory mapping not implemented
+        -:  289:    return;
+        -:  290:#else
+        1:  291:    if (g_orchestrator->history_mapping && g_orchestrator->history_mapping != MAP_FAILED) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  292:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_SYNC);
+call    0 returned 100%
+        1:  293:        munmap(g_orchestrator->history_mapping, g_orchestrator->history_file_size);
+call    0 returned 100%
+        1:  294:        g_orchestrator->history_mapping = NULL;
+        -:  295:    }
+        -:  296:    
+        1:  297:    if (g_orchestrator->history_fd >= 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  298:        close(g_orchestrator->history_fd);
+call    0 returned 100%
+        1:  299:        g_orchestrator->history_fd = -1;
+        -:  300:    }
+        -:  301:#endif
+        1:  302:}
+------------------
+        -:  303:
+        -:  304:// Store test result in memory-mapped history
+      823:  305:static MercuryError store_test_result(const TestContext* context) {
+      823:  306:    if (!context) {
+        -:  307:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  308:    }
+        -:  309:    
+        -:  310:#ifdef _WIN32
+        -:  311:    // History storage not implemented on Windows
+        -:  312:    return MERCURY_SUCCESS;
+        -:  313:#else
+      823:  314:    if (!g_orchestrator->history_header) {
+        -:  315:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  316:    }
+        -:  317:    
+        -:  318:    // Check if we have space
+      823:  319:    if (g_orchestrator->history_header->entry_count >= g_orchestrator->history_header->max_entries) {
+        -:  320:        // Could implement circular buffer logic here
+        -:  321:        static int warn_count = 0;
+      823:  322:        if (warn_count < 5) {
+       15:  323:            MERCURY_WARN("History buffer full, cannot store new entry");
+       15:  324:            warn_count++;
+       15:  325:            if (warn_count == 5) {
+        3:  326:                MERCURY_WARN("Suppressing further history buffer full warnings...");
+        -:  327:            }
+        -:  328:        }
+      823:  329:        return MERCURY_ERROR_BUFFER_OVERFLOW;
+        -:  330:    }
+        -:  331:    
+        -:  332:    // Calculate entry position
+    #####:  333:    uint64_t entry_offset = g_orchestrator->history_header->next_offset;
+    #####:  334:    HistoryEntry* entry = (HistoryEntry*)((char*)g_orchestrator->history_mapping + entry_offset);
+        -:  335:    
+        -:  336:    // Fill entry
+    #####:  337:    entry->timestamp_ns = mercury_get_timestamp().nanoseconds;
+    #####:  338:    strncpy(entry->test_class, context->test_class, sizeof(entry->test_class) - 1);
+    #####:  339:    entry->test_class[sizeof(entry->test_class) - 1] = '\0';
+    #####:  340:    strncpy(entry->test_method, context->test_method, sizeof(entry->test_method) - 1);
+    #####:  341:    entry->test_method[sizeof(entry->test_method) - 1] = '\0';
+        -:  342:    
+        -:  343:    // Create operation name from class and method
+    #####:  344:    snprintf(entry->operation_name, sizeof(entry->operation_name), "%s::%s", 
+        -:  345:             context->test_class, context->test_method);
+        -:  346:    
+    #####:  347:    entry->response_time_ms = context->response_time_ms;
+    #####:  348:    entry->memory_usage_mb = context->memory_usage_mb;
+    #####:  349:    entry->query_count = context->query_count;
+    #####:  350:    entry->performance_score = context->performance_score;
+    #####:  351:    strncpy(entry->grade, context->grade, sizeof(entry->grade) - 1);
+    #####:  352:    entry->grade[sizeof(entry->grade) - 1] = '\0';
+    #####:  353:    entry->has_n_plus_one = context->has_n_plus_one ? 1 : 0;
+    #####:  354:    entry->severity_level = context->severity_level;
+    #####:  355:    entry->context_data_size = 0;  // No additional context data for now
+        -:  356:    
+        -:  357:    // Update header
+    #####:  358:    g_orchestrator->history_header->entry_count++;
+    #####:  359:    g_orchestrator->history_header->next_offset += sizeof(HistoryEntry) + entry->context_data_size;
+        -:  360:    
+        -:  361:    // Periodic sync (every 10 entries)
+    #####:  362:    if (g_orchestrator->history_header->entry_count % 10 == 0) {
+    #####:  363:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_ASYNC);
+        -:  364:    }
+        -:  365:    
+        -:  366:    return MERCURY_SUCCESS;
+        -:  367:#endif  // !_WIN32
+        -:  368:}
+------------------
+store_test_result:
+function store_test_result called 7 returned 100% blocks executed 79%
+        7:  305:static MercuryError store_test_result(const TestContext* context) {
+        7:  306:    if (!context) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  307:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  308:    }
+        -:  309:    
+        -:  310:#ifdef _WIN32
+        -:  311:    // History storage not implemented on Windows
+        -:  312:    return MERCURY_SUCCESS;
+        -:  313:#else
+        7:  314:    if (!g_orchestrator->history_header) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  315:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  316:    }
+        -:  317:    
+        -:  318:    // Check if we have space
+        7:  319:    if (g_orchestrator->history_header->entry_count >= g_orchestrator->history_header->max_entries) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  320:        // Could implement circular buffer logic here
+        -:  321:        static int warn_count = 0;
+        7:  322:        if (warn_count < 5) {
+branch  0 taken 71% (fallthrough)
+branch  1 taken 29%
+        5:  323:            MERCURY_WARN("History buffer full, cannot store new entry");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        5:  324:            warn_count++;
+        5:  325:            if (warn_count == 5) {
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+        1:  326:                MERCURY_WARN("Suppressing further history buffer full warnings...");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  327:            }
+        -:  328:        }
+        7:  329:        return MERCURY_ERROR_BUFFER_OVERFLOW;
+        -:  330:    }
+        -:  331:    
+        -:  332:    // Calculate entry position
+    #####:  333:    uint64_t entry_offset = g_orchestrator->history_header->next_offset;
+    #####:  334:    HistoryEntry* entry = (HistoryEntry*)((char*)g_orchestrator->history_mapping + entry_offset);
+        -:  335:    
+        -:  336:    // Fill entry
+    #####:  337:    entry->timestamp_ns = mercury_get_timestamp().nanoseconds;
+call    0 never executed
+    #####:  338:    strncpy(entry->test_class, context->test_class, sizeof(entry->test_class) - 1);
+branch  0 never executed
+branch  1 never executed
+    #####:  339:    entry->test_class[sizeof(entry->test_class) - 1] = '\0';
+    #####:  340:    strncpy(entry->test_method, context->test_method, sizeof(entry->test_method) - 1);
+    #####:  341:    entry->test_method[sizeof(entry->test_method) - 1] = '\0';
+        -:  342:    
+        -:  343:    // Create operation name from class and method
+    #####:  344:    snprintf(entry->operation_name, sizeof(entry->operation_name), "%s::%s", 
+branch  0 never executed
+branch  1 never executed
+        -:  345:             context->test_class, context->test_method);
+        -:  346:    
+    #####:  347:    entry->response_time_ms = context->response_time_ms;
+    #####:  348:    entry->memory_usage_mb = context->memory_usage_mb;
+    #####:  349:    entry->query_count = context->query_count;
+    #####:  350:    entry->performance_score = context->performance_score;
+    #####:  351:    strncpy(entry->grade, context->grade, sizeof(entry->grade) - 1);
+    #####:  352:    entry->grade[sizeof(entry->grade) - 1] = '\0';
+    #####:  353:    entry->has_n_plus_one = context->has_n_plus_one ? 1 : 0;
+    #####:  354:    entry->severity_level = context->severity_level;
+    #####:  355:    entry->context_data_size = 0;  // No additional context data for now
+        -:  356:    
+        -:  357:    // Update header
+    #####:  358:    g_orchestrator->history_header->entry_count++;
+    #####:  359:    g_orchestrator->history_header->next_offset += sizeof(HistoryEntry) + entry->context_data_size;
+        -:  360:    
+        -:  361:    // Periodic sync (every 10 entries)
+    #####:  362:    if (g_orchestrator->history_header->entry_count % 10 == 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  363:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_ASYNC);
+call    0 never executed
+        -:  364:    }
+        -:  365:    
+        -:  366:    return MERCURY_SUCCESS;
+        -:  367:#endif  // !_WIN32
+        -:  368:}
+------------------
+store_test_result:
+function store_test_result called 340 returned 100% blocks executed 79%
+      340:  305:static MercuryError store_test_result(const TestContext* context) {
+      340:  306:    if (!context) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  307:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  308:    }
+        -:  309:    
+        -:  310:#ifdef _WIN32
+        -:  311:    // History storage not implemented on Windows
+        -:  312:    return MERCURY_SUCCESS;
+        -:  313:#else
+      340:  314:    if (!g_orchestrator->history_header) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  315:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  316:    }
+        -:  317:    
+        -:  318:    // Check if we have space
+      340:  319:    if (g_orchestrator->history_header->entry_count >= g_orchestrator->history_header->max_entries) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  320:        // Could implement circular buffer logic here
+        -:  321:        static int warn_count = 0;
+      340:  322:        if (warn_count < 5) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        5:  323:            MERCURY_WARN("History buffer full, cannot store new entry");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        5:  324:            warn_count++;
+        5:  325:            if (warn_count == 5) {
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+        1:  326:                MERCURY_WARN("Suppressing further history buffer full warnings...");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  327:            }
+        -:  328:        }
+      340:  329:        return MERCURY_ERROR_BUFFER_OVERFLOW;
+        -:  330:    }
+        -:  331:    
+        -:  332:    // Calculate entry position
+    #####:  333:    uint64_t entry_offset = g_orchestrator->history_header->next_offset;
+    #####:  334:    HistoryEntry* entry = (HistoryEntry*)((char*)g_orchestrator->history_mapping + entry_offset);
+        -:  335:    
+        -:  336:    // Fill entry
+    #####:  337:    entry->timestamp_ns = mercury_get_timestamp().nanoseconds;
+call    0 never executed
+    #####:  338:    strncpy(entry->test_class, context->test_class, sizeof(entry->test_class) - 1);
+branch  0 never executed
+branch  1 never executed
+    #####:  339:    entry->test_class[sizeof(entry->test_class) - 1] = '\0';
+    #####:  340:    strncpy(entry->test_method, context->test_method, sizeof(entry->test_method) - 1);
+    #####:  341:    entry->test_method[sizeof(entry->test_method) - 1] = '\0';
+        -:  342:    
+        -:  343:    // Create operation name from class and method
+    #####:  344:    snprintf(entry->operation_name, sizeof(entry->operation_name), "%s::%s", 
+branch  0 never executed
+branch  1 never executed
+        -:  345:             context->test_class, context->test_method);
+        -:  346:    
+    #####:  347:    entry->response_time_ms = context->response_time_ms;
+    #####:  348:    entry->memory_usage_mb = context->memory_usage_mb;
+    #####:  349:    entry->query_count = context->query_count;
+    #####:  350:    entry->performance_score = context->performance_score;
+    #####:  351:    strncpy(entry->grade, context->grade, sizeof(entry->grade) - 1);
+    #####:  352:    entry->grade[sizeof(entry->grade) - 1] = '\0';
+    #####:  353:    entry->has_n_plus_one = context->has_n_plus_one ? 1 : 0;
+    #####:  354:    entry->severity_level = context->severity_level;
+    #####:  355:    entry->context_data_size = 0;  // No additional context data for now
+        -:  356:    
+        -:  357:    // Update header
+    #####:  358:    g_orchestrator->history_header->entry_count++;
+    #####:  359:    g_orchestrator->history_header->next_offset += sizeof(HistoryEntry) + entry->context_data_size;
+        -:  360:    
+        -:  361:    // Periodic sync (every 10 entries)
+    #####:  362:    if (g_orchestrator->history_header->entry_count % 10 == 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  363:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_ASYNC);
+call    0 never executed
+        -:  364:    }
+        -:  365:    
+        -:  366:    return MERCURY_SUCCESS;
+        -:  367:#endif  // !_WIN32
+        -:  368:}
+------------------
+store_test_result:
+function store_test_result called 476 returned 100% blocks executed 79%
+      476:  305:static MercuryError store_test_result(const TestContext* context) {
+      476:  306:    if (!context) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  307:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  308:    }
+        -:  309:    
+        -:  310:#ifdef _WIN32
+        -:  311:    // History storage not implemented on Windows
+        -:  312:    return MERCURY_SUCCESS;
+        -:  313:#else
+      476:  314:    if (!g_orchestrator->history_header) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  315:        return MERCURY_ERROR_INVALID_ARGUMENT;
+        -:  316:    }
+        -:  317:    
+        -:  318:    // Check if we have space
+      476:  319:    if (g_orchestrator->history_header->entry_count >= g_orchestrator->history_header->max_entries) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  320:        // Could implement circular buffer logic here
+        -:  321:        static int warn_count = 0;
+      476:  322:        if (warn_count < 5) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        5:  323:            MERCURY_WARN("History buffer full, cannot store new entry");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        5:  324:            warn_count++;
+        5:  325:            if (warn_count == 5) {
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+        1:  326:                MERCURY_WARN("Suppressing further history buffer full warnings...");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  327:            }
+        -:  328:        }
+      476:  329:        return MERCURY_ERROR_BUFFER_OVERFLOW;
+        -:  330:    }
+        -:  331:    
+        -:  332:    // Calculate entry position
+    #####:  333:    uint64_t entry_offset = g_orchestrator->history_header->next_offset;
+    #####:  334:    HistoryEntry* entry = (HistoryEntry*)((char*)g_orchestrator->history_mapping + entry_offset);
+        -:  335:    
+        -:  336:    // Fill entry
+    #####:  337:    entry->timestamp_ns = mercury_get_timestamp().nanoseconds;
+call    0 never executed
+    #####:  338:    strncpy(entry->test_class, context->test_class, sizeof(entry->test_class) - 1);
+branch  0 never executed
+branch  1 never executed
+    #####:  339:    entry->test_class[sizeof(entry->test_class) - 1] = '\0';
+    #####:  340:    strncpy(entry->test_method, context->test_method, sizeof(entry->test_method) - 1);
+    #####:  341:    entry->test_method[sizeof(entry->test_method) - 1] = '\0';
+        -:  342:    
+        -:  343:    // Create operation name from class and method
+    #####:  344:    snprintf(entry->operation_name, sizeof(entry->operation_name), "%s::%s", 
+branch  0 never executed
+branch  1 never executed
+        -:  345:             context->test_class, context->test_method);
+        -:  346:    
+    #####:  347:    entry->response_time_ms = context->response_time_ms;
+    #####:  348:    entry->memory_usage_mb = context->memory_usage_mb;
+    #####:  349:    entry->query_count = context->query_count;
+    #####:  350:    entry->performance_score = context->performance_score;
+    #####:  351:    strncpy(entry->grade, context->grade, sizeof(entry->grade) - 1);
+    #####:  352:    entry->grade[sizeof(entry->grade) - 1] = '\0';
+    #####:  353:    entry->has_n_plus_one = context->has_n_plus_one ? 1 : 0;
+    #####:  354:    entry->severity_level = context->severity_level;
+    #####:  355:    entry->context_data_size = 0;  // No additional context data for now
+        -:  356:    
+        -:  357:    // Update header
+    #####:  358:    g_orchestrator->history_header->entry_count++;
+    #####:  359:    g_orchestrator->history_header->next_offset += sizeof(HistoryEntry) + entry->context_data_size;
+        -:  360:    
+        -:  361:    // Periodic sync (every 10 entries)
+    #####:  362:    if (g_orchestrator->history_header->entry_count % 10 == 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  363:        msync(g_orchestrator->history_mapping, g_orchestrator->history_file_size, MS_ASYNC);
+call    0 never executed
+        -:  364:    }
+        -:  365:    
+        -:  366:    return MERCURY_SUCCESS;
+        -:  367:#endif  // !_WIN32
+        -:  368:}
+------------------
+        -:  369:
+        -:  370:// === ORCHESTRATOR INITIALIZATION ===
+        -:  371:
+        3:  372:static MercuryError init_test_orchestrator(const char* history_path) {
+        3:  373:    if (g_orchestrator) {
+        -:  374:        return MERCURY_SUCCESS;  // Already initialized
+        -:  375:    }
+        -:  376:    
+        3:  377:    g_orchestrator = mercury_aligned_alloc(sizeof(TestOrchestrator), 64);
+        3:  378:    if (!g_orchestrator) {
+    #####:  379:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate test orchestrator");
+    #####:  380:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  381:    }
+        -:  382:    
+        -:  383:    // Initialize context pool
+        3:  384:    g_orchestrator->max_contexts = MAX_TEST_CONTEXTS;
+        3:  385:    g_orchestrator->contexts = mercury_aligned_alloc(g_orchestrator->max_contexts * sizeof(TestContext), 64);
+        3:  386:    if (!g_orchestrator->contexts) {
+    #####:  387:        mercury_aligned_free(g_orchestrator);
+    #####:  388:        g_orchestrator = NULL;
+    #####:  389:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate context pool");
+    #####:  390:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  391:    }
+        -:  392:    
+        3:  393:    g_orchestrator->context_count = 0;
+        -:  394:    
+        -:  395:    // Initialize all contexts as inactive
+      771:  396:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+      768:  397:        g_orchestrator->contexts[i].is_active = false;
+      768:  398:        g_orchestrator->contexts[i].context_id = -1;
+        -:  399:    }
+        -:  400:    
+        -:  401:    // Initialize statistics
+        3:  402:    atomic_store(&g_orchestrator->total_tests_executed, 0);
+        3:  403:    atomic_store(&g_orchestrator->total_violations, 0);
+        3:  404:    atomic_store(&g_orchestrator->total_n_plus_one_detected, 0);
+        3:  405:    atomic_store(&g_orchestrator->next_context_id, 0);
+        -:  406:    
+        -:  407:    // Initialize history file
+        -:  408:    const char* default_history = "/tmp/mercury_history.dat";
+        3:  409:    if (!history_path) {
+        -:  410:        history_path = default_history;
+        -:  411:    }
+        -:  412:    
+        3:  413:    g_orchestrator->history_fd = -1;  // Mark as uninitialized
+        3:  414:    if (init_history_file(history_path) != MERCURY_SUCCESS) {
+    #####:  415:        mercury_aligned_free(g_orchestrator->contexts);
+    #####:  416:        mercury_aligned_free(g_orchestrator);
+    #####:  417:        g_orchestrator = NULL;
+    #####:  418:        return MERCURY_ERROR_IO_ERROR;
+        -:  419:    }
+        -:  420:    
+        3:  421:    MERCURY_INFO("Test orchestrator initialized with %zu context slots", g_orchestrator->max_contexts);
+        -:  422:    return MERCURY_SUCCESS;
+        -:  423:}
+------------------
+init_test_orchestrator:
+function init_test_orchestrator called 1 returned 100% blocks executed 71%
+        1:  372:static MercuryError init_test_orchestrator(const char* history_path) {
+        1:  373:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  374:        return MERCURY_SUCCESS;  // Already initialized
+        -:  375:    }
+        -:  376:    
+        1:  377:    g_orchestrator = mercury_aligned_alloc(sizeof(TestOrchestrator), 64);
+call    0 returned 100%
+        1:  378:    if (!g_orchestrator) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  379:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate test orchestrator");
+    #####:  380:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  381:    }
+        -:  382:    
+        -:  383:    // Initialize context pool
+        1:  384:    g_orchestrator->max_contexts = MAX_TEST_CONTEXTS;
+        1:  385:    g_orchestrator->contexts = mercury_aligned_alloc(g_orchestrator->max_contexts * sizeof(TestContext), 64);
+call    0 returned 100%
+        1:  386:    if (!g_orchestrator->contexts) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  387:        mercury_aligned_free(g_orchestrator);
+call    0 never executed
+    #####:  388:        g_orchestrator = NULL;
+    #####:  389:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate context pool");
+    #####:  390:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  391:    }
+        -:  392:    
+        1:  393:    g_orchestrator->context_count = 0;
+        -:  394:    
+        -:  395:    // Initialize all contexts as inactive
+      257:  396:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+      256:  397:        g_orchestrator->contexts[i].is_active = false;
+      256:  398:        g_orchestrator->contexts[i].context_id = -1;
+        -:  399:    }
+        -:  400:    
+        -:  401:    // Initialize statistics
+        1:  402:    atomic_store(&g_orchestrator->total_tests_executed, 0);
+        1:  403:    atomic_store(&g_orchestrator->total_violations, 0);
+        1:  404:    atomic_store(&g_orchestrator->total_n_plus_one_detected, 0);
+        1:  405:    atomic_store(&g_orchestrator->next_context_id, 0);
+        -:  406:    
+        -:  407:    // Initialize history file
+        -:  408:    const char* default_history = "/tmp/mercury_history.dat";
+        1:  409:    if (!history_path) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  410:        history_path = default_history;
+        -:  411:    }
+        -:  412:    
+        1:  413:    g_orchestrator->history_fd = -1;  // Mark as uninitialized
+        1:  414:    if (init_history_file(history_path) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  415:        mercury_aligned_free(g_orchestrator->contexts);
+call    0 never executed
+    #####:  416:        mercury_aligned_free(g_orchestrator);
+call    0 never executed
+    #####:  417:        g_orchestrator = NULL;
+    #####:  418:        return MERCURY_ERROR_IO_ERROR;
+        -:  419:    }
+        -:  420:    
+        1:  421:    MERCURY_INFO("Test orchestrator initialized with %zu context slots", g_orchestrator->max_contexts);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  422:    return MERCURY_SUCCESS;
+        -:  423:}
+------------------
+init_test_orchestrator:
+function init_test_orchestrator called 1 returned 100% blocks executed 71%
+        1:  372:static MercuryError init_test_orchestrator(const char* history_path) {
+        1:  373:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  374:        return MERCURY_SUCCESS;  // Already initialized
+        -:  375:    }
+        -:  376:    
+        1:  377:    g_orchestrator = mercury_aligned_alloc(sizeof(TestOrchestrator), 64);
+call    0 returned 100%
+        1:  378:    if (!g_orchestrator) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  379:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate test orchestrator");
+    #####:  380:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  381:    }
+        -:  382:    
+        -:  383:    // Initialize context pool
+        1:  384:    g_orchestrator->max_contexts = MAX_TEST_CONTEXTS;
+        1:  385:    g_orchestrator->contexts = mercury_aligned_alloc(g_orchestrator->max_contexts * sizeof(TestContext), 64);
+call    0 returned 100%
+        1:  386:    if (!g_orchestrator->contexts) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  387:        mercury_aligned_free(g_orchestrator);
+call    0 never executed
+    #####:  388:        g_orchestrator = NULL;
+    #####:  389:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate context pool");
+    #####:  390:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  391:    }
+        -:  392:    
+        1:  393:    g_orchestrator->context_count = 0;
+        -:  394:    
+        -:  395:    // Initialize all contexts as inactive
+      257:  396:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+      256:  397:        g_orchestrator->contexts[i].is_active = false;
+      256:  398:        g_orchestrator->contexts[i].context_id = -1;
+        -:  399:    }
+        -:  400:    
+        -:  401:    // Initialize statistics
+        1:  402:    atomic_store(&g_orchestrator->total_tests_executed, 0);
+        1:  403:    atomic_store(&g_orchestrator->total_violations, 0);
+        1:  404:    atomic_store(&g_orchestrator->total_n_plus_one_detected, 0);
+        1:  405:    atomic_store(&g_orchestrator->next_context_id, 0);
+        -:  406:    
+        -:  407:    // Initialize history file
+        -:  408:    const char* default_history = "/tmp/mercury_history.dat";
+        1:  409:    if (!history_path) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  410:        history_path = default_history;
+        -:  411:    }
+        -:  412:    
+        1:  413:    g_orchestrator->history_fd = -1;  // Mark as uninitialized
+        1:  414:    if (init_history_file(history_path) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  415:        mercury_aligned_free(g_orchestrator->contexts);
+call    0 never executed
+    #####:  416:        mercury_aligned_free(g_orchestrator);
+call    0 never executed
+    #####:  417:        g_orchestrator = NULL;
+    #####:  418:        return MERCURY_ERROR_IO_ERROR;
+        -:  419:    }
+        -:  420:    
+        1:  421:    MERCURY_INFO("Test orchestrator initialized with %zu context slots", g_orchestrator->max_contexts);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  422:    return MERCURY_SUCCESS;
+        -:  423:}
+------------------
+init_test_orchestrator:
+function init_test_orchestrator called 1 returned 100% blocks executed 71%
+        1:  372:static MercuryError init_test_orchestrator(const char* history_path) {
+        1:  373:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  374:        return MERCURY_SUCCESS;  // Already initialized
+        -:  375:    }
+        -:  376:    
+        1:  377:    g_orchestrator = mercury_aligned_alloc(sizeof(TestOrchestrator), 64);
+call    0 returned 100%
+        1:  378:    if (!g_orchestrator) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  379:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate test orchestrator");
+    #####:  380:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  381:    }
+        -:  382:    
+        -:  383:    // Initialize context pool
+        1:  384:    g_orchestrator->max_contexts = MAX_TEST_CONTEXTS;
+        1:  385:    g_orchestrator->contexts = mercury_aligned_alloc(g_orchestrator->max_contexts * sizeof(TestContext), 64);
+call    0 returned 100%
+        1:  386:    if (!g_orchestrator->contexts) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  387:        mercury_aligned_free(g_orchestrator);
+call    0 never executed
+    #####:  388:        g_orchestrator = NULL;
+    #####:  389:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate context pool");
+    #####:  390:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  391:    }
+        -:  392:    
+        1:  393:    g_orchestrator->context_count = 0;
+        -:  394:    
+        -:  395:    // Initialize all contexts as inactive
+      257:  396:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+      256:  397:        g_orchestrator->contexts[i].is_active = false;
+      256:  398:        g_orchestrator->contexts[i].context_id = -1;
+        -:  399:    }
+        -:  400:    
+        -:  401:    // Initialize statistics
+        1:  402:    atomic_store(&g_orchestrator->total_tests_executed, 0);
+        1:  403:    atomic_store(&g_orchestrator->total_violations, 0);
+        1:  404:    atomic_store(&g_orchestrator->total_n_plus_one_detected, 0);
+        1:  405:    atomic_store(&g_orchestrator->next_context_id, 0);
+        -:  406:    
+        -:  407:    // Initialize history file
+        -:  408:    const char* default_history = "/tmp/mercury_history.dat";
+        1:  409:    if (!history_path) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  410:        history_path = default_history;
+        -:  411:    }
+        -:  412:    
+        1:  413:    g_orchestrator->history_fd = -1;  // Mark as uninitialized
+        1:  414:    if (init_history_file(history_path) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  415:        mercury_aligned_free(g_orchestrator->contexts);
+call    0 never executed
+    #####:  416:        mercury_aligned_free(g_orchestrator);
+call    0 never executed
+    #####:  417:        g_orchestrator = NULL;
+    #####:  418:        return MERCURY_ERROR_IO_ERROR;
+        -:  419:    }
+        -:  420:    
+        1:  421:    MERCURY_INFO("Test orchestrator initialized with %zu context slots", g_orchestrator->max_contexts);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  422:    return MERCURY_SUCCESS;
+        -:  423:}
+------------------
+        -:  424:
+        3:  425:static void cleanup_orchestrator_internal(void) {
+        3:  426:    if (!g_orchestrator) return;
+        -:  427:    
+        3:  428:    cleanup_history_file();
+        3:  429:    mercury_aligned_free(g_orchestrator->contexts);
+        3:  430:    mercury_aligned_free(g_orchestrator);
+        3:  431:    g_orchestrator = NULL;
+        -:  432:    
+        3:  433:    MERCURY_INFO("Test orchestrator cleaned up");
+        -:  434:}
+------------------
+cleanup_orchestrator_internal:
+function cleanup_orchestrator_internal called 1 returned 100% blocks executed 100%
+        1:  425:static void cleanup_orchestrator_internal(void) {
+        1:  426:    if (!g_orchestrator) return;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  427:    
+        1:  428:    cleanup_history_file();
+call    0 returned 100%
+        1:  429:    mercury_aligned_free(g_orchestrator->contexts);
+call    0 returned 100%
+        1:  430:    mercury_aligned_free(g_orchestrator);
+call    0 returned 100%
+        1:  431:    g_orchestrator = NULL;
+        -:  432:    
+        1:  433:    MERCURY_INFO("Test orchestrator cleaned up");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  434:}
+------------------
+cleanup_orchestrator_internal:
+function cleanup_orchestrator_internal called 1 returned 100% blocks executed 100%
+        1:  425:static void cleanup_orchestrator_internal(void) {
+        1:  426:    if (!g_orchestrator) return;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  427:    
+        1:  428:    cleanup_history_file();
+call    0 returned 100%
+        1:  429:    mercury_aligned_free(g_orchestrator->contexts);
+call    0 returned 100%
+        1:  430:    mercury_aligned_free(g_orchestrator);
+call    0 returned 100%
+        1:  431:    g_orchestrator = NULL;
+        -:  432:    
+        1:  433:    MERCURY_INFO("Test orchestrator cleaned up");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  434:}
+------------------
+cleanup_orchestrator_internal:
+function cleanup_orchestrator_internal called 1 returned 100% blocks executed 100%
+        1:  425:static void cleanup_orchestrator_internal(void) {
+        1:  426:    if (!g_orchestrator) return;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  427:    
+        1:  428:    cleanup_history_file();
+call    0 returned 100%
+        1:  429:    mercury_aligned_free(g_orchestrator->contexts);
+call    0 returned 100%
+        1:  430:    mercury_aligned_free(g_orchestrator);
+call    0 returned 100%
+        1:  431:    g_orchestrator = NULL;
+        -:  432:    
+        1:  433:    MERCURY_INFO("Test orchestrator cleaned up");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  434:}
+------------------
+        -:  435:
+        -:  436:// === PUBLIC API FUNCTIONS ===
+        -:  437:
+        -:  438:// Create new test context
+      829:  439:void* create_test_context(const char* test_class, const char* test_method) {
+        -:  440:    // Validate inputs - reject NULL parameters for security
+      829:  441:    if (!test_class || !test_method) {
+        -:  442:        return NULL;
+        -:  443:    }
+        -:  444:    
+        -:  445:    // Initialize orchestrator if needed
+      826:  446:    if (!g_orchestrator) {
+        3:  447:        if (init_test_orchestrator(NULL) != MERCURY_SUCCESS) {
+        -:  448:            return NULL;
+        -:  449:        }
+        -:  450:    }
+        -:  451:    
+        -:  452:    // Find available context slot
+        -:  453:    TestContext* context = NULL;
+        -:  454:    
+    68206:  455:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+    68204:  456:        if (!g_orchestrator->contexts[i].is_active) {
+        -:  457:            context = &g_orchestrator->contexts[i];
+        -:  458:            break;
+        -:  459:        }
+        -:  460:    }
+        -:  461:    
+      826:  462:    if (!context) {
+       2*:  463:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available context slots");
+       2*:  464:        return NULL;
+        -:  465:    }
+        -:  466:    
+        -:  467:    // Initialize context
+      824:  468:    context->context_id = atomic_fetch_add(&g_orchestrator->next_context_id, 1);
+      824:  469:    context->start_time = mercury_get_timestamp().nanoseconds;
+      824:  470:    context->end_time = 0;  // Initialize end_time
+        -:  471:    
+        -:  472:    // Safe string copy with bounds checking
+      824:  473:    size_t class_len = strlen(test_class);
+      824:  474:    size_t method_len = strlen(test_method);
+        -:  475:    
+        -:  476:    // Ensure we don't overflow the buffers
+        -:  477:    if (class_len >= sizeof(context->test_class)) {
+        -:  478:        class_len = sizeof(context->test_class) - 1;
+        -:  479:    }
+        -:  480:    if (method_len >= sizeof(context->test_method)) {
+        -:  481:        method_len = sizeof(context->test_method) - 1;
+        -:  482:    }
+        -:  483:    
+      824:  484:    memcpy(context->test_class, test_class, class_len);
+      824:  485:    context->test_class[class_len] = '\0';
+      824:  486:    memcpy(context->test_method, test_method, method_len);
+      824:  487:    context->test_method[method_len] = '\0';
+        -:  488:    
+        -:  489:    // Set default configuration using anonymous struct
+      824:  490:    context->config.response_time_threshold = 1000.0;  // 1 second
+      824:  491:    context->config.memory_threshold_mb = 200.0;       // 200MB
+      824:  492:    context->config.max_queries = 50;                  // 50 queries
+      824:  493:    context->config.min_cache_hit_ratio = 0.7;         // 70%
+        -:  494:    
+        -:  495:    // Initialize metrics
+      824:  496:    context->response_time_ms = 0.0;
+      824:  497:    context->memory_usage_mb = 0.0;
+      824:  498:    context->query_count = 0;
+      824:  499:    context->cache_hit_ratio = 0.0;
+      824:  500:    context->performance_score = 0.0;
+      824:  501:    strncpy(context->grade, "N/A", sizeof(context->grade) - 1);
+      824:  502:    context->grade[sizeof(context->grade) - 1] = '\0';
+        -:  503:    
+        -:  504:    // Initialize status
+      824:  505:    context->is_active = true;
+      824:  506:    context->has_violations = false;
+      824:  507:    context->violation_flags = 0;
+      824:  508:    context->has_n_plus_one = false;
+      824:  509:    context->severity_level = 0;
+      824:  510:    strncpy(context->optimization_suggestion, "No analysis available", 
+        -:  511:            sizeof(context->optimization_suggestion) - 1);
+      824:  512:    context->optimization_suggestion[sizeof(context->optimization_suggestion) - 1] = '\0';
+        -:  513:    
+      824:  514:    if (g_orchestrator) {
+      824:  515:        g_orchestrator->context_count++;
+        -:  516:    }
+        -:  517:    
+        -:  518:    return context;
+        -:  519:}
+------------------
+create_test_context:
+function create_test_context called 10 returned 100% blocks executed 93%
+       10:  439:void* create_test_context(const char* test_class, const char* test_method) {
+        -:  440:    // Validate inputs - reject NULL parameters for security
+       10:  441:    if (!test_class || !test_method) {
+branch  0 taken 70% (fallthrough)
+branch  1 taken 30%
+        -:  442:        return NULL;
+        -:  443:    }
+        -:  444:    
+        -:  445:    // Initialize orchestrator if needed
+        7:  446:    if (!g_orchestrator) {
+branch  0 taken 14% (fallthrough)
+branch  1 taken 86%
+        1:  447:        if (init_test_orchestrator(NULL) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  448:            return NULL;
+        -:  449:        }
+        -:  450:    }
+        -:  451:    
+        -:  452:    // Find available context slot
+        -:  453:    TestContext* context = NULL;
+        -:  454:    
+       10:  455:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+       10:  456:        if (!g_orchestrator->contexts[i].is_active) {
+branch  0 taken 30% (fallthrough)
+branch  1 taken 70%
+        -:  457:            context = &g_orchestrator->contexts[i];
+        -:  458:            break;
+        -:  459:        }
+        -:  460:    }
+        -:  461:    
+        7:  462:    if (!context) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  463:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available context slots");
+    #####:  464:        return NULL;
+        -:  465:    }
+        -:  466:    
+        -:  467:    // Initialize context
+        7:  468:    context->context_id = atomic_fetch_add(&g_orchestrator->next_context_id, 1);
+        7:  469:    context->start_time = mercury_get_timestamp().nanoseconds;
+call    0 returned 100%
+        7:  470:    context->end_time = 0;  // Initialize end_time
+        -:  471:    
+        -:  472:    // Safe string copy with bounds checking
+        7:  473:    size_t class_len = strlen(test_class);
+        7:  474:    size_t method_len = strlen(test_method);
+        -:  475:    
+        -:  476:    // Ensure we don't overflow the buffers
+        -:  477:    if (class_len >= sizeof(context->test_class)) {
+        -:  478:        class_len = sizeof(context->test_class) - 1;
+        -:  479:    }
+        -:  480:    if (method_len >= sizeof(context->test_method)) {
+        -:  481:        method_len = sizeof(context->test_method) - 1;
+        -:  482:    }
+        -:  483:    
+        7:  484:    memcpy(context->test_class, test_class, class_len);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        7:  485:    context->test_class[class_len] = '\0';
+        7:  486:    memcpy(context->test_method, test_method, method_len);
+        7:  487:    context->test_method[method_len] = '\0';
+        -:  488:    
+        -:  489:    // Set default configuration using anonymous struct
+        7:  490:    context->config.response_time_threshold = 1000.0;  // 1 second
+        7:  491:    context->config.memory_threshold_mb = 200.0;       // 200MB
+        7:  492:    context->config.max_queries = 50;                  // 50 queries
+        7:  493:    context->config.min_cache_hit_ratio = 0.7;         // 70%
+        -:  494:    
+        -:  495:    // Initialize metrics
+        7:  496:    context->response_time_ms = 0.0;
+        7:  497:    context->memory_usage_mb = 0.0;
+        7:  498:    context->query_count = 0;
+        7:  499:    context->cache_hit_ratio = 0.0;
+        7:  500:    context->performance_score = 0.0;
+        7:  501:    strncpy(context->grade, "N/A", sizeof(context->grade) - 1);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        7:  502:    context->grade[sizeof(context->grade) - 1] = '\0';
+        -:  503:    
+        -:  504:    // Initialize status
+        7:  505:    context->is_active = true;
+        7:  506:    context->has_violations = false;
+        7:  507:    context->violation_flags = 0;
+        7:  508:    context->has_n_plus_one = false;
+        7:  509:    context->severity_level = 0;
+        7:  510:    strncpy(context->optimization_suggestion, "No analysis available", 
+        -:  511:            sizeof(context->optimization_suggestion) - 1);
+        7:  512:    context->optimization_suggestion[sizeof(context->optimization_suggestion) - 1] = '\0';
+        -:  513:    
+        7:  514:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        7:  515:        g_orchestrator->context_count++;
+        -:  516:    }
+        -:  517:    
+        -:  518:    return context;
+        -:  519:}
+------------------
+create_test_context:
+function create_test_context called 341 returned 100% blocks executed 100%
+      341:  439:void* create_test_context(const char* test_class, const char* test_method) {
+        -:  440:    // Validate inputs - reject NULL parameters for security
+      341:  441:    if (!test_class || !test_method) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  442:        return NULL;
+        -:  443:    }
+        -:  444:    
+        -:  445:    // Initialize orchestrator if needed
+      341:  446:    if (!g_orchestrator) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  447:        if (init_test_orchestrator(NULL) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  448:            return NULL;
+        -:  449:        }
+        -:  450:    }
+        -:  451:    
+        -:  452:    // Find available context slot
+        -:  453:    TestContext* context = NULL;
+        -:  454:    
+    34462:  455:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+    34461:  456:        if (!g_orchestrator->contexts[i].is_active) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+        -:  457:            context = &g_orchestrator->contexts[i];
+        -:  458:            break;
+        -:  459:        }
+        -:  460:    }
+        -:  461:    
+      341:  462:    if (!context) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  463:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available context slots");
+        1:  464:        return NULL;
+        -:  465:    }
+        -:  466:    
+        -:  467:    // Initialize context
+      340:  468:    context->context_id = atomic_fetch_add(&g_orchestrator->next_context_id, 1);
+      340:  469:    context->start_time = mercury_get_timestamp().nanoseconds;
+call    0 returned 100%
+      340:  470:    context->end_time = 0;  // Initialize end_time
+        -:  471:    
+        -:  472:    // Safe string copy with bounds checking
+      340:  473:    size_t class_len = strlen(test_class);
+      340:  474:    size_t method_len = strlen(test_method);
+        -:  475:    
+        -:  476:    // Ensure we don't overflow the buffers
+        -:  477:    if (class_len >= sizeof(context->test_class)) {
+        -:  478:        class_len = sizeof(context->test_class) - 1;
+        -:  479:    }
+        -:  480:    if (method_len >= sizeof(context->test_method)) {
+        -:  481:        method_len = sizeof(context->test_method) - 1;
+        -:  482:    }
+        -:  483:    
+      340:  484:    memcpy(context->test_class, test_class, class_len);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      340:  485:    context->test_class[class_len] = '\0';
+      340:  486:    memcpy(context->test_method, test_method, method_len);
+      340:  487:    context->test_method[method_len] = '\0';
+        -:  488:    
+        -:  489:    // Set default configuration using anonymous struct
+      340:  490:    context->config.response_time_threshold = 1000.0;  // 1 second
+      340:  491:    context->config.memory_threshold_mb = 200.0;       // 200MB
+      340:  492:    context->config.max_queries = 50;                  // 50 queries
+      340:  493:    context->config.min_cache_hit_ratio = 0.7;         // 70%
+        -:  494:    
+        -:  495:    // Initialize metrics
+      340:  496:    context->response_time_ms = 0.0;
+      340:  497:    context->memory_usage_mb = 0.0;
+      340:  498:    context->query_count = 0;
+      340:  499:    context->cache_hit_ratio = 0.0;
+      340:  500:    context->performance_score = 0.0;
+      340:  501:    strncpy(context->grade, "N/A", sizeof(context->grade) - 1);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      340:  502:    context->grade[sizeof(context->grade) - 1] = '\0';
+        -:  503:    
+        -:  504:    // Initialize status
+      340:  505:    context->is_active = true;
+      340:  506:    context->has_violations = false;
+      340:  507:    context->violation_flags = 0;
+      340:  508:    context->has_n_plus_one = false;
+      340:  509:    context->severity_level = 0;
+      340:  510:    strncpy(context->optimization_suggestion, "No analysis available", 
+        -:  511:            sizeof(context->optimization_suggestion) - 1);
+      340:  512:    context->optimization_suggestion[sizeof(context->optimization_suggestion) - 1] = '\0';
+        -:  513:    
+      340:  514:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      340:  515:        g_orchestrator->context_count++;
+        -:  516:    }
+        -:  517:    
+        -:  518:    return context;
+        -:  519:}
+------------------
+create_test_context:
+function create_test_context called 478 returned 100% blocks executed 100%
+      478:  439:void* create_test_context(const char* test_class, const char* test_method) {
+        -:  440:    // Validate inputs - reject NULL parameters for security
+      478:  441:    if (!test_class || !test_method) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  442:        return NULL;
+        -:  443:    }
+        -:  444:    
+        -:  445:    // Initialize orchestrator if needed
+      478:  446:    if (!g_orchestrator) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  447:        if (init_test_orchestrator(NULL) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  448:            return NULL;
+        -:  449:        }
+        -:  450:    }
+        -:  451:    
+        -:  452:    // Find available context slot
+        -:  453:    TestContext* context = NULL;
+        -:  454:    
+    33734:  455:    for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+    33733:  456:        if (!g_orchestrator->contexts[i].is_active) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+        -:  457:            context = &g_orchestrator->contexts[i];
+        -:  458:            break;
+        -:  459:        }
+        -:  460:    }
+        -:  461:    
+      478:  462:    if (!context) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  463:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available context slots");
+        1:  464:        return NULL;
+        -:  465:    }
+        -:  466:    
+        -:  467:    // Initialize context
+      477:  468:    context->context_id = atomic_fetch_add(&g_orchestrator->next_context_id, 1);
+      477:  469:    context->start_time = mercury_get_timestamp().nanoseconds;
+call    0 returned 100%
+      477:  470:    context->end_time = 0;  // Initialize end_time
+        -:  471:    
+        -:  472:    // Safe string copy with bounds checking
+      477:  473:    size_t class_len = strlen(test_class);
+      477:  474:    size_t method_len = strlen(test_method);
+        -:  475:    
+        -:  476:    // Ensure we don't overflow the buffers
+        -:  477:    if (class_len >= sizeof(context->test_class)) {
+        -:  478:        class_len = sizeof(context->test_class) - 1;
+        -:  479:    }
+        -:  480:    if (method_len >= sizeof(context->test_method)) {
+        -:  481:        method_len = sizeof(context->test_method) - 1;
+        -:  482:    }
+        -:  483:    
+      477:  484:    memcpy(context->test_class, test_class, class_len);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      477:  485:    context->test_class[class_len] = '\0';
+      477:  486:    memcpy(context->test_method, test_method, method_len);
+      477:  487:    context->test_method[method_len] = '\0';
+        -:  488:    
+        -:  489:    // Set default configuration using anonymous struct
+      477:  490:    context->config.response_time_threshold = 1000.0;  // 1 second
+      477:  491:    context->config.memory_threshold_mb = 200.0;       // 200MB
+      477:  492:    context->config.max_queries = 50;                  // 50 queries
+      477:  493:    context->config.min_cache_hit_ratio = 0.7;         // 70%
+        -:  494:    
+        -:  495:    // Initialize metrics
+      477:  496:    context->response_time_ms = 0.0;
+      477:  497:    context->memory_usage_mb = 0.0;
+      477:  498:    context->query_count = 0;
+      477:  499:    context->cache_hit_ratio = 0.0;
+      477:  500:    context->performance_score = 0.0;
+      477:  501:    strncpy(context->grade, "N/A", sizeof(context->grade) - 1);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      477:  502:    context->grade[sizeof(context->grade) - 1] = '\0';
+        -:  503:    
+        -:  504:    // Initialize status
+      477:  505:    context->is_active = true;
+      477:  506:    context->has_violations = false;
+      477:  507:    context->violation_flags = 0;
+      477:  508:    context->has_n_plus_one = false;
+      477:  509:    context->severity_level = 0;
+      477:  510:    strncpy(context->optimization_suggestion, "No analysis available", 
+        -:  511:            sizeof(context->optimization_suggestion) - 1);
+      477:  512:    context->optimization_suggestion[sizeof(context->optimization_suggestion) - 1] = '\0';
+        -:  513:    
+      477:  514:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      477:  515:        g_orchestrator->context_count++;
+        -:  516:    }
+        -:  517:    
+        -:  518:    return context;
+        -:  519:}
+------------------
+        -:  520:
+        -:  521:// Update test context with metrics
+      821:  522:int update_test_context(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  523:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  524:                       const char* grade) {
+      821:  525:    if (!context_ptr) {
+       2*:  526:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+       2*:  527:        return -1;
+        -:  528:    }
+        -:  529:    
+        -:  530:    TestContext* context = (TestContext*)context_ptr;
+      819:  531:    if (!context->is_active) {
+    #####:  532:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  533:        return -1;
+        -:  534:    }
+        -:  535:    
+        -:  536:    // Validate and clamp metrics to prevent overflow
+        -:  537:    if (response_time_ms < 0) response_time_ms = 0;
+        -:  538:    if (response_time_ms > 1e9) response_time_ms = 1e9;  // Cap at 1 million seconds
+        -:  539:    
+        -:  540:    if (memory_usage_mb < 0) memory_usage_mb = 0;
+        -:  541:    if (memory_usage_mb > 1e9) memory_usage_mb = 1e9;  // Cap at 1 million GB
+        -:  542:    
+        -:  543:    if (cache_hit_ratio < 0) cache_hit_ratio = 0;
+        -:  544:    if (cache_hit_ratio > 1) cache_hit_ratio = 1;
+        -:  545:    
+        -:  546:    if (performance_score < 0) performance_score = 0;
+        -:  547:    if (performance_score > 100) performance_score = 100;
+        -:  548:    
+        -:  549:    // Update metrics with validated values
+      819:  550:    context->response_time_ms = response_time_ms;
+      819:  551:    context->memory_usage_mb = memory_usage_mb;
+      819:  552:    context->query_count = query_count;
+      819:  553:    context->cache_hit_ratio = cache_hit_ratio;
+      819:  554:    context->performance_score = performance_score;
+        -:  555:    
+      819:  556:    if (grade) {
+        -:  557:        // Grade field is 4 bytes, limit to 3 characters + null terminator
+      819:  558:        size_t grade_len = strlen(grade);
+        -:  559:        if (grade_len > 3) {
+        -:  560:            grade_len = 3;
+        -:  561:        }
+      819:  562:        memcpy(context->grade, grade, grade_len);
+      819:  563:        context->grade[grade_len] = '\0';
+        -:  564:    } else {
+    #####:  565:        strcpy(context->grade, "N/A");
+        -:  566:    }
+        -:  567:    
+        -:  568:    // Check for violations
+      819:  569:    context->has_violations = false;
+      819:  570:    context->violation_flags = 0;
+        -:  571:    
+      819:  572:    if (response_time_ms > context->config.response_time_threshold) {
+       2*:  573:        context->has_violations = true;
+       2*:  574:        context->violation_flags |= VIOLATION_RESPONSE_TIME;
+        -:  575:    }
+        -:  576:    
+      819:  577:    if (memory_usage_mb > context->config.memory_threshold_mb) {
+       1*:  578:        context->has_violations = true;
+       1*:  579:        context->violation_flags |= VIOLATION_MEMORY_USAGE;
+        -:  580:    }
+        -:  581:    
+      819:  582:    if (query_count > context->config.max_queries) {
+       5*:  583:        context->has_violations = true;
+       5*:  584:        context->violation_flags |= VIOLATION_QUERY_COUNT;
+        -:  585:    }
+        -:  586:    
+      819:  587:    if (cache_hit_ratio < context->config.min_cache_hit_ratio) {
+      818:  588:        context->has_violations = true;
+      818:  589:        context->violation_flags |= VIOLATION_CACHE_RATIO;
+        -:  590:    }
+        -:  591:    
+      819:  592:    if (context->has_violations && g_orchestrator) {
+      818:  593:        atomic_fetch_add(&g_orchestrator->total_violations, 1);
+        -:  594:    }
+        -:  595:    
+        -:  596:    return 0;
+        -:  597:}
+------------------
+update_test_context:
+function update_test_context called 5 returned 100% blocks executed 74%
+        5:  522:int update_test_context(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  523:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  524:                       const char* grade) {
+        5:  525:    if (!context_ptr) {
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+        1:  526:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+        1:  527:        return -1;
+        -:  528:    }
+        -:  529:    
+        -:  530:    TestContext* context = (TestContext*)context_ptr;
+        4:  531:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  532:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  533:        return -1;
+        -:  534:    }
+        -:  535:    
+        -:  536:    // Validate and clamp metrics to prevent overflow
+        -:  537:    if (response_time_ms < 0) response_time_ms = 0;
+        -:  538:    if (response_time_ms > 1e9) response_time_ms = 1e9;  // Cap at 1 million seconds
+        -:  539:    
+        -:  540:    if (memory_usage_mb < 0) memory_usage_mb = 0;
+        -:  541:    if (memory_usage_mb > 1e9) memory_usage_mb = 1e9;  // Cap at 1 million GB
+        -:  542:    
+        -:  543:    if (cache_hit_ratio < 0) cache_hit_ratio = 0;
+        -:  544:    if (cache_hit_ratio > 1) cache_hit_ratio = 1;
+        -:  545:    
+        -:  546:    if (performance_score < 0) performance_score = 0;
+        -:  547:    if (performance_score > 100) performance_score = 100;
+        -:  548:    
+        -:  549:    // Update metrics with validated values
+        4:  550:    context->response_time_ms = response_time_ms;
+        4:  551:    context->memory_usage_mb = memory_usage_mb;
+        4:  552:    context->query_count = query_count;
+        4:  553:    context->cache_hit_ratio = cache_hit_ratio;
+        4:  554:    context->performance_score = performance_score;
+        -:  555:    
+        4:  556:    if (grade) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  557:        // Grade field is 4 bytes, limit to 3 characters + null terminator
+        4:  558:        size_t grade_len = strlen(grade);
+        -:  559:        if (grade_len > 3) {
+        -:  560:            grade_len = 3;
+        -:  561:        }
+        4:  562:        memcpy(context->grade, grade, grade_len);
+        4:  563:        context->grade[grade_len] = '\0';
+        -:  564:    } else {
+    #####:  565:        strcpy(context->grade, "N/A");
+        -:  566:    }
+        -:  567:    
+        -:  568:    // Check for violations
+        4:  569:    context->has_violations = false;
+        4:  570:    context->violation_flags = 0;
+        -:  571:    
+        4:  572:    if (response_time_ms > context->config.response_time_threshold) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  573:        context->has_violations = true;
+    #####:  574:        context->violation_flags |= VIOLATION_RESPONSE_TIME;
+        -:  575:    }
+        -:  576:    
+        4:  577:    if (memory_usage_mb > context->config.memory_threshold_mb) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  578:        context->has_violations = true;
+    #####:  579:        context->violation_flags |= VIOLATION_MEMORY_USAGE;
+        -:  580:    }
+        -:  581:    
+        4:  582:    if (query_count > context->config.max_queries) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  583:        context->has_violations = true;
+    #####:  584:        context->violation_flags |= VIOLATION_QUERY_COUNT;
+        -:  585:    }
+        -:  586:    
+        4:  587:    if (cache_hit_ratio < context->config.min_cache_hit_ratio) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  588:        context->has_violations = true;
+        4:  589:        context->violation_flags |= VIOLATION_CACHE_RATIO;
+        -:  590:    }
+        -:  591:    
+        4:  592:    if (context->has_violations && g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        4:  593:        atomic_fetch_add(&g_orchestrator->total_violations, 1);
+        -:  594:    }
+        -:  595:    
+        -:  596:    return 0;
+        -:  597:}
+------------------
+update_test_context:
+function update_test_context called 340 returned 100% blocks executed 79%
+      340:  522:int update_test_context(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  523:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  524:                       const char* grade) {
+      340:  525:    if (!context_ptr) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  526:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+        1:  527:        return -1;
+        -:  528:    }
+        -:  529:    
+        -:  530:    TestContext* context = (TestContext*)context_ptr;
+      339:  531:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  532:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  533:        return -1;
+        -:  534:    }
+        -:  535:    
+        -:  536:    // Validate and clamp metrics to prevent overflow
+        -:  537:    if (response_time_ms < 0) response_time_ms = 0;
+        -:  538:    if (response_time_ms > 1e9) response_time_ms = 1e9;  // Cap at 1 million seconds
+        -:  539:    
+        -:  540:    if (memory_usage_mb < 0) memory_usage_mb = 0;
+        -:  541:    if (memory_usage_mb > 1e9) memory_usage_mb = 1e9;  // Cap at 1 million GB
+        -:  542:    
+        -:  543:    if (cache_hit_ratio < 0) cache_hit_ratio = 0;
+        -:  544:    if (cache_hit_ratio > 1) cache_hit_ratio = 1;
+        -:  545:    
+        -:  546:    if (performance_score < 0) performance_score = 0;
+        -:  547:    if (performance_score > 100) performance_score = 100;
+        -:  548:    
+        -:  549:    // Update metrics with validated values
+      339:  550:    context->response_time_ms = response_time_ms;
+      339:  551:    context->memory_usage_mb = memory_usage_mb;
+      339:  552:    context->query_count = query_count;
+      339:  553:    context->cache_hit_ratio = cache_hit_ratio;
+      339:  554:    context->performance_score = performance_score;
+        -:  555:    
+      339:  556:    if (grade) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  557:        // Grade field is 4 bytes, limit to 3 characters + null terminator
+      339:  558:        size_t grade_len = strlen(grade);
+        -:  559:        if (grade_len > 3) {
+        -:  560:            grade_len = 3;
+        -:  561:        }
+      339:  562:        memcpy(context->grade, grade, grade_len);
+      339:  563:        context->grade[grade_len] = '\0';
+        -:  564:    } else {
+    #####:  565:        strcpy(context->grade, "N/A");
+        -:  566:    }
+        -:  567:    
+        -:  568:    // Check for violations
+      339:  569:    context->has_violations = false;
+      339:  570:    context->violation_flags = 0;
+        -:  571:    
+      339:  572:    if (response_time_ms > context->config.response_time_threshold) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  573:        context->has_violations = true;
+    #####:  574:        context->violation_flags |= VIOLATION_RESPONSE_TIME;
+        -:  575:    }
+        -:  576:    
+      339:  577:    if (memory_usage_mb > context->config.memory_threshold_mb) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  578:        context->has_violations = true;
+    #####:  579:        context->violation_flags |= VIOLATION_MEMORY_USAGE;
+        -:  580:    }
+        -:  581:    
+      339:  582:    if (query_count > context->config.max_queries) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        4:  583:        context->has_violations = true;
+        4:  584:        context->violation_flags |= VIOLATION_QUERY_COUNT;
+        -:  585:    }
+        -:  586:    
+      339:  587:    if (cache_hit_ratio < context->config.min_cache_hit_ratio) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+      338:  588:        context->has_violations = true;
+      338:  589:        context->violation_flags |= VIOLATION_CACHE_RATIO;
+        -:  590:    }
+        -:  591:    
+      339:  592:    if (context->has_violations && g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+      338:  593:        atomic_fetch_add(&g_orchestrator->total_violations, 1);
+        -:  594:    }
+        -:  595:    
+        -:  596:    return 0;
+        -:  597:}
+------------------
+update_test_context:
+function update_test_context called 476 returned 100% blocks executed 84%
+      476:  522:int update_test_context(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  523:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  524:                       const char* grade) {
+      476:  525:    if (!context_ptr) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  526:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+    #####:  527:        return -1;
+        -:  528:    }
+        -:  529:    
+        -:  530:    TestContext* context = (TestContext*)context_ptr;
+      476:  531:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  532:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  533:        return -1;
+        -:  534:    }
+        -:  535:    
+        -:  536:    // Validate and clamp metrics to prevent overflow
+        -:  537:    if (response_time_ms < 0) response_time_ms = 0;
+        -:  538:    if (response_time_ms > 1e9) response_time_ms = 1e9;  // Cap at 1 million seconds
+        -:  539:    
+        -:  540:    if (memory_usage_mb < 0) memory_usage_mb = 0;
+        -:  541:    if (memory_usage_mb > 1e9) memory_usage_mb = 1e9;  // Cap at 1 million GB
+        -:  542:    
+        -:  543:    if (cache_hit_ratio < 0) cache_hit_ratio = 0;
+        -:  544:    if (cache_hit_ratio > 1) cache_hit_ratio = 1;
+        -:  545:    
+        -:  546:    if (performance_score < 0) performance_score = 0;
+        -:  547:    if (performance_score > 100) performance_score = 100;
+        -:  548:    
+        -:  549:    // Update metrics with validated values
+      476:  550:    context->response_time_ms = response_time_ms;
+      476:  551:    context->memory_usage_mb = memory_usage_mb;
+      476:  552:    context->query_count = query_count;
+      476:  553:    context->cache_hit_ratio = cache_hit_ratio;
+      476:  554:    context->performance_score = performance_score;
+        -:  555:    
+      476:  556:    if (grade) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  557:        // Grade field is 4 bytes, limit to 3 characters + null terminator
+      476:  558:        size_t grade_len = strlen(grade);
+        -:  559:        if (grade_len > 3) {
+        -:  560:            grade_len = 3;
+        -:  561:        }
+      476:  562:        memcpy(context->grade, grade, grade_len);
+      476:  563:        context->grade[grade_len] = '\0';
+        -:  564:    } else {
+    #####:  565:        strcpy(context->grade, "N/A");
+        -:  566:    }
+        -:  567:    
+        -:  568:    // Check for violations
+      476:  569:    context->has_violations = false;
+      476:  570:    context->violation_flags = 0;
+        -:  571:    
+      476:  572:    if (response_time_ms > context->config.response_time_threshold) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        2:  573:        context->has_violations = true;
+        2:  574:        context->violation_flags |= VIOLATION_RESPONSE_TIME;
+        -:  575:    }
+        -:  576:    
+      476:  577:    if (memory_usage_mb > context->config.memory_threshold_mb) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  578:        context->has_violations = true;
+        1:  579:        context->violation_flags |= VIOLATION_MEMORY_USAGE;
+        -:  580:    }
+        -:  581:    
+      476:  582:    if (query_count > context->config.max_queries) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  583:        context->has_violations = true;
+        1:  584:        context->violation_flags |= VIOLATION_QUERY_COUNT;
+        -:  585:    }
+        -:  586:    
+      476:  587:    if (cache_hit_ratio < context->config.min_cache_hit_ratio) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      476:  588:        context->has_violations = true;
+      476:  589:        context->violation_flags |= VIOLATION_CACHE_RATIO;
+        -:  590:    }
+        -:  591:    
+      476:  592:    if (context->has_violations && g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+      476:  593:        atomic_fetch_add(&g_orchestrator->total_violations, 1);
+        -:  594:    }
+        -:  595:    
+        -:  596:    return 0;
+        -:  597:}
+------------------
+        -:  598:
+        -:  599:// Update N+1 analysis for context
+       96:  600:int update_n_plus_one_analysis(void* context_ptr, int has_n_plus_one, int severity_level,
+        -:  601:                               const char* optimization_suggestion) {
+       96:  602:    if (!context_ptr) {
+       1*:  603:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+       1*:  604:        return -1;
+        -:  605:    }
+        -:  606:    
+        -:  607:    TestContext* context = (TestContext*)context_ptr;
+       95:  608:    if (!context->is_active) {
+    #####:  609:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  610:        return -1;
+        -:  611:    }
+        -:  612:    
+       95:  613:    context->has_n_plus_one = (has_n_plus_one != 0);
+       95:  614:    context->severity_level = severity_level;
+        -:  615:    
+       95:  616:    if (optimization_suggestion) {
+        -:  617:        // Safe copy that treats format strings as literal strings
+       95:  618:        size_t suggestion_len = strlen(optimization_suggestion);
+        -:  619:        if (suggestion_len >= sizeof(context->optimization_suggestion)) {
+        -:  620:            suggestion_len = sizeof(context->optimization_suggestion) - 1;
+        -:  621:        }
+        -:  622:        // Use memcpy to avoid any format string interpretation
+       95:  623:        memcpy(context->optimization_suggestion, optimization_suggestion, suggestion_len);
+       95:  624:        context->optimization_suggestion[suggestion_len] = '\0';
+        -:  625:    } else {
+    #####:  626:        strcpy(context->optimization_suggestion, "No suggestion");
+        -:  627:    }
+        -:  628:    
+       95:  629:    if (context->has_n_plus_one) {
+       94:  630:        context->violation_flags |= VIOLATION_N_PLUS_ONE;
+       94:  631:        if (g_orchestrator) {
+       94:  632:            atomic_fetch_add(&g_orchestrator->total_n_plus_one_detected, 1);
+        -:  633:        }
+        -:  634:    }
+        -:  635:    
+        -:  636:    return 0;
+        -:  637:}
+------------------
+update_n_plus_one_analysis:
+function update_n_plus_one_analysis called 3 returned 100% blocks executed 73%
+        3:  600:int update_n_plus_one_analysis(void* context_ptr, int has_n_plus_one, int severity_level,
+        -:  601:                               const char* optimization_suggestion) {
+        3:  602:    if (!context_ptr) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  603:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+    #####:  604:        return -1;
+        -:  605:    }
+        -:  606:    
+        -:  607:    TestContext* context = (TestContext*)context_ptr;
+        3:  608:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  609:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  610:        return -1;
+        -:  611:    }
+        -:  612:    
+        3:  613:    context->has_n_plus_one = (has_n_plus_one != 0);
+        3:  614:    context->severity_level = severity_level;
+        -:  615:    
+        3:  616:    if (optimization_suggestion) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  617:        // Safe copy that treats format strings as literal strings
+        3:  618:        size_t suggestion_len = strlen(optimization_suggestion);
+        -:  619:        if (suggestion_len >= sizeof(context->optimization_suggestion)) {
+        -:  620:            suggestion_len = sizeof(context->optimization_suggestion) - 1;
+        -:  621:        }
+        -:  622:        // Use memcpy to avoid any format string interpretation
+        3:  623:        memcpy(context->optimization_suggestion, optimization_suggestion, suggestion_len);
+        3:  624:        context->optimization_suggestion[suggestion_len] = '\0';
+        -:  625:    } else {
+    #####:  626:        strcpy(context->optimization_suggestion, "No suggestion");
+        -:  627:    }
+        -:  628:    
+        3:  629:    if (context->has_n_plus_one) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        3:  630:        context->violation_flags |= VIOLATION_N_PLUS_ONE;
+        3:  631:        if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        3:  632:            atomic_fetch_add(&g_orchestrator->total_n_plus_one_detected, 1);
+        -:  633:        }
+        -:  634:    }
+        -:  635:    
+        -:  636:    return 0;
+        -:  637:}
+------------------
+update_n_plus_one_analysis:
+function update_n_plus_one_analysis called 20 returned 100% blocks executed 82%
+       20:  600:int update_n_plus_one_analysis(void* context_ptr, int has_n_plus_one, int severity_level,
+        -:  601:                               const char* optimization_suggestion) {
+       20:  602:    if (!context_ptr) {
+branch  0 taken 5% (fallthrough)
+branch  1 taken 95%
+        1:  603:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+        1:  604:        return -1;
+        -:  605:    }
+        -:  606:    
+        -:  607:    TestContext* context = (TestContext*)context_ptr;
+       19:  608:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  609:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  610:        return -1;
+        -:  611:    }
+        -:  612:    
+       19:  613:    context->has_n_plus_one = (has_n_plus_one != 0);
+       19:  614:    context->severity_level = severity_level;
+        -:  615:    
+       19:  616:    if (optimization_suggestion) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  617:        // Safe copy that treats format strings as literal strings
+       19:  618:        size_t suggestion_len = strlen(optimization_suggestion);
+        -:  619:        if (suggestion_len >= sizeof(context->optimization_suggestion)) {
+        -:  620:            suggestion_len = sizeof(context->optimization_suggestion) - 1;
+        -:  621:        }
+        -:  622:        // Use memcpy to avoid any format string interpretation
+       19:  623:        memcpy(context->optimization_suggestion, optimization_suggestion, suggestion_len);
+       19:  624:        context->optimization_suggestion[suggestion_len] = '\0';
+        -:  625:    } else {
+    #####:  626:        strcpy(context->optimization_suggestion, "No suggestion");
+        -:  627:    }
+        -:  628:    
+       19:  629:    if (context->has_n_plus_one) {
+branch  0 taken 95% (fallthrough)
+branch  1 taken 5%
+       18:  630:        context->violation_flags |= VIOLATION_N_PLUS_ONE;
+       18:  631:        if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       18:  632:            atomic_fetch_add(&g_orchestrator->total_n_plus_one_detected, 1);
+        -:  633:        }
+        -:  634:    }
+        -:  635:    
+        -:  636:    return 0;
+        -:  637:}
+------------------
+update_n_plus_one_analysis:
+function update_n_plus_one_analysis called 73 returned 100% blocks executed 73%
+       73:  600:int update_n_plus_one_analysis(void* context_ptr, int has_n_plus_one, int severity_level,
+        -:  601:                               const char* optimization_suggestion) {
+       73:  602:    if (!context_ptr) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  603:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+    #####:  604:        return -1;
+        -:  605:    }
+        -:  606:    
+        -:  607:    TestContext* context = (TestContext*)context_ptr;
+       73:  608:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  609:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  610:        return -1;
+        -:  611:    }
+        -:  612:    
+       73:  613:    context->has_n_plus_one = (has_n_plus_one != 0);
+       73:  614:    context->severity_level = severity_level;
+        -:  615:    
+       73:  616:    if (optimization_suggestion) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  617:        // Safe copy that treats format strings as literal strings
+       73:  618:        size_t suggestion_len = strlen(optimization_suggestion);
+        -:  619:        if (suggestion_len >= sizeof(context->optimization_suggestion)) {
+        -:  620:            suggestion_len = sizeof(context->optimization_suggestion) - 1;
+        -:  621:        }
+        -:  622:        // Use memcpy to avoid any format string interpretation
+       73:  623:        memcpy(context->optimization_suggestion, optimization_suggestion, suggestion_len);
+       73:  624:        context->optimization_suggestion[suggestion_len] = '\0';
+        -:  625:    } else {
+    #####:  626:        strcpy(context->optimization_suggestion, "No suggestion");
+        -:  627:    }
+        -:  628:    
+       73:  629:    if (context->has_n_plus_one) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       73:  630:        context->violation_flags |= VIOLATION_N_PLUS_ONE;
+       73:  631:        if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       73:  632:            atomic_fetch_add(&g_orchestrator->total_n_plus_one_detected, 1);
+        -:  633:        }
+        -:  634:    }
+        -:  635:    
+        -:  636:    return 0;
+        -:  637:}
+------------------
+        -:  638:
+        -:  639:// Finalize test context and store results
+      826:  640:int finalize_test_context(void* context_ptr) {
+      826:  641:    if (!context_ptr) {
+       2*:  642:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+       2*:  643:        return -1;
+        -:  644:    }
+        -:  645:    
+        -:  646:    TestContext* context = (TestContext*)context_ptr;
+      824:  647:    if (!context->is_active) {
+       1*:  648:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+       1*:  649:        return -1;
+        -:  650:    }
+        -:  651:    
+        -:  652:    // Store result in history
+      823:  653:    if (store_test_result(context) != MERCURY_SUCCESS) {
+        -:  654:        static int store_warn_count = 0;
+      823:  655:        if (store_warn_count < 5) {
+       15:  656:            MERCURY_WARN("Failed to store test result in history");
+       15:  657:            store_warn_count++;
+        -:  658:        }
+        -:  659:    }
+        -:  660:    
+        -:  661:    // Deactivate context
+      823:  662:    context->is_active = false;
+      823:  663:    context->context_id = -1;
+      823:  664:    if (g_orchestrator) {
+      823:  665:        g_orchestrator->context_count--;
+      823:  666:        atomic_fetch_add(&g_orchestrator->total_tests_executed, 1);
+        -:  667:    }
+        -:  668:    
+        -:  669:    return 0;
+        -:  670:}
+------------------
+finalize_test_context:
+function finalize_test_context called 8 returned 100% blocks executed 92%
+        8:  640:int finalize_test_context(void* context_ptr) {
+        8:  641:    if (!context_ptr) {
+branch  0 taken 12% (fallthrough)
+branch  1 taken 88%
+        1:  642:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+        1:  643:        return -1;
+        -:  644:    }
+        -:  645:    
+        -:  646:    TestContext* context = (TestContext*)context_ptr;
+        7:  647:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  648:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  649:        return -1;
+        -:  650:    }
+        -:  651:    
+        -:  652:    // Store result in history
+        7:  653:    if (store_test_result(context) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  654:        static int store_warn_count = 0;
+        7:  655:        if (store_warn_count < 5) {
+branch  0 taken 71% (fallthrough)
+branch  1 taken 29%
+        5:  656:            MERCURY_WARN("Failed to store test result in history");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        5:  657:            store_warn_count++;
+        -:  658:        }
+        -:  659:    }
+        -:  660:    
+        -:  661:    // Deactivate context
+        7:  662:    context->is_active = false;
+        7:  663:    context->context_id = -1;
+        7:  664:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        7:  665:        g_orchestrator->context_count--;
+        7:  666:        atomic_fetch_add(&g_orchestrator->total_tests_executed, 1);
+        -:  667:    }
+        -:  668:    
+        -:  669:    return 0;
+        -:  670:}
+------------------
+finalize_test_context:
+function finalize_test_context called 341 returned 100% blocks executed 92%
+      341:  640:int finalize_test_context(void* context_ptr) {
+      341:  641:    if (!context_ptr) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  642:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+        1:  643:        return -1;
+        -:  644:    }
+        -:  645:    
+        -:  646:    TestContext* context = (TestContext*)context_ptr;
+      340:  647:    if (!context->is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  648:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+    #####:  649:        return -1;
+        -:  650:    }
+        -:  651:    
+        -:  652:    // Store result in history
+      340:  653:    if (store_test_result(context) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  654:        static int store_warn_count = 0;
+      340:  655:        if (store_warn_count < 5) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        5:  656:            MERCURY_WARN("Failed to store test result in history");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        5:  657:            store_warn_count++;
+        -:  658:        }
+        -:  659:    }
+        -:  660:    
+        -:  661:    // Deactivate context
+      340:  662:    context->is_active = false;
+      340:  663:    context->context_id = -1;
+      340:  664:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      340:  665:        g_orchestrator->context_count--;
+      340:  666:        atomic_fetch_add(&g_orchestrator->total_tests_executed, 1);
+        -:  667:    }
+        -:  668:    
+        -:  669:    return 0;
+        -:  670:}
+------------------
+finalize_test_context:
+function finalize_test_context called 477 returned 100% blocks executed 92%
+      477:  640:int finalize_test_context(void* context_ptr) {
+      477:  641:    if (!context_ptr) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  642:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context cannot be NULL");
+    #####:  643:        return -1;
+        -:  644:    }
+        -:  645:    
+        -:  646:    TestContext* context = (TestContext*)context_ptr;
+      477:  647:    if (!context->is_active) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        1:  648:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Context is not active");
+        1:  649:        return -1;
+        -:  650:    }
+        -:  651:    
+        -:  652:    // Store result in history
+      476:  653:    if (store_test_result(context) != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  654:        static int store_warn_count = 0;
+      476:  655:        if (store_warn_count < 5) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        5:  656:            MERCURY_WARN("Failed to store test result in history");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        5:  657:            store_warn_count++;
+        -:  658:        }
+        -:  659:    }
+        -:  660:    
+        -:  661:    // Deactivate context
+      476:  662:    context->is_active = false;
+      476:  663:    context->context_id = -1;
+      476:  664:    if (g_orchestrator) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      476:  665:        g_orchestrator->context_count--;
+      476:  666:        atomic_fetch_add(&g_orchestrator->total_tests_executed, 1);
+        -:  667:    }
+        -:  668:    
+        -:  669:    return 0;
+        -:  670:}
+------------------
+        -:  671:
+        -:  672:// Get orchestrator statistics
+       6*:  673:void get_orchestrator_statistics(uint64_t* total_tests, uint64_t* total_violations,
+        -:  674:                                uint64_t* total_n_plus_one, size_t* active_contexts,
+        -:  675:                                uint64_t* history_entries) {
+       6*:  676:    if (!g_orchestrator) {
+    #####:  677:        if (total_tests) *total_tests = 0;
+    #####:  678:        if (total_violations) *total_violations = 0;
+    #####:  679:        if (total_n_plus_one) *total_n_plus_one = 0;
+    #####:  680:        if (active_contexts) *active_contexts = 0;
+    #####:  681:        if (history_entries) *history_entries = 0;
+    #####:  682:        return;
+        -:  683:    }
+        -:  684:    
+       6*:  685:    if (total_tests) *total_tests = atomic_load(&g_orchestrator->total_tests_executed);
+       6*:  686:    if (total_violations) *total_violations = atomic_load(&g_orchestrator->total_violations);
+       6*:  687:    if (total_n_plus_one) *total_n_plus_one = atomic_load(&g_orchestrator->total_n_plus_one_detected);
+        -:  688:    
+        -:  689:    // Count active contexts
+       6*:  690:    if (active_contexts) {
+        -:  691:        size_t active_count = 0;
+    1542*:  692:        for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+    1536*:  693:            if (g_orchestrator->contexts[i].is_active) {
+    #####:  694:                active_count++;
+        -:  695:            }
+        -:  696:        }
+       6*:  697:        *active_contexts = active_count;
+        -:  698:    }
+        -:  699:    
+        -:  700:    // Get history entries count
+       6*:  701:    if (history_entries) {
+       6*:  702:        *history_entries = 0; // TODO: Implement history entries counting if needed
+        -:  703:    }
+        -:  704:}
+------------------
+get_orchestrator_statistics:
+function get_orchestrator_statistics called 2 returned 100% blocks executed 56%
+        2:  673:void get_orchestrator_statistics(uint64_t* total_tests, uint64_t* total_violations,
+        -:  674:                                uint64_t* total_n_plus_one, size_t* active_contexts,
+        -:  675:                                uint64_t* history_entries) {
+        2:  676:    if (!g_orchestrator) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  677:        if (total_tests) *total_tests = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  678:        if (total_violations) *total_violations = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  679:        if (total_n_plus_one) *total_n_plus_one = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  680:        if (active_contexts) *active_contexts = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  681:        if (history_entries) *history_entries = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  682:        return;
+        -:  683:    }
+        -:  684:    
+        2:  685:    if (total_tests) *total_tests = atomic_load(&g_orchestrator->total_tests_executed);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2:  686:    if (total_violations) *total_violations = atomic_load(&g_orchestrator->total_violations);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2:  687:    if (total_n_plus_one) *total_n_plus_one = atomic_load(&g_orchestrator->total_n_plus_one_detected);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  688:    
+        -:  689:    // Count active contexts
+        2:  690:    if (active_contexts) {
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  691:        size_t active_count = 0;
+      514:  692:        for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+      512:  693:            if (g_orchestrator->contexts[i].is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  694:                active_count++;
+        -:  695:            }
+        -:  696:        }
+        2:  697:        *active_contexts = active_count;
+        -:  698:    }
+        -:  699:    
+        -:  700:    // Get history entries count
+        2:  701:    if (history_entries) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2:  702:        *history_entries = 0; // TODO: Implement history entries counting if needed
+        -:  703:    }
+        -:  704:}
+------------------
+get_orchestrator_statistics:
+function get_orchestrator_statistics called 4 returned 100% blocks executed 56%
+        4:  673:void get_orchestrator_statistics(uint64_t* total_tests, uint64_t* total_violations,
+        -:  674:                                uint64_t* total_n_plus_one, size_t* active_contexts,
+        -:  675:                                uint64_t* history_entries) {
+        4:  676:    if (!g_orchestrator) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  677:        if (total_tests) *total_tests = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  678:        if (total_violations) *total_violations = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  679:        if (total_n_plus_one) *total_n_plus_one = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  680:        if (active_contexts) *active_contexts = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  681:        if (history_entries) *history_entries = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  682:        return;
+        -:  683:    }
+        -:  684:    
+        4:  685:    if (total_tests) *total_tests = atomic_load(&g_orchestrator->total_tests_executed);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  686:    if (total_violations) *total_violations = atomic_load(&g_orchestrator->total_violations);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  687:    if (total_n_plus_one) *total_n_plus_one = atomic_load(&g_orchestrator->total_n_plus_one_detected);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  688:    
+        -:  689:    // Count active contexts
+        4:  690:    if (active_contexts) {
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  691:        size_t active_count = 0;
+     1028:  692:        for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+     1024:  693:            if (g_orchestrator->contexts[i].is_active) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  694:                active_count++;
+        -:  695:            }
+        -:  696:        }
+        4:  697:        *active_contexts = active_count;
+        -:  698:    }
+        -:  699:    
+        -:  700:    // Get history entries count
+        4:  701:    if (history_entries) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  702:        *history_entries = 0; // TODO: Implement history entries counting if needed
+        -:  703:    }
+        -:  704:}
+------------------
+get_orchestrator_statistics:
+function get_orchestrator_statistics called 0 returned 0% blocks executed 0%
+    #####:  673:void get_orchestrator_statistics(uint64_t* total_tests, uint64_t* total_violations,
+        -:  674:                                uint64_t* total_n_plus_one, size_t* active_contexts,
+        -:  675:                                uint64_t* history_entries) {
+    #####:  676:    if (!g_orchestrator) {
+branch  0 never executed
+branch  1 never executed
+    #####:  677:        if (total_tests) *total_tests = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  678:        if (total_violations) *total_violations = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  679:        if (total_n_plus_one) *total_n_plus_one = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  680:        if (active_contexts) *active_contexts = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  681:        if (history_entries) *history_entries = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  682:        return;
+        -:  683:    }
+        -:  684:    
+    #####:  685:    if (total_tests) *total_tests = atomic_load(&g_orchestrator->total_tests_executed);
+branch  0 never executed
+branch  1 never executed
+    #####:  686:    if (total_violations) *total_violations = atomic_load(&g_orchestrator->total_violations);
+branch  0 never executed
+branch  1 never executed
+    #####:  687:    if (total_n_plus_one) *total_n_plus_one = atomic_load(&g_orchestrator->total_n_plus_one_detected);
+branch  0 never executed
+branch  1 never executed
+        -:  688:    
+        -:  689:    // Count active contexts
+    #####:  690:    if (active_contexts) {
+branch  0 never executed
+branch  1 never executed
+        -:  691:        size_t active_count = 0;
+    #####:  692:        for (size_t i = 0; i < g_orchestrator->max_contexts; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  693:            if (g_orchestrator->contexts[i].is_active) {
+branch  0 never executed
+branch  1 never executed
+    #####:  694:                active_count++;
+        -:  695:            }
+        -:  696:        }
+    #####:  697:        *active_contexts = active_count;
+        -:  698:    }
+        -:  699:    
+        -:  700:    // Get history entries count
+    #####:  701:    if (history_entries) {
+branch  0 never executed
+branch  1 never executed
+    #####:  702:        *history_entries = 0; // TODO: Implement history entries counting if needed
+        -:  703:    }
+        -:  704:}
+------------------
+        -:  705:
+        -:  706:// Load configuration from binary file
+       28:  707:int load_binary_configuration(const char* config_path) {
+       28:  708:    if (!config_path) {
+       1*:  709:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+       1*:  710:        return -1;
+        -:  711:    }
+        -:  712:    
+        -:  713:    // Check if file exists before attempting to load
+       27:  714:    if (access(config_path, F_OK) != 0) {
+        7:  715:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration file does not exist");
+        7:  716:        return -1;
+        -:  717:    }
+        -:  718:    
+        -:  719:    // This would implement binary configuration loading
+        -:  720:    // For now, it's a placeholder for existing files
+       20:  721:    MERCURY_INFO("Binary configuration loading not yet implemented: %s", config_path);
+        -:  722:    return 0;
+        -:  723:}
+------------------
+load_binary_configuration:
+function load_binary_configuration called 3 returned 100% blocks executed 100%
+        3:  707:int load_binary_configuration(const char* config_path) {
+        3:  708:    if (!config_path) {
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        1:  709:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+        1:  710:        return -1;
+        -:  711:    }
+        -:  712:    
+        -:  713:    // Check if file exists before attempting to load
+        2:  714:    if (access(config_path, F_OK) != 0) {
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+        1:  715:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration file does not exist");
+        1:  716:        return -1;
+        -:  717:    }
+        -:  718:    
+        -:  719:    // This would implement binary configuration loading
+        -:  720:    // For now, it's a placeholder for existing files
+        1:  721:    MERCURY_INFO("Binary configuration loading not yet implemented: %s", config_path);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  722:    return 0;
+        -:  723:}
+------------------
+load_binary_configuration:
+function load_binary_configuration called 9 returned 100% blocks executed 88%
+        9:  707:int load_binary_configuration(const char* config_path) {
+        9:  708:    if (!config_path) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  709:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+    #####:  710:        return -1;
+        -:  711:    }
+        -:  712:    
+        -:  713:    // Check if file exists before attempting to load
+        9:  714:    if (access(config_path, F_OK) != 0) {
+call    0 returned 100%
+branch  1 taken 11% (fallthrough)
+branch  2 taken 89%
+        1:  715:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration file does not exist");
+        1:  716:        return -1;
+        -:  717:    }
+        -:  718:    
+        -:  719:    // This would implement binary configuration loading
+        -:  720:    // For now, it's a placeholder for existing files
+        8:  721:    MERCURY_INFO("Binary configuration loading not yet implemented: %s", config_path);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  722:    return 0;
+        -:  723:}
+------------------
+load_binary_configuration:
+function load_binary_configuration called 16 returned 100% blocks executed 88%
+       16:  707:int load_binary_configuration(const char* config_path) {
+       16:  708:    if (!config_path) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  709:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+    #####:  710:        return -1;
+        -:  711:    }
+        -:  712:    
+        -:  713:    // Check if file exists before attempting to load
+       16:  714:    if (access(config_path, F_OK) != 0) {
+call    0 returned 100%
+branch  1 taken 31% (fallthrough)
+branch  2 taken 69%
+        5:  715:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration file does not exist");
+        5:  716:        return -1;
+        -:  717:    }
+        -:  718:    
+        -:  719:    // This would implement binary configuration loading
+        -:  720:    // For now, it's a placeholder for existing files
+       11:  721:    MERCURY_INFO("Binary configuration loading not yet implemented: %s", config_path);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  722:    return 0;
+        -:  723:}
+------------------
+        -:  724:
+        -:  725:// Save configuration to binary file
+       21:  726:int save_binary_configuration(const char* config_path) {
+       21:  727:    if (!config_path) {
+       1*:  728:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+       1*:  729:        return -1;
+        -:  730:    }
+        -:  731:    
+        -:  732:    // Create a minimal dummy file for testing purposes - SAFE VERSION
+        -:  733:    // This would implement binary configuration saving in a real implementation
+       20:  734:    FILE* fp = fopen(config_path, "w");
+       20:  735:    if (!fp) {
+        -:  736:        char error_msg[256];
+       8*:  737:        snprintf(error_msg, sizeof(error_msg), "Failed to create configuration file: %s", strerror(errno));
+       8*:  738:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, error_msg);
+        -:  739:        return -1;
+        -:  740:    }
+        -:  741:    
+        -:  742:    // Write a minimal header to mark it as a valid config file
+        -:  743:    const char* header = "MERCURY_CONFIG_V1\n";
+       12:  744:    size_t written = fwrite(header, 1, strlen(header), fp);
+       12:  745:    fclose(fp);
+        -:  746:    
+       12:  747:    if (written != strlen(header)) {
+    #####:  748:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, 
+        -:  749:                         "Failed to write configuration header");
+    #####:  750:        return -1;
+        -:  751:    }
+        -:  752:    
+       12:  753:    MERCURY_INFO("Binary configuration saving not yet implemented: %s", config_path);
+        -:  754:    return 0;
+        -:  755:}
+------------------
+save_binary_configuration:
+function save_binary_configuration called 2 returned 100% blocks executed 77%
+        2:  726:int save_binary_configuration(const char* config_path) {
+        2:  727:    if (!config_path) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        1:  728:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+        1:  729:        return -1;
+        -:  730:    }
+        -:  731:    
+        -:  732:    // Create a minimal dummy file for testing purposes - SAFE VERSION
+        -:  733:    // This would implement binary configuration saving in a real implementation
+        1:  734:    FILE* fp = fopen(config_path, "w");
+call    0 returned 100%
+        1:  735:    if (!fp) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  736:        char error_msg[256];
+    #####:  737:        snprintf(error_msg, sizeof(error_msg), "Failed to create configuration file: %s", strerror(errno));
+call    0 never executed
+    #####:  738:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, error_msg);
+        -:  739:        return -1;
+        -:  740:    }
+        -:  741:    
+        -:  742:    // Write a minimal header to mark it as a valid config file
+        -:  743:    const char* header = "MERCURY_CONFIG_V1\n";
+        1:  744:    size_t written = fwrite(header, 1, strlen(header), fp);
+call    0 returned 100%
+        1:  745:    fclose(fp);
+call    0 returned 100%
+        -:  746:    
+        1:  747:    if (written != strlen(header)) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  748:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, 
+        -:  749:                         "Failed to write configuration header");
+    #####:  750:        return -1;
+        -:  751:    }
+        -:  752:    
+        1:  753:    MERCURY_INFO("Binary configuration saving not yet implemented: %s", config_path);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  754:    return 0;
+        -:  755:}
+------------------
+save_binary_configuration:
+function save_binary_configuration called 4 returned 100% blocks executed 85%
+        4:  726:int save_binary_configuration(const char* config_path) {
+        4:  727:    if (!config_path) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  728:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+    #####:  729:        return -1;
+        -:  730:    }
+        -:  731:    
+        -:  732:    // Create a minimal dummy file for testing purposes - SAFE VERSION
+        -:  733:    // This would implement binary configuration saving in a real implementation
+        4:  734:    FILE* fp = fopen(config_path, "w");
+call    0 returned 100%
+        4:  735:    if (!fp) {
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+        -:  736:        char error_msg[256];
+        1:  737:        snprintf(error_msg, sizeof(error_msg), "Failed to create configuration file: %s", strerror(errno));
+call    0 returned 100%
+        1:  738:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, error_msg);
+        -:  739:        return -1;
+        -:  740:    }
+        -:  741:    
+        -:  742:    // Write a minimal header to mark it as a valid config file
+        -:  743:    const char* header = "MERCURY_CONFIG_V1\n";
+        3:  744:    size_t written = fwrite(header, 1, strlen(header), fp);
+call    0 returned 100%
+        3:  745:    fclose(fp);
+call    0 returned 100%
+        -:  746:    
+        3:  747:    if (written != strlen(header)) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  748:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, 
+        -:  749:                         "Failed to write configuration header");
+    #####:  750:        return -1;
+        -:  751:    }
+        -:  752:    
+        3:  753:    MERCURY_INFO("Binary configuration saving not yet implemented: %s", config_path);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  754:    return 0;
+        -:  755:}
+------------------
+save_binary_configuration:
+function save_binary_configuration called 15 returned 100% blocks executed 85%
+       15:  726:int save_binary_configuration(const char* config_path) {
+       15:  727:    if (!config_path) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  728:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Configuration path cannot be NULL");
+    #####:  729:        return -1;
+        -:  730:    }
+        -:  731:    
+        -:  732:    // Create a minimal dummy file for testing purposes - SAFE VERSION
+        -:  733:    // This would implement binary configuration saving in a real implementation
+       15:  734:    FILE* fp = fopen(config_path, "w");
+call    0 returned 100%
+       15:  735:    if (!fp) {
+branch  0 taken 47% (fallthrough)
+branch  1 taken 53%
+        -:  736:        char error_msg[256];
+        7:  737:        snprintf(error_msg, sizeof(error_msg), "Failed to create configuration file: %s", strerror(errno));
+call    0 returned 100%
+        7:  738:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, error_msg);
+        -:  739:        return -1;
+        -:  740:    }
+        -:  741:    
+        -:  742:    // Write a minimal header to mark it as a valid config file
+        -:  743:    const char* header = "MERCURY_CONFIG_V1\n";
+        8:  744:    size_t written = fwrite(header, 1, strlen(header), fp);
+call    0 returned 100%
+        8:  745:    fclose(fp);
+call    0 returned 100%
+        -:  746:    
+        8:  747:    if (written != strlen(header)) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  748:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, 
+        -:  749:                         "Failed to write configuration header");
+    #####:  750:        return -1;
+        -:  751:    }
+        -:  752:    
+        8:  753:    MERCURY_INFO("Binary configuration saving not yet implemented: %s", config_path);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  754:    return 0;
+        -:  755:}
+------------------
+        -:  756:
+        -:  757:// Public initialization function for testing
+    #####:  758:int initialize_test_orchestrator(const char* history_file_path) {
+    #####:  759:    const char* path = history_file_path ? history_file_path : "/tmp/test_history.bin";
+    #####:  760:    return init_test_orchestrator(path) == MERCURY_SUCCESS ? 0 : -1;
+        -:  761:}
+------------------
+initialize_test_orchestrator:
+function initialize_test_orchestrator called 0 returned 0% blocks executed 0%
+    #####:  758:int initialize_test_orchestrator(const char* history_file_path) {
+    #####:  759:    const char* path = history_file_path ? history_file_path : "/tmp/test_history.bin";
+branch  0 never executed
+branch  1 never executed
+    #####:  760:    return init_test_orchestrator(path) == MERCURY_SUCCESS ? 0 : -1;
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  761:}
+------------------
+initialize_test_orchestrator:
+function initialize_test_orchestrator called 0 returned 0% blocks executed 0%
+    #####:  758:int initialize_test_orchestrator(const char* history_file_path) {
+    #####:  759:    const char* path = history_file_path ? history_file_path : "/tmp/test_history.bin";
+branch  0 never executed
+branch  1 never executed
+    #####:  760:    return init_test_orchestrator(path) == MERCURY_SUCCESS ? 0 : -1;
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  761:}
+------------------
+initialize_test_orchestrator:
+function initialize_test_orchestrator called 0 returned 0% blocks executed 0%
+    #####:  758:int initialize_test_orchestrator(const char* history_file_path) {
+    #####:  759:    const char* path = history_file_path ? history_file_path : "/tmp/test_history.bin";
+branch  0 never executed
+branch  1 never executed
+    #####:  760:    return init_test_orchestrator(path) == MERCURY_SUCCESS ? 0 : -1;
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  761:}
+------------------
+        -:  762:
+        -:  763:// Public cleanup function for testing
+        3:  764:void cleanup_test_orchestrator(void) {
+        3:  765:    cleanup_orchestrator_internal();
+        3:  766:}
+------------------
+cleanup_test_orchestrator:
+function cleanup_test_orchestrator called 1 returned 100% blocks executed 100%
+        1:  764:void cleanup_test_orchestrator(void) {
+        1:  765:    cleanup_orchestrator_internal();
+call    0 returned 100%
+        1:  766:}
+------------------
+cleanup_test_orchestrator:
+function cleanup_test_orchestrator called 1 returned 100% blocks executed 100%
+        1:  764:void cleanup_test_orchestrator(void) {
+        1:  765:    cleanup_orchestrator_internal();
+call    0 returned 100%
+        1:  766:}
+------------------
+cleanup_test_orchestrator:
+function cleanup_test_orchestrator called 1 returned 100% blocks executed 100%
+        1:  764:void cleanup_test_orchestrator(void) {
+        1:  765:    cleanup_orchestrator_internal();
+call    0 returned 100%
+        1:  766:}
+------------------
+        -:  767:
+        -:  768:// Alias for update_test_context for compatibility
+    #####:  769:int update_test_metrics(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  770:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  771:                       const char* grade) {
+    #####:  772:    return update_test_context(context_ptr, response_time_ms, memory_usage_mb,
+        -:  773:                              query_count, cache_hit_ratio, performance_score, grade);
+        -:  774:}
+------------------
+update_test_metrics:
+function update_test_metrics called 0 returned 0% blocks executed 0%
+    #####:  769:int update_test_metrics(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  770:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  771:                       const char* grade) {
+    #####:  772:    return update_test_context(context_ptr, response_time_ms, memory_usage_mb,
+call    0 never executed
+        -:  773:                              query_count, cache_hit_ratio, performance_score, grade);
+        -:  774:}
+------------------
+update_test_metrics:
+function update_test_metrics called 0 returned 0% blocks executed 0%
+    #####:  769:int update_test_metrics(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  770:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  771:                       const char* grade) {
+    #####:  772:    return update_test_context(context_ptr, response_time_ms, memory_usage_mb,
+call    0 never executed
+        -:  773:                              query_count, cache_hit_ratio, performance_score, grade);
+        -:  774:}
+------------------
+update_test_metrics:
+function update_test_metrics called 0 returned 0% blocks executed 0%
+    #####:  769:int update_test_metrics(void* context_ptr, double response_time_ms, double memory_usage_mb,
+        -:  770:                       uint32_t query_count, double cache_hit_ratio, double performance_score,
+        -:  771:                       const char* grade) {
+    #####:  772:    return update_test_context(context_ptr, response_time_ms, memory_usage_mb,
+call    0 never executed
+        -:  773:                              query_count, cache_hit_ratio, performance_score, grade);
+        -:  774:}
+------------------
+        -:  775:
+        -:  776:// Destroy a test context
+    #####:  777:void destroy_test_context(void* context) {
+    #####:  778:    if (!context) return;
+        -:  779:    
+        -:  780:    TestContext* ctx = (TestContext*)context;
+    #####:  781:    ctx->is_active = false;
+        -:  782:    
+    #####:  783:    if (g_orchestrator) {
+    #####:  784:        g_orchestrator->context_count--;
+        -:  785:    }
+        -:  786:}
+------------------
+destroy_test_context:
+function destroy_test_context called 0 returned 0% blocks executed 0%
+    #####:  777:void destroy_test_context(void* context) {
+    #####:  778:    if (!context) return;
+branch  0 never executed
+branch  1 never executed
+        -:  779:    
+        -:  780:    TestContext* ctx = (TestContext*)context;
+    #####:  781:    ctx->is_active = false;
+        -:  782:    
+    #####:  783:    if (g_orchestrator) {
+branch  0 never executed
+branch  1 never executed
+    #####:  784:        g_orchestrator->context_count--;
+        -:  785:    }
+        -:  786:}
+------------------
+destroy_test_context:
+function destroy_test_context called 0 returned 0% blocks executed 0%
+    #####:  777:void destroy_test_context(void* context) {
+    #####:  778:    if (!context) return;
+branch  0 never executed
+branch  1 never executed
+        -:  779:    
+        -:  780:    TestContext* ctx = (TestContext*)context;
+    #####:  781:    ctx->is_active = false;
+        -:  782:    
+    #####:  783:    if (g_orchestrator) {
+branch  0 never executed
+branch  1 never executed
+    #####:  784:        g_orchestrator->context_count--;
+        -:  785:    }
+        -:  786:}
+------------------
+destroy_test_context:
+function destroy_test_context called 0 returned 0% blocks executed 0%
+    #####:  777:void destroy_test_context(void* context) {
+    #####:  778:    if (!context) return;
+branch  0 never executed
+branch  1 never executed
+        -:  779:    
+        -:  780:    TestContext* ctx = (TestContext*)context;
+    #####:  781:    ctx->is_active = false;
+        -:  782:    
+    #####:  783:    if (g_orchestrator) {
+branch  0 never executed
+branch  1 never executed
+    #####:  784:        g_orchestrator->context_count--;
+        -:  785:    }
+        -:  786:}
+------------------
+        -:  787:
+        -:  788:// Query history entries
+       18:  789:int query_history_entries(const char* test_class_filter, const char* test_method_filter,
+        -:  790:                         uint64_t start_timestamp, uint64_t end_timestamp,
+        -:  791:                         char* result_buffer, size_t buffer_size) {
+       18:  792:    if (!result_buffer || buffer_size == 0) {
+       2*:  793:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid result buffer");
+       2*:  794:        return -1;
+        -:  795:    }
+        -:  796:    
+       16:  797:    if (!g_orchestrator || !g_orchestrator->history_header) {
+    #####:  798:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Orchestrator not initialized");
+    #####:  799:        return -1;
+        -:  800:    }
+        -:  801:    
+        -:  802:    // This would implement history querying
+        -:  803:    // For now, return a simple count
+        -:  804:    int matching_entries = 0;
+        -:  805:    
+       16:  806:    snprintf(result_buffer, buffer_size, 
+        -:  807:             "History query results: %" PRIu64 " total entries, %d matching filters",
+        -:  808:             g_orchestrator->history_header->entry_count, matching_entries);
+        -:  809:    
+       16:  810:    return matching_entries;
+        -:  811:}
+------------------
+query_history_entries:
+function query_history_entries called 6 returned 100% blocks executed 86%
+        6:  789:int query_history_entries(const char* test_class_filter, const char* test_method_filter,
+        -:  790:                         uint64_t start_timestamp, uint64_t end_timestamp,
+        -:  791:                         char* result_buffer, size_t buffer_size) {
+        6:  792:    if (!result_buffer || buffer_size == 0) {
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        2:  793:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid result buffer");
+        2:  794:        return -1;
+        -:  795:    }
+        -:  796:    
+        4:  797:    if (!g_orchestrator || !g_orchestrator->history_header) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  798:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Orchestrator not initialized");
+    #####:  799:        return -1;
+        -:  800:    }
+        -:  801:    
+        -:  802:    // This would implement history querying
+        -:  803:    // For now, return a simple count
+        -:  804:    int matching_entries = 0;
+        -:  805:    
+        4:  806:    snprintf(result_buffer, buffer_size, 
+        -:  807:             "History query results: %" PRIu64 " total entries, %d matching filters",
+        -:  808:             g_orchestrator->history_header->entry_count, matching_entries);
+        -:  809:    
+        4:  810:    return matching_entries;
+        -:  811:}
+------------------
+query_history_entries:
+function query_history_entries called 8 returned 100% blocks executed 71%
+        8:  789:int query_history_entries(const char* test_class_filter, const char* test_method_filter,
+        -:  790:                         uint64_t start_timestamp, uint64_t end_timestamp,
+        -:  791:                         char* result_buffer, size_t buffer_size) {
+        8:  792:    if (!result_buffer || buffer_size == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  793:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid result buffer");
+    #####:  794:        return -1;
+        -:  795:    }
+        -:  796:    
+        8:  797:    if (!g_orchestrator || !g_orchestrator->history_header) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  798:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Orchestrator not initialized");
+    #####:  799:        return -1;
+        -:  800:    }
+        -:  801:    
+        -:  802:    // This would implement history querying
+        -:  803:    // For now, return a simple count
+        -:  804:    int matching_entries = 0;
+        -:  805:    
+        8:  806:    snprintf(result_buffer, buffer_size, 
+        -:  807:             "History query results: %" PRIu64 " total entries, %d matching filters",
+        -:  808:             g_orchestrator->history_header->entry_count, matching_entries);
+        -:  809:    
+        8:  810:    return matching_entries;
+        -:  811:}
+------------------
+query_history_entries:
+function query_history_entries called 4 returned 100% blocks executed 71%
+        4:  789:int query_history_entries(const char* test_class_filter, const char* test_method_filter,
+        -:  790:                         uint64_t start_timestamp, uint64_t end_timestamp,
+        -:  791:                         char* result_buffer, size_t buffer_size) {
+        4:  792:    if (!result_buffer || buffer_size == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  793:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid result buffer");
+    #####:  794:        return -1;
+        -:  795:    }
+        -:  796:    
+        4:  797:    if (!g_orchestrator || !g_orchestrator->history_header) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  798:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Orchestrator not initialized");
+    #####:  799:        return -1;
+        -:  800:    }
+        -:  801:    
+        -:  802:    // This would implement history querying
+        -:  803:    // For now, return a simple count
+        -:  804:    int matching_entries = 0;
+        -:  805:    
+        4:  806:    snprintf(result_buffer, buffer_size, 
+        -:  807:             "History query results: %" PRIu64 " total entries, %d matching filters",
+        -:  808:             g_orchestrator->history_header->entry_count, matching_entries);
+        -:  809:    
+        4:  810:    return matching_entries;
+        -:  811:}
+------------------
+        -:  812:
+        -:  813:// === LIBRARY INITIALIZATION ===
+        -:  814:
+        -:  815:// Library constructor
+        -:  816:MERCURY_CONSTRUCTOR(test_orchestrator_init) {
+        -:  817:    // MERCURY_INFO("libtest_orchestrator.so loaded");  // Too verbose
+        -:  818:}
+        -:  819:
+        -:  820:// Library destructor
+        3:  821:MERCURY_DESTRUCTOR(test_orchestrator_cleanup) {
+        3:  822:    cleanup_test_orchestrator();
+        -:  823:    // MERCURY_INFO("libtest_orchestrator.so unloaded");  // Too verbose
+        3:  824:}
+------------------
+test_orchestrator_cleanup:
+function test_orchestrator_cleanup called 1 returned 100% blocks executed 100%
+        1:  821:MERCURY_DESTRUCTOR(test_orchestrator_cleanup) {
+        1:  822:    cleanup_test_orchestrator();
+call    0 returned 100%
+        -:  823:    // MERCURY_INFO("libtest_orchestrator.so unloaded");  // Too verbose
+        1:  824:}
+------------------
+test_orchestrator_cleanup:
+function test_orchestrator_cleanup called 1 returned 100% blocks executed 100%
+        1:  821:MERCURY_DESTRUCTOR(test_orchestrator_cleanup) {
+        1:  822:    cleanup_test_orchestrator();
+call    0 returned 100%
+        -:  823:    // MERCURY_INFO("libtest_orchestrator.so unloaded");  // Too verbose
+        1:  824:}
+------------------
+test_orchestrator_cleanup:
+function test_orchestrator_cleanup called 1 returned 100% blocks executed 100%
+        1:  821:MERCURY_DESTRUCTOR(test_orchestrator_cleanup) {
+        1:  822:    cleanup_test_orchestrator();
+call    0 returned 100%
+        -:  823:    // MERCURY_INFO("libtest_orchestrator.so unloaded");  // Too verbose
+        1:  824:}
+------------------

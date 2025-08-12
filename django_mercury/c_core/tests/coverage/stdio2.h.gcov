@@ -1,0 +1,2755 @@
+        -:    0:Source:/usr/include/x86_64-linux-gnu/bits/stdio2.h
+        -:    1:/* Checking macros for stdio functions.
+        -:    2:   Copyright (C) 2004-2022 Free Software Foundation, Inc.
+        -:    3:   This file is part of the GNU C Library.
+        -:    4:
+        -:    5:   The GNU C Library is free software; you can redistribute it and/or
+        -:    6:   modify it under the terms of the GNU Lesser General Public
+        -:    7:   License as published by the Free Software Foundation; either
+        -:    8:   version 2.1 of the License, or (at your option) any later version.
+        -:    9:
+        -:   10:   The GNU C Library is distributed in the hope that it will be useful,
+        -:   11:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   12:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+        -:   13:   Lesser General Public License for more details.
+        -:   14:
+        -:   15:   You should have received a copy of the GNU Lesser General Public
+        -:   16:   License along with the GNU C Library; if not, see
+        -:   17:   <https://www.gnu.org/licenses/>.  */
+        -:   18:
+        -:   19:#ifndef _BITS_STDIO2_H
+        -:   20:#define _BITS_STDIO2_H 1
+        -:   21:
+        -:   22:#ifndef _STDIO_H
+        -:   23:# error "Never include <bits/stdio2.h> directly; use <stdio.h> instead."
+        -:   24:#endif
+        -:   25:
+        -:   26:extern int __sprintf_chk (char *__restrict __s, int __flag, size_t __slen,
+        -:   27:			  const char *__restrict __format, ...) __THROW
+        -:   28:    __attr_access ((__write_only__, 1, 3));
+        -:   29:extern int __vsprintf_chk (char *__restrict __s, int __flag, size_t __slen,
+        -:   30:			   const char *__restrict __format,
+        -:   31:			   __gnuc_va_list __ap) __THROW
+        -:   32:    __attr_access ((__write_only__, 1, 3));
+        -:   33:
+        -:   34:#ifdef __va_arg_pack
+        -:   35:__fortify_function int
+        -:   36:__NTH (sprintf (char *__restrict __s, const char *__restrict __fmt, ...))
+        -:   37:{
+        -:   38:  return __builtin___sprintf_chk (__s, __USE_FORTIFY_LEVEL - 1,
+        -:   39:				  __glibc_objsize (__s), __fmt,
+        -:   40:				  __va_arg_pack ());
+        -:   41:}
+        -:   42:#elif !defined __cplusplus
+        -:   43:# define sprintf(str, ...) \
+        -:   44:  __builtin___sprintf_chk (str, __USE_FORTIFY_LEVEL - 1,		      \
+        -:   45:			   __glibc_objsize (str), __VA_ARGS__)
+        -:   46:#endif
+        -:   47:
+        -:   48:__fortify_function int
+        -:   49:__NTH (vsprintf (char *__restrict __s, const char *__restrict __fmt,
+        -:   50:		 __gnuc_va_list __ap))
+        -:   51:{
+        -:   52:  return __builtin___vsprintf_chk (__s, __USE_FORTIFY_LEVEL - 1,
+        -:   53:				   __glibc_objsize (__s), __fmt, __ap);
+        -:   54:}
+        -:   55:
+        -:   56:#if defined __USE_ISOC99 || defined __USE_UNIX98
+        -:   57:
+        -:   58:extern int __snprintf_chk (char *__restrict __s, size_t __n, int __flag,
+        -:   59:			   size_t __slen, const char *__restrict __format,
+        -:   60:			   ...) __THROW
+        -:   61:    __attr_access ((__write_only__, 1, 2));
+        -:   62:extern int __vsnprintf_chk (char *__restrict __s, size_t __n, int __flag,
+        -:   63:			    size_t __slen, const char *__restrict __format,
+        -:   64:			    __gnuc_va_list __ap) __THROW;
+        -:   65:
+        -:   66:# ifdef __va_arg_pack
+        -:   67:__fortify_function int
+        -:   68:__NTH (snprintf (char *__restrict __s, size_t __n,
+        -:   69:		 const char *__restrict __fmt, ...))
+        -:   70:{
+    5386*:   71:  return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 0% (fallthrough)
+branch 12 taken 100%
+call   13 returned 100%
+call   14 returned 100%
+call   15 returned 100%
+branch 16 taken 100% (fallthrough)
+branch 17 taken 0%
+call   18 returned 100%
+call   19 returned 100%
+call   20 returned 100%
+call   21 returned 100%
+call   22 returned 100%
+branch 23 never executed
+branch 24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 returned 100%
+call   28 returned 100%
+call   29 returned 100%
+call   30 returned 100%
+branch 31 never executed
+branch 32 never executed
+call   33 never executed
+call   34 returned 100%
+call   35 returned 100%
+call   36 returned 100%
+call   37 returned 100%
+call   38 returned 100%
+branch 39 never executed
+branch 40 never executed
+call   41 never executed
+        -:   72:				   __glibc_objsize (__s), __fmt,
+        -:   73:				   __va_arg_pack ());
+        -:   74:}
+        -:   75:# elif !defined __cplusplus
+        -:   76:#  define snprintf(str, len, ...) \
+        -:   77:  __builtin___snprintf_chk (str, len, __USE_FORTIFY_LEVEL - 1,		      \
+        -:   78:			    __glibc_objsize (str), __VA_ARGS__)
+        -:   79:# endif
+        -:   80:
+        -:   81:__fortify_function int
+        -:   82:__NTH (vsnprintf (char *__restrict __s, size_t __n,
+        -:   83:		  const char *__restrict __fmt, __gnuc_va_list __ap))
+        -:   84:{
+    #####:   85:  return __builtin___vsnprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+        -:   86:				    __glibc_objsize (__s), __fmt, __ap);
+        -:   87:}
+        -:   88:
+        -:   89:#endif
+        -:   90:
+        -:   91:#if __USE_FORTIFY_LEVEL > 1
+        -:   92:
+        -:   93:extern int __fprintf_chk (FILE *__restrict __stream, int __flag,
+        -:   94:			  const char *__restrict __format, ...);
+        -:   95:extern int __printf_chk (int __flag, const char *__restrict __format, ...);
+        -:   96:extern int __vfprintf_chk (FILE *__restrict __stream, int __flag,
+        -:   97:			   const char *__restrict __format, __gnuc_va_list __ap);
+        -:   98:extern int __vprintf_chk (int __flag, const char *__restrict __format,
+        -:   99:			  __gnuc_va_list __ap);
+        -:  100:
+        -:  101:# ifdef __va_arg_pack
+        -:  102:__fortify_function int
+        -:  103:fprintf (FILE *__restrict __stream, const char *__restrict __fmt, ...)
+        -:  104:{
+     228*:  105:  return __fprintf_chk (__stream, __USE_FORTIFY_LEVEL - 1, __fmt,
+call    0 never executed
+call    1 never executed
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 returned 100%
+call   12 returned 100%
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 returned 100%
+call   17 returned 100%
+call   18 returned 100%
+call   19 returned 100%
+call   20 returned 100%
+call   21 returned 100%
+call   22 returned 100%
+call   23 returned 100%
+        -:  106:			__va_arg_pack ());
+        -:  107:}
+        -:  108:
+        -:  109:__fortify_function int
+        -:  110:printf (const char *__restrict __fmt, ...)
+        -:  111:{
+     325*:  112:  return __printf_chk (__USE_FORTIFY_LEVEL - 1, __fmt, __va_arg_pack ());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 returned 100%
+call   14 returned 100%
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 returned 100%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 returned 100%
+call   32 returned 100%
+call   33 never executed
+call   34 returned 100%
+call   35 never executed
+call   36 never executed
+call   37 never executed
+call   38 never executed
+call   39 never executed
+call   40 never executed
+call   41 never executed
+call   42 never executed
+call   43 never executed
+call   44 never executed
+call   45 never executed
+call   46 never executed
+call   47 never executed
+call   48 never executed
+call   49 never executed
+call   50 never executed
+call   51 never executed
+call   52 never executed
+call   53 never executed
+call   54 never executed
+call   55 never executed
+call   56 never executed
+call   57 never executed
+call   58 never executed
+call   59 never executed
+call   60 never executed
+call   61 returned 100%
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+call   66 never executed
+call   67 never executed
+call   68 never executed
+call   69 never executed
+call   70 never executed
+call   71 never executed
+call   72 never executed
+call   73 never executed
+call   74 returned 100%
+call   75 returned 100%
+call   76 returned 100%
+call   77 never executed
+call   78 never executed
+call   79 never executed
+call   80 never executed
+call   81 returned 100%
+call   82 returned 100%
+call   83 never executed
+call   84 never executed
+call   85 never executed
+call   86 never executed
+call   87 returned 100%
+call   88 returned 100%
+call   89 never executed
+call   90 never executed
+call   91 never executed
+call   92 never executed
+call   93 returned 100%
+call   94 returned 100%
+call   95 never executed
+call   96 never executed
+call   97 never executed
+call   98 never executed
+call   99 returned 100%
+call   100 returned 100%
+call   101 never executed
+call   102 never executed
+call   103 never executed
+call   104 never executed
+call   105 returned 100%
+call   106 returned 100%
+call   107 never executed
+call   108 never executed
+call   109 never executed
+call   110 never executed
+call   111 returned 100%
+call   112 returned 100%
+call   113 never executed
+call   114 never executed
+call   115 never executed
+call   116 never executed
+call   117 returned 100%
+call   118 returned 100%
+call   119 never executed
+call   120 never executed
+call   121 never executed
+call   122 never executed
+call   123 returned 100%
+call   124 returned 100%
+call   125 never executed
+call   126 never executed
+call   127 never executed
+call   128 never executed
+call   129 returned 100%
+call   130 returned 100%
+call   131 never executed
+call   132 never executed
+call   133 never executed
+call   134 never executed
+call   135 returned 100%
+call   136 returned 100%
+call   137 never executed
+call   138 never executed
+call   139 never executed
+call   140 never executed
+call   141 returned 100%
+call   142 returned 100%
+call   143 never executed
+call   144 never executed
+call   145 never executed
+call   146 never executed
+call   147 returned 100%
+call   148 returned 100%
+call   149 never executed
+call   150 never executed
+call   151 never executed
+call   152 never executed
+call   153 returned 100%
+call   154 returned 100%
+call   155 never executed
+call   156 never executed
+call   157 never executed
+call   158 never executed
+call   159 returned 100%
+call   160 returned 100%
+call   161 never executed
+call   162 never executed
+call   163 never executed
+call   164 never executed
+call   165 returned 100%
+call   166 returned 100%
+call   167 never executed
+call   168 never executed
+call   169 never executed
+call   170 never executed
+call   171 returned 100%
+call   172 returned 100%
+call   173 never executed
+call   174 never executed
+call   175 never executed
+call   176 never executed
+call   177 returned 100%
+call   178 returned 100%
+call   179 never executed
+call   180 never executed
+call   181 never executed
+call   182 never executed
+call   183 returned 100%
+call   184 returned 100%
+call   185 never executed
+call   186 never executed
+call   187 never executed
+call   188 never executed
+call   189 returned 100%
+call   190 returned 100%
+call   191 never executed
+call   192 never executed
+call   193 never executed
+call   194 never executed
+call   195 returned 100%
+call   196 returned 100%
+call   197 never executed
+call   198 never executed
+call   199 never executed
+call   200 never executed
+call   201 returned 100%
+call   202 returned 100%
+call   203 never executed
+call   204 never executed
+call   205 never executed
+call   206 never executed
+call   207 returned 100%
+call   208 returned 100%
+call   209 never executed
+call   210 returned 100%
+call   211 never executed
+call   212 never executed
+call   213 never executed
+call   214 never executed
+call   215 never executed
+call   216 never executed
+call   217 never executed
+call   218 never executed
+call   219 never executed
+call   220 never executed
+call   221 never executed
+call   222 never executed
+call   223 never executed
+call   224 never executed
+call   225 never executed
+call   226 never executed
+call   227 never executed
+call   228 never executed
+call   229 never executed
+call   230 never executed
+call   231 never executed
+call   232 never executed
+call   233 never executed
+call   234 never executed
+call   235 never executed
+call   236 never executed
+call   237 never executed
+call   238 never executed
+call   239 never executed
+call   240 never executed
+call   241 never executed
+call   242 never executed
+call   243 never executed
+call   244 never executed
+call   245 never executed
+call   246 never executed
+call   247 never executed
+call   248 never executed
+call   249 never executed
+call   250 never executed
+call   251 never executed
+call   252 never executed
+call   253 never executed
+call   254 never executed
+call   255 never executed
+call   256 never executed
+call   257 never executed
+call   258 never executed
+call   259 never executed
+call   260 never executed
+call   261 never executed
+call   262 never executed
+call   263 never executed
+call   264 never executed
+call   265 never executed
+call   266 never executed
+call   267 never executed
+call   268 never executed
+call   269 never executed
+call   270 never executed
+call   271 never executed
+call   272 never executed
+call   273 never executed
+call   274 never executed
+call   275 never executed
+call   276 never executed
+call   277 never executed
+call   278 never executed
+call   279 never executed
+call   280 never executed
+call   281 never executed
+call   282 never executed
+call   283 never executed
+call   284 never executed
+call   285 never executed
+call   286 never executed
+call   287 never executed
+call   288 never executed
+call   289 never executed
+call   290 never executed
+call   291 never executed
+call   292 never executed
+call   293 never executed
+call   294 never executed
+call   295 never executed
+call   296 never executed
+call   297 never executed
+call   298 never executed
+call   299 never executed
+call   300 never executed
+call   301 never executed
+call   302 never executed
+call   303 never executed
+call   304 never executed
+call   305 never executed
+call   306 never executed
+call   307 never executed
+call   308 never executed
+call   309 never executed
+call   310 never executed
+call   311 never executed
+call   312 never executed
+call   313 never executed
+call   314 never executed
+call   315 never executed
+call   316 never executed
+call   317 never executed
+call   318 never executed
+call   319 never executed
+call   320 never executed
+call   321 never executed
+call   322 never executed
+call   323 never executed
+call   324 never executed
+call   325 never executed
+call   326 never executed
+call   327 never executed
+call   328 never executed
+call   329 never executed
+call   330 never executed
+call   331 never executed
+call   332 never executed
+call   333 never executed
+call   334 never executed
+call   335 never executed
+call   336 never executed
+call   337 never executed
+call   338 never executed
+call   339 never executed
+call   340 never executed
+call   341 never executed
+call   342 never executed
+call   343 never executed
+call   344 never executed
+call   345 never executed
+call   346 never executed
+call   347 never executed
+call   348 never executed
+call   349 never executed
+call   350 never executed
+call   351 never executed
+call   352 never executed
+call   353 never executed
+call   354 never executed
+call   355 never executed
+call   356 never executed
+call   357 never executed
+call   358 never executed
+call   359 never executed
+call   360 never executed
+call   361 never executed
+call   362 never executed
+call   363 never executed
+call   364 never executed
+call   365 never executed
+call   366 never executed
+call   367 never executed
+call   368 never executed
+call   369 never executed
+call   370 never executed
+call   371 never executed
+call   372 never executed
+call   373 never executed
+call   374 never executed
+call   375 never executed
+call   376 never executed
+call   377 never executed
+call   378 never executed
+call   379 never executed
+call   380 never executed
+call   381 never executed
+call   382 never executed
+call   383 never executed
+call   384 never executed
+call   385 never executed
+call   386 never executed
+call   387 never executed
+call   388 never executed
+call   389 never executed
+call   390 never executed
+call   391 never executed
+call   392 never executed
+call   393 never executed
+call   394 never executed
+call   395 never executed
+call   396 never executed
+call   397 never executed
+call   398 never executed
+call   399 never executed
+call   400 never executed
+call   401 never executed
+call   402 never executed
+call   403 never executed
+call   404 never executed
+call   405 never executed
+call   406 never executed
+call   407 never executed
+call   408 never executed
+call   409 never executed
+call   410 never executed
+call   411 never executed
+call   412 never executed
+call   413 never executed
+call   414 never executed
+call   415 never executed
+call   416 never executed
+call   417 never executed
+call   418 never executed
+call   419 never executed
+call   420 never executed
+call   421 never executed
+call   422 never executed
+call   423 never executed
+call   424 never executed
+call   425 never executed
+call   426 never executed
+call   427 never executed
+call   428 never executed
+call   429 never executed
+call   430 never executed
+call   431 never executed
+call   432 never executed
+call   433 never executed
+call   434 never executed
+call   435 never executed
+call   436 never executed
+call   437 never executed
+call   438 never executed
+call   439 never executed
+call   440 never executed
+call   441 never executed
+call   442 never executed
+call   443 never executed
+call   444 never executed
+call   445 never executed
+call   446 never executed
+call   447 never executed
+call   448 never executed
+call   449 never executed
+call   450 never executed
+call   451 never executed
+call   452 never executed
+call   453 never executed
+call   454 never executed
+call   455 never executed
+call   456 never executed
+call   457 never executed
+call   458 never executed
+call   459 never executed
+call   460 never executed
+call   461 never executed
+call   462 never executed
+call   463 never executed
+call   464 never executed
+call   465 never executed
+call   466 never executed
+call   467 never executed
+call   468 never executed
+call   469 never executed
+call   470 never executed
+call   471 never executed
+call   472 never executed
+call   473 never executed
+call   474 never executed
+call   475 never executed
+call   476 never executed
+call   477 never executed
+call   478 never executed
+call   479 never executed
+call   480 never executed
+call   481 never executed
+call   482 never executed
+call   483 never executed
+call   484 never executed
+call   485 never executed
+call   486 never executed
+call   487 never executed
+call   488 never executed
+call   489 never executed
+call   490 never executed
+call   491 never executed
+call   492 never executed
+call   493 never executed
+call   494 never executed
+call   495 never executed
+call   496 never executed
+call   497 never executed
+call   498 never executed
+call   499 never executed
+call   500 never executed
+call   501 never executed
+call   502 never executed
+call   503 never executed
+call   504 never executed
+call   505 never executed
+call   506 never executed
+call   507 never executed
+call   508 never executed
+call   509 never executed
+call   510 never executed
+call   511 never executed
+call   512 never executed
+call   513 never executed
+call   514 never executed
+call   515 never executed
+call   516 never executed
+call   517 never executed
+call   518 never executed
+call   519 never executed
+call   520 never executed
+call   521 never executed
+call   522 never executed
+call   523 never executed
+call   524 never executed
+call   525 never executed
+call   526 never executed
+call   527 never executed
+call   528 never executed
+call   529 never executed
+call   530 never executed
+call   531 never executed
+call   532 never executed
+call   533 never executed
+call   534 never executed
+call   535 never executed
+call   536 never executed
+call   537 never executed
+call   538 never executed
+call   539 never executed
+call   540 never executed
+call   541 never executed
+call   542 never executed
+call   543 never executed
+call   544 never executed
+call   545 never executed
+call   546 never executed
+call   547 never executed
+call   548 never executed
+call   549 never executed
+call   550 never executed
+call   551 never executed
+call   552 never executed
+call   553 never executed
+call   554 never executed
+call   555 never executed
+call   556 never executed
+call   557 never executed
+call   558 never executed
+call   559 never executed
+call   560 never executed
+call   561 never executed
+call   562 never executed
+call   563 never executed
+call   564 never executed
+call   565 never executed
+call   566 never executed
+call   567 never executed
+call   568 never executed
+call   569 never executed
+call   570 never executed
+call   571 never executed
+call   572 never executed
+call   573 never executed
+call   574 never executed
+call   575 never executed
+call   576 never executed
+call   577 never executed
+call   578 never executed
+call   579 never executed
+call   580 returned 100%
+call   581 returned 100%
+call   582 returned 100%
+call   583 returned 100%
+call   584 returned 100%
+call   585 returned 100%
+call   586 returned 100%
+call   587 never executed
+call   588 never executed
+call   589 never executed
+call   590 returned 100%
+call   591 never executed
+call   592 returned 100%
+call   593 never executed
+call   594 never executed
+call   595 never executed
+call   596 returned 100%
+call   597 never executed
+call   598 returned 100%
+call   599 never executed
+call   600 never executed
+call   601 never executed
+call   602 returned 100%
+call   603 never executed
+call   604 returned 100%
+call   605 never executed
+call   606 never executed
+call   607 never executed
+call   608 returned 100%
+call   609 never executed
+call   610 returned 100%
+call   611 never executed
+call   612 never executed
+call   613 never executed
+call   614 returned 100%
+call   615 never executed
+call   616 returned 100%
+call   617 never executed
+call   618 never executed
+call   619 never executed
+call   620 returned 100%
+call   621 never executed
+call   622 returned 100%
+call   623 never executed
+call   624 never executed
+call   625 never executed
+call   626 returned 100%
+call   627 never executed
+call   628 returned 100%
+call   629 returned 100%
+call   630 never executed
+call   631 returned 100%
+call   632 returned 100%
+call   633 returned 100%
+call   634 returned 100%
+call   635 never executed
+call   636 never executed
+call   637 returned 100%
+call   638 never executed
+call   639 never executed
+call   640 returned 100%
+call   641 never executed
+call   642 never executed
+call   643 returned 100%
+call   644 never executed
+call   645 never executed
+call   646 returned 100%
+call   647 never executed
+call   648 never executed
+call   649 returned 100%
+call   650 returned 100%
+call   651 never executed
+call   652 never executed
+call   653 returned 100%
+call   654 never executed
+call   655 never executed
+call   656 returned 100%
+call   657 never executed
+call   658 never executed
+call   659 returned 100%
+call   660 never executed
+call   661 never executed
+call   662 returned 100%
+call   663 returned 100%
+call   664 returned 100%
+call   665 returned 100%
+call   666 never executed
+call   667 never executed
+call   668 returned 100%
+call   669 never executed
+call   670 never executed
+call   671 returned 100%
+call   672 never executed
+call   673 never executed
+call   674 returned 100%
+call   675 never executed
+call   676 never executed
+call   677 returned 100%
+call   678 never executed
+call   679 never executed
+call   680 returned 100%
+call   681 never executed
+call   682 never executed
+call   683 returned 100%
+call   684 never executed
+call   685 never executed
+call   686 returned 100%
+call   687 never executed
+call   688 never executed
+call   689 returned 100%
+call   690 never executed
+call   691 never executed
+call   692 returned 100%
+call   693 returned 100%
+call   694 never executed
+call   695 returned 100%
+call   696 returned 100%
+call   697 returned 100%
+call   698 returned 100%
+call   699 returned 100%
+call   700 returned 100%
+call   701 returned 100%
+call   702 returned 100%
+call   703 returned 100%
+call   704 returned 100%
+call   705 returned 100%
+call   706 returned 100%
+call   707 never executed
+call   708 never executed
+call   709 returned 100%
+call   710 never executed
+call   711 never executed
+call   712 returned 100%
+call   713 never executed
+call   714 never executed
+call   715 never executed
+call   716 returned 100%
+call   717 never executed
+call   718 never executed
+call   719 returned 100%
+call   720 returned 100%
+call   721 returned 100%
+call   722 never executed
+call   723 never executed
+call   724 never executed
+call   725 returned 100%
+call   726 never executed
+call   727 returned 100%
+call   728 never executed
+call   729 never executed
+call   730 never executed
+call   731 returned 100%
+call   732 never executed
+call   733 returned 100%
+call   734 never executed
+call   735 never executed
+call   736 never executed
+call   737 returned 100%
+call   738 never executed
+call   739 returned 100%
+call   740 never executed
+call   741 never executed
+call   742 never executed
+call   743 returned 100%
+call   744 never executed
+call   745 returned 100%
+call   746 never executed
+call   747 never executed
+call   748 never executed
+call   749 returned 100%
+call   750 never executed
+call   751 returned 100%
+call   752 never executed
+call   753 never executed
+call   754 never executed
+call   755 returned 100%
+call   756 never executed
+call   757 returned 100%
+call   758 never executed
+call   759 never executed
+call   760 never executed
+call   761 returned 100%
+call   762 never executed
+call   763 returned 100%
+call   764 never executed
+call   765 never executed
+call   766 never executed
+call   767 returned 100%
+call   768 never executed
+call   769 returned 100%
+call   770 returned 100%
+call   771 never executed
+call   772 returned 100%
+call   773 never executed
+call   774 never executed
+call   775 returned 100%
+call   776 never executed
+call   777 never executed
+call   778 returned 100%
+call   779 never executed
+call   780 never executed
+call   781 returned 100%
+call   782 never executed
+call   783 never executed
+call   784 returned 100%
+call   785 never executed
+call   786 never executed
+call   787 returned 100%
+call   788 never executed
+call   789 never executed
+call   790 returned 100%
+call   791 never executed
+call   792 never executed
+call   793 returned 100%
+call   794 never executed
+call   795 never executed
+call   796 returned 100%
+call   797 never executed
+call   798 never executed
+call   799 returned 100%
+call   800 never executed
+call   801 never executed
+call   802 returned 100%
+call   803 never executed
+call   804 never executed
+call   805 returned 100%
+call   806 never executed
+call   807 never executed
+call   808 returned 100%
+call   809 never executed
+call   810 never executed
+call   811 returned 100%
+call   812 never executed
+call   813 never executed
+call   814 returned 100%
+call   815 returned 100%
+call   816 returned 100%
+call   817 never executed
+call   818 never executed
+call   819 returned 100%
+call   820 never executed
+call   821 never executed
+call   822 returned 100%
+call   823 never executed
+call   824 never executed
+call   825 returned 100%
+call   826 returned 100%
+call   827 returned 100%
+call   828 never executed
+call   829 never executed
+call   830 returned 100%
+call   831 never executed
+call   832 never executed
+call   833 returned 100%
+call   834 never executed
+call   835 never executed
+call   836 returned 100%
+call   837 returned 100%
+call   838 returned 100%
+call   839 returned 100%
+call   840 never executed
+call   841 never executed
+call   842 never executed
+call   843 never executed
+call   844 returned 100%
+call   845 returned 100%
+call   846 never executed
+call   847 never executed
+call   848 never executed
+call   849 never executed
+call   850 returned 100%
+call   851 returned 100%
+call   852 never executed
+call   853 never executed
+call   854 never executed
+call   855 never executed
+call   856 returned 100%
+call   857 returned 100%
+call   858 never executed
+call   859 never executed
+call   860 never executed
+call   861 never executed
+call   862 returned 100%
+call   863 returned 100%
+call   864 never executed
+call   865 returned 100%
+call   866 never executed
+call   867 never executed
+call   868 never executed
+call   869 never executed
+call   870 never executed
+call   871 never executed
+call   872 never executed
+call   873 never executed
+call   874 never executed
+call   875 never executed
+call   876 never executed
+call   877 never executed
+call   878 returned 100%
+call   879 returned 100%
+call   880 returned 100%
+call   881 never executed
+call   882 never executed
+call   883 never executed
+call   884 never executed
+call   885 returned 100%
+call   886 returned 100%
+call   887 never executed
+call   888 never executed
+call   889 never executed
+call   890 never executed
+call   891 returned 100%
+call   892 returned 100%
+call   893 never executed
+call   894 never executed
+call   895 never executed
+call   896 never executed
+call   897 returned 100%
+call   898 returned 100%
+call   899 never executed
+call   900 never executed
+call   901 never executed
+call   902 never executed
+call   903 returned 100%
+call   904 returned 100%
+call   905 never executed
+call   906 never executed
+call   907 never executed
+call   908 never executed
+call   909 returned 100%
+call   910 returned 100%
+call   911 never executed
+call   912 never executed
+call   913 never executed
+call   914 never executed
+call   915 returned 100%
+call   916 returned 100%
+call   917 never executed
+call   918 never executed
+call   919 never executed
+call   920 never executed
+call   921 returned 100%
+call   922 returned 100%
+call   923 never executed
+call   924 never executed
+call   925 never executed
+call   926 never executed
+call   927 returned 100%
+call   928 returned 100%
+call   929 never executed
+call   930 never executed
+call   931 never executed
+call   932 never executed
+call   933 returned 100%
+call   934 returned 100%
+call   935 never executed
+call   936 never executed
+call   937 never executed
+call   938 never executed
+call   939 returned 100%
+call   940 returned 100%
+call   941 never executed
+call   942 never executed
+call   943 never executed
+call   944 never executed
+call   945 returned 100%
+call   946 returned 100%
+call   947 never executed
+call   948 never executed
+call   949 never executed
+call   950 never executed
+call   951 returned 100%
+call   952 returned 100%
+call   953 never executed
+call   954 returned 100%
+call   955 never executed
+call   956 never executed
+call   957 never executed
+call   958 never executed
+call   959 never executed
+call   960 never executed
+call   961 never executed
+call   962 never executed
+call   963 never executed
+call   964 never executed
+call   965 never executed
+call   966 never executed
+call   967 never executed
+call   968 never executed
+call   969 never executed
+call   970 never executed
+call   971 never executed
+call   972 never executed
+call   973 never executed
+call   974 never executed
+call   975 never executed
+call   976 never executed
+call   977 never executed
+call   978 never executed
+call   979 never executed
+call   980 never executed
+call   981 never executed
+call   982 never executed
+call   983 never executed
+call   984 never executed
+call   985 never executed
+call   986 never executed
+call   987 never executed
+call   988 never executed
+call   989 never executed
+call   990 never executed
+call   991 never executed
+call   992 never executed
+call   993 never executed
+call   994 never executed
+call   995 never executed
+call   996 never executed
+call   997 never executed
+call   998 never executed
+call   999 never executed
+call   1000 never executed
+call   1001 never executed
+call   1002 never executed
+call   1003 never executed
+call   1004 never executed
+call   1005 never executed
+call   1006 never executed
+call   1007 never executed
+call   1008 never executed
+call   1009 never executed
+call   1010 never executed
+call   1011 never executed
+call   1012 never executed
+call   1013 never executed
+call   1014 never executed
+call   1015 never executed
+call   1016 never executed
+call   1017 never executed
+call   1018 never executed
+call   1019 never executed
+call   1020 never executed
+call   1021 never executed
+call   1022 never executed
+call   1023 never executed
+call   1024 never executed
+call   1025 never executed
+call   1026 never executed
+call   1027 never executed
+call   1028 never executed
+call   1029 never executed
+call   1030 never executed
+call   1031 never executed
+call   1032 never executed
+call   1033 never executed
+call   1034 never executed
+call   1035 never executed
+call   1036 never executed
+call   1037 never executed
+call   1038 never executed
+call   1039 never executed
+call   1040 never executed
+call   1041 never executed
+call   1042 never executed
+call   1043 never executed
+call   1044 never executed
+call   1045 never executed
+call   1046 never executed
+call   1047 never executed
+call   1048 never executed
+call   1049 never executed
+call   1050 never executed
+call   1051 never executed
+call   1052 never executed
+call   1053 never executed
+call   1054 never executed
+call   1055 never executed
+call   1056 never executed
+call   1057 never executed
+call   1058 never executed
+call   1059 never executed
+call   1060 never executed
+call   1061 never executed
+call   1062 never executed
+call   1063 never executed
+call   1064 never executed
+call   1065 never executed
+call   1066 never executed
+call   1067 never executed
+call   1068 never executed
+call   1069 never executed
+call   1070 never executed
+call   1071 never executed
+call   1072 never executed
+call   1073 never executed
+call   1074 never executed
+call   1075 never executed
+call   1076 never executed
+call   1077 never executed
+call   1078 never executed
+call   1079 never executed
+call   1080 never executed
+call   1081 never executed
+call   1082 never executed
+call   1083 never executed
+call   1084 never executed
+call   1085 never executed
+call   1086 never executed
+call   1087 never executed
+call   1088 never executed
+call   1089 never executed
+call   1090 never executed
+call   1091 never executed
+call   1092 never executed
+call   1093 never executed
+call   1094 never executed
+call   1095 never executed
+call   1096 never executed
+call   1097 never executed
+call   1098 never executed
+call   1099 never executed
+call   1100 never executed
+call   1101 never executed
+call   1102 never executed
+call   1103 never executed
+call   1104 never executed
+call   1105 never executed
+call   1106 never executed
+call   1107 never executed
+call   1108 never executed
+call   1109 never executed
+call   1110 never executed
+call   1111 never executed
+call   1112 never executed
+call   1113 never executed
+call   1114 never executed
+call   1115 never executed
+call   1116 never executed
+call   1117 never executed
+call   1118 never executed
+call   1119 never executed
+call   1120 never executed
+call   1121 never executed
+call   1122 never executed
+call   1123 never executed
+call   1124 never executed
+call   1125 never executed
+call   1126 never executed
+call   1127 never executed
+call   1128 never executed
+call   1129 never executed
+call   1130 never executed
+call   1131 never executed
+call   1132 never executed
+call   1133 never executed
+call   1134 never executed
+call   1135 never executed
+call   1136 never executed
+call   1137 never executed
+call   1138 never executed
+call   1139 never executed
+call   1140 never executed
+call   1141 never executed
+call   1142 never executed
+call   1143 never executed
+call   1144 never executed
+call   1145 never executed
+call   1146 never executed
+call   1147 never executed
+call   1148 never executed
+call   1149 never executed
+call   1150 never executed
+call   1151 never executed
+call   1152 never executed
+call   1153 never executed
+call   1154 never executed
+call   1155 never executed
+call   1156 never executed
+call   1157 never executed
+call   1158 never executed
+call   1159 never executed
+call   1160 never executed
+call   1161 never executed
+call   1162 never executed
+call   1163 never executed
+call   1164 never executed
+call   1165 never executed
+call   1166 never executed
+call   1167 never executed
+call   1168 never executed
+call   1169 never executed
+call   1170 never executed
+call   1171 never executed
+call   1172 never executed
+call   1173 never executed
+call   1174 returned 100%
+call   1175 returned 100%
+call   1176 returned 100%
+call   1177 never executed
+call   1178 never executed
+call   1179 never executed
+call   1180 never executed
+call   1181 returned 100%
+call   1182 returned 100%
+call   1183 never executed
+call   1184 never executed
+call   1185 never executed
+call   1186 never executed
+call   1187 returned 100%
+call   1188 returned 100%
+call   1189 never executed
+call   1190 never executed
+call   1191 never executed
+call   1192 never executed
+call   1193 returned 100%
+call   1194 returned 100%
+call   1195 never executed
+call   1196 never executed
+call   1197 never executed
+call   1198 never executed
+call   1199 returned 100%
+call   1200 returned 100%
+call   1201 never executed
+call   1202 never executed
+call   1203 never executed
+call   1204 never executed
+call   1205 returned 100%
+call   1206 returned 100%
+call   1207 never executed
+call   1208 never executed
+call   1209 never executed
+call   1210 never executed
+call   1211 returned 100%
+call   1212 returned 100%
+call   1213 never executed
+call   1214 never executed
+call   1215 never executed
+call   1216 never executed
+call   1217 returned 100%
+call   1218 returned 100%
+call   1219 never executed
+call   1220 returned 100%
+call   1221 never executed
+call   1222 never executed
+call   1223 never executed
+call   1224 never executed
+call   1225 never executed
+call   1226 never executed
+call   1227 never executed
+call   1228 never executed
+call   1229 never executed
+call   1230 never executed
+call   1231 never executed
+call   1232 never executed
+call   1233 never executed
+call   1234 never executed
+call   1235 never executed
+call   1236 never executed
+call   1237 never executed
+call   1238 never executed
+call   1239 never executed
+call   1240 never executed
+call   1241 never executed
+call   1242 never executed
+call   1243 never executed
+call   1244 never executed
+call   1245 never executed
+call   1246 never executed
+call   1247 never executed
+call   1248 never executed
+call   1249 never executed
+call   1250 never executed
+call   1251 never executed
+call   1252 never executed
+call   1253 never executed
+call   1254 never executed
+call   1255 never executed
+call   1256 never executed
+call   1257 never executed
+call   1258 never executed
+call   1259 never executed
+call   1260 never executed
+call   1261 never executed
+call   1262 never executed
+call   1263 never executed
+call   1264 never executed
+call   1265 never executed
+call   1266 never executed
+call   1267 never executed
+call   1268 never executed
+call   1269 never executed
+call   1270 never executed
+call   1271 never executed
+call   1272 never executed
+call   1273 never executed
+call   1274 never executed
+call   1275 never executed
+call   1276 never executed
+call   1277 never executed
+call   1278 never executed
+call   1279 never executed
+call   1280 never executed
+call   1281 never executed
+call   1282 never executed
+call   1283 never executed
+call   1284 never executed
+call   1285 never executed
+call   1286 never executed
+call   1287 never executed
+call   1288 never executed
+call   1289 never executed
+call   1290 never executed
+call   1291 never executed
+call   1292 never executed
+call   1293 never executed
+call   1294 never executed
+call   1295 never executed
+call   1296 never executed
+call   1297 never executed
+call   1298 never executed
+call   1299 never executed
+call   1300 never executed
+call   1301 never executed
+call   1302 never executed
+call   1303 never executed
+call   1304 never executed
+call   1305 never executed
+call   1306 never executed
+call   1307 never executed
+call   1308 never executed
+call   1309 never executed
+call   1310 never executed
+call   1311 never executed
+call   1312 never executed
+call   1313 never executed
+call   1314 never executed
+call   1315 never executed
+call   1316 never executed
+call   1317 never executed
+call   1318 never executed
+call   1319 never executed
+call   1320 never executed
+call   1321 never executed
+call   1322 never executed
+call   1323 returned 100%
+call   1324 returned 100%
+call   1325 returned 100%
+call   1326 never executed
+call   1327 never executed
+call   1328 never executed
+call   1329 never executed
+call   1330 returned 100%
+call   1331 returned 100%
+call   1332 never executed
+call   1333 never executed
+call   1334 never executed
+call   1335 never executed
+call   1336 returned 100%
+call   1337 returned 100%
+call   1338 never executed
+call   1339 never executed
+call   1340 never executed
+call   1341 never executed
+call   1342 returned 100%
+call   1343 returned 100%
+call   1344 never executed
+call   1345 never executed
+call   1346 never executed
+call   1347 never executed
+call   1348 returned 100%
+call   1349 returned 100%
+call   1350 never executed
+call   1351 never executed
+call   1352 never executed
+call   1353 never executed
+call   1354 returned 100%
+call   1355 returned 100%
+call   1356 never executed
+call   1357 never executed
+call   1358 never executed
+call   1359 never executed
+call   1360 returned 100%
+call   1361 returned 100%
+call   1362 never executed
+call   1363 never executed
+call   1364 never executed
+call   1365 never executed
+call   1366 returned 100%
+call   1367 returned 100%
+call   1368 never executed
+call   1369 never executed
+call   1370 never executed
+call   1371 never executed
+call   1372 returned 100%
+call   1373 returned 100%
+call   1374 never executed
+call   1375 never executed
+call   1376 never executed
+call   1377 never executed
+call   1378 returned 100%
+call   1379 returned 100%
+call   1380 never executed
+call   1381 never executed
+call   1382 never executed
+call   1383 never executed
+call   1384 returned 100%
+call   1385 returned 100%
+call   1386 never executed
+call   1387 never executed
+call   1388 never executed
+call   1389 never executed
+call   1390 returned 100%
+call   1391 returned 100%
+call   1392 never executed
+call   1393 returned 100%
+call   1394 never executed
+call   1395 never executed
+call   1396 never executed
+call   1397 never executed
+call   1398 never executed
+call   1399 never executed
+call   1400 never executed
+call   1401 never executed
+call   1402 never executed
+call   1403 never executed
+call   1404 never executed
+call   1405 never executed
+call   1406 never executed
+call   1407 never executed
+call   1408 never executed
+call   1409 never executed
+call   1410 never executed
+call   1411 never executed
+call   1412 never executed
+call   1413 never executed
+call   1414 never executed
+call   1415 never executed
+call   1416 never executed
+call   1417 never executed
+call   1418 never executed
+call   1419 never executed
+call   1420 never executed
+call   1421 never executed
+call   1422 never executed
+call   1423 never executed
+call   1424 never executed
+call   1425 never executed
+call   1426 never executed
+call   1427 never executed
+call   1428 never executed
+call   1429 never executed
+call   1430 never executed
+call   1431 never executed
+call   1432 never executed
+call   1433 never executed
+call   1434 never executed
+call   1435 never executed
+call   1436 never executed
+call   1437 never executed
+call   1438 never executed
+call   1439 never executed
+call   1440 never executed
+call   1441 never executed
+call   1442 never executed
+call   1443 never executed
+call   1444 never executed
+call   1445 never executed
+call   1446 never executed
+call   1447 never executed
+call   1448 never executed
+call   1449 never executed
+call   1450 never executed
+call   1451 never executed
+call   1452 never executed
+call   1453 never executed
+call   1454 never executed
+call   1455 never executed
+call   1456 never executed
+call   1457 never executed
+call   1458 never executed
+call   1459 never executed
+call   1460 never executed
+call   1461 never executed
+call   1462 never executed
+call   1463 never executed
+call   1464 never executed
+call   1465 never executed
+call   1466 never executed
+call   1467 never executed
+call   1468 never executed
+call   1469 never executed
+call   1470 never executed
+call   1471 never executed
+call   1472 never executed
+call   1473 never executed
+call   1474 never executed
+call   1475 never executed
+call   1476 never executed
+call   1477 never executed
+call   1478 never executed
+call   1479 never executed
+call   1480 never executed
+call   1481 never executed
+call   1482 never executed
+call   1483 never executed
+call   1484 never executed
+call   1485 never executed
+call   1486 never executed
+call   1487 never executed
+call   1488 never executed
+call   1489 never executed
+call   1490 never executed
+call   1491 never executed
+call   1492 never executed
+call   1493 never executed
+call   1494 never executed
+call   1495 never executed
+call   1496 never executed
+call   1497 never executed
+call   1498 never executed
+call   1499 never executed
+call   1500 never executed
+call   1501 never executed
+call   1502 never executed
+call   1503 never executed
+call   1504 never executed
+call   1505 never executed
+call   1506 never executed
+call   1507 never executed
+call   1508 never executed
+call   1509 never executed
+call   1510 never executed
+call   1511 never executed
+call   1512 never executed
+call   1513 never executed
+call   1514 never executed
+call   1515 never executed
+call   1516 never executed
+call   1517 never executed
+call   1518 never executed
+call   1519 never executed
+call   1520 never executed
+call   1521 never executed
+call   1522 never executed
+call   1523 never executed
+call   1524 never executed
+call   1525 never executed
+call   1526 never executed
+call   1527 never executed
+call   1528 never executed
+call   1529 never executed
+call   1530 never executed
+call   1531 never executed
+call   1532 never executed
+call   1533 never executed
+call   1534 never executed
+call   1535 never executed
+call   1536 never executed
+call   1537 never executed
+call   1538 never executed
+call   1539 never executed
+call   1540 never executed
+call   1541 never executed
+call   1542 never executed
+call   1543 never executed
+call   1544 never executed
+call   1545 never executed
+call   1546 never executed
+call   1547 never executed
+call   1548 never executed
+call   1549 never executed
+call   1550 never executed
+call   1551 never executed
+call   1552 never executed
+call   1553 never executed
+call   1554 never executed
+call   1555 never executed
+call   1556 never executed
+call   1557 never executed
+call   1558 never executed
+call   1559 never executed
+call   1560 never executed
+call   1561 never executed
+call   1562 never executed
+call   1563 never executed
+call   1564 never executed
+call   1565 never executed
+call   1566 never executed
+call   1567 never executed
+call   1568 never executed
+call   1569 never executed
+call   1570 never executed
+call   1571 never executed
+call   1572 never executed
+call   1573 never executed
+call   1574 never executed
+call   1575 never executed
+call   1576 never executed
+call   1577 never executed
+call   1578 never executed
+call   1579 never executed
+call   1580 never executed
+call   1581 never executed
+call   1582 never executed
+call   1583 never executed
+call   1584 never executed
+call   1585 never executed
+call   1586 never executed
+call   1587 never executed
+call   1588 never executed
+call   1589 never executed
+call   1590 never executed
+call   1591 never executed
+call   1592 never executed
+call   1593 never executed
+call   1594 never executed
+call   1595 never executed
+call   1596 never executed
+call   1597 never executed
+call   1598 never executed
+call   1599 never executed
+call   1600 never executed
+call   1601 never executed
+call   1602 never executed
+call   1603 never executed
+call   1604 never executed
+call   1605 never executed
+call   1606 never executed
+call   1607 never executed
+call   1608 never executed
+call   1609 never executed
+call   1610 never executed
+call   1611 never executed
+call   1612 never executed
+call   1613 never executed
+call   1614 never executed
+call   1615 never executed
+call   1616 never executed
+call   1617 never executed
+call   1618 never executed
+call   1619 never executed
+call   1620 never executed
+call   1621 never executed
+call   1622 never executed
+call   1623 never executed
+call   1624 never executed
+call   1625 never executed
+call   1626 never executed
+call   1627 never executed
+call   1628 never executed
+call   1629 never executed
+call   1630 never executed
+call   1631 never executed
+call   1632 never executed
+call   1633 never executed
+call   1634 never executed
+call   1635 never executed
+call   1636 never executed
+call   1637 never executed
+call   1638 never executed
+call   1639 never executed
+call   1640 never executed
+call   1641 never executed
+call   1642 never executed
+call   1643 never executed
+call   1644 never executed
+call   1645 never executed
+call   1646 never executed
+call   1647 never executed
+call   1648 never executed
+call   1649 never executed
+call   1650 never executed
+call   1651 never executed
+call   1652 never executed
+call   1653 never executed
+call   1654 never executed
+call   1655 never executed
+call   1656 never executed
+call   1657 never executed
+call   1658 never executed
+call   1659 never executed
+call   1660 never executed
+call   1661 never executed
+call   1662 never executed
+call   1663 never executed
+call   1664 returned 100%
+call   1665 never executed
+call   1666 never executed
+call   1667 never executed
+call   1668 never executed
+call   1669 never executed
+call   1670 returned 100%
+call   1671 returned 100%
+call   1672 never executed
+call   1673 never executed
+call   1674 never executed
+call   1675 never executed
+call   1676 returned 100%
+call   1677 returned 100%
+call   1678 never executed
+call   1679 never executed
+call   1680 never executed
+call   1681 never executed
+call   1682 returned 100%
+call   1683 returned 100%
+call   1684 never executed
+call   1685 never executed
+call   1686 never executed
+call   1687 never executed
+call   1688 returned 100%
+call   1689 returned 100%
+call   1690 never executed
+call   1691 never executed
+call   1692 never executed
+call   1693 never executed
+call   1694 returned 100%
+call   1695 returned 100%
+call   1696 never executed
+call   1697 never executed
+call   1698 never executed
+call   1699 never executed
+call   1700 returned 100%
+call   1701 returned 100%
+call   1702 never executed
+call   1703 never executed
+call   1704 never executed
+call   1705 never executed
+call   1706 returned 100%
+call   1707 returned 100%
+call   1708 never executed
+call   1709 never executed
+call   1710 never executed
+call   1711 never executed
+call   1712 returned 100%
+call   1713 returned 100%
+call   1714 never executed
+call   1715 returned 100%
+call   1716 never executed
+call   1717 never executed
+call   1718 never executed
+call   1719 never executed
+call   1720 never executed
+call   1721 never executed
+call   1722 never executed
+call   1723 never executed
+call   1724 never executed
+call   1725 never executed
+call   1726 never executed
+call   1727 never executed
+call   1728 never executed
+call   1729 never executed
+call   1730 never executed
+call   1731 never executed
+call   1732 never executed
+call   1733 never executed
+call   1734 never executed
+call   1735 never executed
+call   1736 never executed
+call   1737 never executed
+call   1738 never executed
+call   1739 never executed
+call   1740 never executed
+call   1741 never executed
+call   1742 never executed
+call   1743 never executed
+call   1744 never executed
+call   1745 never executed
+call   1746 never executed
+call   1747 never executed
+call   1748 never executed
+call   1749 never executed
+call   1750 never executed
+call   1751 never executed
+call   1752 never executed
+call   1753 never executed
+call   1754 never executed
+call   1755 never executed
+call   1756 never executed
+call   1757 never executed
+call   1758 never executed
+call   1759 never executed
+call   1760 never executed
+call   1761 never executed
+call   1762 never executed
+call   1763 never executed
+call   1764 never executed
+call   1765 never executed
+call   1766 never executed
+call   1767 never executed
+call   1768 never executed
+call   1769 never executed
+call   1770 never executed
+call   1771 never executed
+call   1772 never executed
+call   1773 never executed
+call   1774 never executed
+call   1775 never executed
+call   1776 never executed
+call   1777 never executed
+call   1778 never executed
+call   1779 never executed
+call   1780 never executed
+call   1781 never executed
+call   1782 never executed
+call   1783 never executed
+call   1784 never executed
+call   1785 never executed
+call   1786 never executed
+call   1787 never executed
+call   1788 never executed
+call   1789 never executed
+call   1790 never executed
+call   1791 never executed
+call   1792 never executed
+call   1793 never executed
+call   1794 never executed
+call   1795 never executed
+call   1796 never executed
+call   1797 never executed
+call   1798 never executed
+call   1799 never executed
+call   1800 never executed
+call   1801 never executed
+call   1802 never executed
+call   1803 never executed
+call   1804 never executed
+call   1805 never executed
+call   1806 never executed
+call   1807 never executed
+call   1808 never executed
+call   1809 never executed
+call   1810 returned 100%
+call   1811 never executed
+call   1812 never executed
+call   1813 never executed
+call   1814 never executed
+call   1815 never executed
+call   1816 never executed
+call   1817 never executed
+call   1818 never executed
+call   1819 returned 100%
+call   1820 returned 100%
+call   1821 never executed
+call   1822 never executed
+call   1823 never executed
+call   1824 never executed
+call   1825 returned 100%
+call   1826 returned 100%
+call   1827 never executed
+call   1828 never executed
+call   1829 never executed
+call   1830 never executed
+call   1831 returned 100%
+call   1832 returned 100%
+call   1833 never executed
+call   1834 never executed
+call   1835 never executed
+call   1836 never executed
+call   1837 returned 100%
+call   1838 returned 100%
+call   1839 never executed
+call   1840 never executed
+call   1841 never executed
+call   1842 never executed
+call   1843 returned 100%
+call   1844 returned 100%
+call   1845 never executed
+call   1846 never executed
+call   1847 never executed
+call   1848 never executed
+call   1849 returned 100%
+call   1850 returned 100%
+call   1851 never executed
+call   1852 never executed
+call   1853 never executed
+call   1854 never executed
+call   1855 returned 100%
+call   1856 returned 100%
+call   1857 never executed
+call   1858 never executed
+call   1859 never executed
+call   1860 never executed
+call   1861 returned 100%
+call   1862 returned 100%
+call   1863 never executed
+call   1864 returned 100%
+call   1865 never executed
+call   1866 never executed
+call   1867 never executed
+call   1868 returned 100%
+call   1869 never executed
+call   1870 never executed
+call   1871 never executed
+call   1872 never executed
+call   1873 never executed
+call   1874 never executed
+call   1875 never executed
+call   1876 never executed
+call   1877 never executed
+call   1878 never executed
+call   1879 never executed
+call   1880 never executed
+call   1881 never executed
+call   1882 never executed
+call   1883 never executed
+call   1884 never executed
+call   1885 never executed
+call   1886 never executed
+call   1887 returned 100%
+call   1888 never executed
+call   1889 never executed
+call   1890 never executed
+call   1891 never executed
+call   1892 never executed
+call   1893 never executed
+call   1894 never executed
+call   1895 never executed
+call   1896 never executed
+call   1897 never executed
+call   1898 never executed
+call   1899 never executed
+call   1900 never executed
+call   1901 never executed
+call   1902 never executed
+call   1903 never executed
+call   1904 never executed
+call   1905 never executed
+call   1906 never executed
+call   1907 never executed
+call   1908 never executed
+call   1909 never executed
+call   1910 never executed
+call   1911 never executed
+call   1912 never executed
+call   1913 returned 100%
+call   1914 never executed
+call   1915 never executed
+call   1916 never executed
+call   1917 never executed
+call   1918 never executed
+call   1919 never executed
+call   1920 never executed
+call   1921 never executed
+call   1922 never executed
+call   1923 never executed
+call   1924 never executed
+call   1925 never executed
+call   1926 never executed
+call   1927 never executed
+call   1928 never executed
+call   1929 never executed
+call   1930 never executed
+call   1931 never executed
+call   1932 never executed
+call   1933 never executed
+call   1934 never executed
+call   1935 never executed
+call   1936 never executed
+call   1937 never executed
+call   1938 never executed
+call   1939 never executed
+call   1940 never executed
+call   1941 never executed
+call   1942 never executed
+call   1943 never executed
+call   1944 never executed
+call   1945 never executed
+call   1946 never executed
+call   1947 never executed
+call   1948 never executed
+call   1949 never executed
+call   1950 never executed
+call   1951 never executed
+call   1952 never executed
+call   1953 never executed
+call   1954 never executed
+call   1955 never executed
+call   1956 returned 100%
+call   1957 never executed
+call   1958 never executed
+call   1959 never executed
+call   1960 never executed
+call   1961 never executed
+call   1962 never executed
+call   1963 returned 100%
+call   1964 never executed
+call   1965 never executed
+call   1966 never executed
+call   1967 never executed
+call   1968 never executed
+call   1969 never executed
+call   1970 returned 100%
+call   1971 never executed
+call   1972 never executed
+call   1973 never executed
+call   1974 never executed
+call   1975 never executed
+call   1976 never executed
+call   1977 returned 100%
+call   1978 never executed
+call   1979 never executed
+call   1980 never executed
+call   1981 never executed
+call   1982 never executed
+call   1983 never executed
+call   1984 never executed
+call   1985 never executed
+call   1986 never executed
+call   1987 never executed
+call   1988 never executed
+call   1989 never executed
+call   1990 never executed
+call   1991 never executed
+call   1992 never executed
+call   1993 never executed
+call   1994 never executed
+call   1995 never executed
+call   1996 returned 100%
+call   1997 returned 100%
+call   1998 never executed
+call   1999 never executed
+call   2000 never executed
+call   2001 never executed
+call   2002 never executed
+call   2003 never executed
+call   2004 never executed
+call   2005 never executed
+call   2006 never executed
+call   2007 never executed
+call   2008 never executed
+call   2009 never executed
+call   2010 returned 100%
+call   2011 returned 100%
+call   2012 never executed
+call   2013 never executed
+call   2014 never executed
+call   2015 never executed
+call   2016 never executed
+call   2017 never executed
+call   2018 returned 100%
+call   2019 returned 100%
+call   2020 returned 100%
+call   2021 never executed
+call   2022 never executed
+call   2023 never executed
+call   2024 never executed
+call   2025 never executed
+call   2026 never executed
+call   2027 never executed
+call   2028 never executed
+call   2029 never executed
+call   2030 never executed
+call   2031 never executed
+call   2032 never executed
+call   2033 never executed
+call   2034 never executed
+call   2035 never executed
+call   2036 never executed
+call   2037 never executed
+call   2038 never executed
+call   2039 returned 100%
+call   2040 never executed
+call   2041 never executed
+call   2042 never executed
+call   2043 never executed
+call   2044 never executed
+call   2045 never executed
+call   2046 returned 100%
+call   2047 never executed
+call   2048 never executed
+call   2049 never executed
+call   2050 never executed
+call   2051 never executed
+call   2052 never executed
+call   2053 returned 100%
+call   2054 never executed
+call   2055 never executed
+call   2056 never executed
+call   2057 never executed
+call   2058 never executed
+call   2059 never executed
+call   2060 never executed
+call   2061 never executed
+call   2062 never executed
+call   2063 never executed
+call   2064 never executed
+call   2065 never executed
+call   2066 never executed
+call   2067 never executed
+call   2068 never executed
+call   2069 never executed
+call   2070 never executed
+call   2071 never executed
+call   2072 never executed
+call   2073 never executed
+call   2074 never executed
+call   2075 never executed
+call   2076 never executed
+call   2077 never executed
+call   2078 returned 100%
+call   2079 never executed
+call   2080 never executed
+call   2081 never executed
+call   2082 never executed
+call   2083 never executed
+call   2084 never executed
+call   2085 never executed
+call   2086 never executed
+call   2087 never executed
+call   2088 never executed
+call   2089 never executed
+call   2090 never executed
+call   2091 returned 100%
+call   2092 never executed
+call   2093 never executed
+call   2094 never executed
+call   2095 never executed
+call   2096 never executed
+call   2097 never executed
+call   2098 returned 100%
+call   2099 never executed
+call   2100 never executed
+call   2101 never executed
+call   2102 never executed
+call   2103 never executed
+call   2104 never executed
+call   2105 never executed
+call   2106 never executed
+call   2107 never executed
+call   2108 never executed
+call   2109 never executed
+call   2110 never executed
+call   2111 never executed
+call   2112 returned 100%
+call   2113 never executed
+call   2114 never executed
+call   2115 never executed
+call   2116 never executed
+call   2117 never executed
+call   2118 never executed
+call   2119 never executed
+call   2120 never executed
+call   2121 never executed
+call   2122 never executed
+call   2123 never executed
+call   2124 never executed
+call   2125 never executed
+call   2126 never executed
+call   2127 never executed
+call   2128 never executed
+call   2129 never executed
+call   2130 never executed
+call   2131 never executed
+call   2132 never executed
+call   2133 never executed
+call   2134 never executed
+call   2135 never executed
+call   2136 never executed
+call   2137 never executed
+call   2138 never executed
+call   2139 never executed
+call   2140 never executed
+call   2141 never executed
+call   2142 never executed
+call   2143 never executed
+call   2144 never executed
+call   2145 never executed
+call   2146 never executed
+call   2147 never executed
+call   2148 never executed
+call   2149 never executed
+call   2150 never executed
+call   2151 never executed
+call   2152 never executed
+call   2153 never executed
+call   2154 never executed
+call   2155 returned 100%
+call   2156 never executed
+call   2157 never executed
+call   2158 never executed
+call   2159 never executed
+call   2160 never executed
+call   2161 never executed
+call   2162 never executed
+call   2163 never executed
+call   2164 returned 100%
+call   2165 returned 100%
+call   2166 never executed
+call   2167 never executed
+call   2168 never executed
+call   2169 never executed
+call   2170 returned 100%
+call   2171 returned 100%
+call   2172 never executed
+call   2173 never executed
+call   2174 never executed
+call   2175 never executed
+call   2176 returned 100%
+call   2177 returned 100%
+call   2178 never executed
+call   2179 never executed
+call   2180 never executed
+call   2181 never executed
+call   2182 returned 100%
+call   2183 returned 100%
+call   2184 never executed
+call   2185 never executed
+call   2186 never executed
+call   2187 never executed
+call   2188 returned 100%
+call   2189 returned 100%
+call   2190 never executed
+call   2191 never executed
+call   2192 never executed
+call   2193 never executed
+call   2194 returned 100%
+call   2195 returned 100%
+call   2196 never executed
+call   2197 never executed
+call   2198 never executed
+call   2199 never executed
+call   2200 returned 100%
+call   2201 returned 100%
+call   2202 never executed
+call   2203 never executed
+call   2204 never executed
+call   2205 never executed
+call   2206 returned 100%
+call   2207 returned 100%
+call   2208 never executed
+call   2209 returned 100%
+call   2210 never executed
+call   2211 never executed
+call   2212 never executed
+call   2213 returned 100%
+call   2214 returned 100%
+call   2215 never executed
+call   2216 never executed
+call   2217 never executed
+call   2218 returned 100%
+call   2219 returned 100%
+call   2220 never executed
+call   2221 never executed
+call   2222 never executed
+call   2223 returned 100%
+call   2224 returned 100%
+call   2225 returned 100%
+call   2226 returned 100%
+call   2227 returned 100%
+call   2228 returned 100%
+call   2229 returned 100%
+call   2230 never executed
+call   2231 returned 100%
+call   2232 never executed
+call   2233 returned 100%
+call   2234 returned 100%
+call   2235 never executed
+call   2236 never executed
+call   2237 never executed
+call   2238 never executed
+call   2239 never executed
+call   2240 never executed
+call   2241 never executed
+call   2242 returned 100%
+call   2243 returned 100%
+call   2244 never executed
+call   2245 returned 100%
+call   2246 returned 100%
+call   2247 returned 100%
+call   2248 returned 100%
+call   2249 returned 100%
+call   2250 returned 100%
+call   2251 never executed
+call   2252 never executed
+call   2253 never executed
+call   2254 returned 100%
+call   2255 returned 100%
+call   2256 never executed
+call   2257 never executed
+call   2258 never executed
+call   2259 never executed
+call   2260 never executed
+call   2261 never executed
+call   2262 never executed
+call   2263 never executed
+call   2264 never executed
+call   2265 returned 100%
+call   2266 never executed
+call   2267 never executed
+call   2268 never executed
+call   2269 returned 100%
+call   2270 returned 100%
+call   2271 returned 100%
+call   2272 returned 100%
+call   2273 returned 100%
+call   2274 returned 100%
+call   2275 returned 100%
+call   2276 returned 100%
+call   2277 returned 100%
+call   2278 returned 100%
+call   2279 never executed
+call   2280 returned 100%
+call   2281 returned 100%
+call   2282 never executed
+call   2283 returned 100%
+call   2284 returned 100%
+call   2285 returned 100%
+call   2286 returned 100%
+call   2287 returned 100%
+call   2288 returned 100%
+call   2289 returned 100%
+call   2290 returned 100%
+call   2291 never executed
+call   2292 never executed
+call   2293 never executed
+call   2294 returned 100%
+call   2295 returned 100%
+        -:  113:}
+        -:  114:# elif !defined __cplusplus
+        -:  115:#  define printf(...) \
+        -:  116:  __printf_chk (__USE_FORTIFY_LEVEL - 1, __VA_ARGS__)
+        -:  117:#  define fprintf(stream, ...) \
+        -:  118:  __fprintf_chk (stream, __USE_FORTIFY_LEVEL - 1, __VA_ARGS__)
+        -:  119:# endif
+        -:  120:
+        -:  121:__fortify_function int
+        -:  122:vprintf (const char *__restrict __fmt, __gnuc_va_list __ap)
+        -:  123:{
+        -:  124:#ifdef __USE_EXTERN_INLINES
+        -:  125:  return __vfprintf_chk (stdout, __USE_FORTIFY_LEVEL - 1, __fmt, __ap);
+        -:  126:#else
+        -:  127:  return __vprintf_chk (__USE_FORTIFY_LEVEL - 1, __fmt, __ap);
+        -:  128:#endif
+        -:  129:}
+        -:  130:
+        -:  131:__fortify_function int
+        -:  132:vfprintf (FILE *__restrict __stream,
+        -:  133:	  const char *__restrict __fmt, __gnuc_va_list __ap)
+        -:  134:{
+     114*:  135:  return __vfprintf_chk (__stream, __USE_FORTIFY_LEVEL - 1, __fmt, __ap);
+call    0 never executed
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 returned 100%
+call    6 never executed
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+        -:  136:}
+        -:  137:
+        -:  138:# ifdef __USE_XOPEN2K8
+        -:  139:extern int __dprintf_chk (int __fd, int __flag, const char *__restrict __fmt,
+        -:  140:			  ...) __attribute__ ((__format__ (__printf__, 3, 4)));
+        -:  141:extern int __vdprintf_chk (int __fd, int __flag,
+        -:  142:			   const char *__restrict __fmt, __gnuc_va_list __arg)
+        -:  143:     __attribute__ ((__format__ (__printf__, 3, 0)));
+        -:  144:
+        -:  145:#  ifdef __va_arg_pack
+        -:  146:__fortify_function int
+        -:  147:dprintf (int __fd, const char *__restrict __fmt, ...)
+        -:  148:{
+        -:  149:  return __dprintf_chk (__fd, __USE_FORTIFY_LEVEL - 1, __fmt,
+        -:  150:			__va_arg_pack ());
+        -:  151:}
+        -:  152:#  elif !defined __cplusplus
+        -:  153:#   define dprintf(fd, ...) \
+        -:  154:  __dprintf_chk (fd, __USE_FORTIFY_LEVEL - 1, __VA_ARGS__)
+        -:  155:#  endif
+        -:  156:
+        -:  157:__fortify_function int
+        -:  158:vdprintf (int __fd, const char *__restrict __fmt, __gnuc_va_list __ap)
+        -:  159:{
+        -:  160:  return __vdprintf_chk (__fd, __USE_FORTIFY_LEVEL - 1, __fmt, __ap);
+        -:  161:}
+        -:  162:# endif
+        -:  163:
+        -:  164:# ifdef __USE_GNU
+        -:  165:
+        -:  166:extern int __asprintf_chk (char **__restrict __ptr, int __flag,
+        -:  167:			   const char *__restrict __fmt, ...)
+        -:  168:     __THROW __attribute__ ((__format__ (__printf__, 3, 4))) __wur;
+        -:  169:extern int __vasprintf_chk (char **__restrict __ptr, int __flag,
+        -:  170:			    const char *__restrict __fmt, __gnuc_va_list __arg)
+        -:  171:     __THROW __attribute__ ((__format__ (__printf__, 3, 0))) __wur;
+        -:  172:extern int __obstack_printf_chk (struct obstack *__restrict __obstack,
+        -:  173:				 int __flag, const char *__restrict __format,
+        -:  174:				 ...)
+        -:  175:     __THROW __attribute__ ((__format__ (__printf__, 3, 4)));
+        -:  176:extern int __obstack_vprintf_chk (struct obstack *__restrict __obstack,
+        -:  177:				  int __flag,
+        -:  178:				  const char *__restrict __format,
+        -:  179:				  __gnuc_va_list __args)
+        -:  180:     __THROW __attribute__ ((__format__ (__printf__, 3, 0)));
+        -:  181:
+        -:  182:#  ifdef __va_arg_pack
+        -:  183:__fortify_function int
+        -:  184:__NTH (asprintf (char **__restrict __ptr, const char *__restrict __fmt, ...))
+        -:  185:{
+        -:  186:  return __asprintf_chk (__ptr, __USE_FORTIFY_LEVEL - 1, __fmt,
+        -:  187:			 __va_arg_pack ());
+        -:  188:}
+        -:  189:
+        -:  190:__fortify_function int
+        -:  191:__NTH (__asprintf (char **__restrict __ptr, const char *__restrict __fmt,
+        -:  192:		   ...))
+        -:  193:{
+        -:  194:  return __asprintf_chk (__ptr, __USE_FORTIFY_LEVEL - 1, __fmt,
+        -:  195:			 __va_arg_pack ());
+        -:  196:}
+        -:  197:
+        -:  198:__fortify_function int
+        -:  199:__NTH (obstack_printf (struct obstack *__restrict __obstack,
+        -:  200:		       const char *__restrict __fmt, ...))
+        -:  201:{
+        -:  202:  return __obstack_printf_chk (__obstack, __USE_FORTIFY_LEVEL - 1, __fmt,
+        -:  203:			       __va_arg_pack ());
+        -:  204:}
+        -:  205:#  elif !defined __cplusplus
+        -:  206:#   define asprintf(ptr, ...) \
+        -:  207:  __asprintf_chk (ptr, __USE_FORTIFY_LEVEL - 1, __VA_ARGS__)
+        -:  208:#   define __asprintf(ptr, ...) \
+        -:  209:  __asprintf_chk (ptr, __USE_FORTIFY_LEVEL - 1, __VA_ARGS__)
+        -:  210:#   define obstack_printf(obstack, ...) \
+        -:  211:  __obstack_printf_chk (obstack, __USE_FORTIFY_LEVEL - 1, __VA_ARGS__)
+        -:  212:#  endif
+        -:  213:
+        -:  214:__fortify_function int
+        -:  215:__NTH (vasprintf (char **__restrict __ptr, const char *__restrict __fmt,
+        -:  216:		  __gnuc_va_list __ap))
+        -:  217:{
+        -:  218:  return __vasprintf_chk (__ptr, __USE_FORTIFY_LEVEL - 1, __fmt, __ap);
+        -:  219:}
+        -:  220:
+        -:  221:__fortify_function int
+        -:  222:__NTH (obstack_vprintf (struct obstack *__restrict __obstack,
+        -:  223:			const char *__restrict __fmt, __gnuc_va_list __ap))
+        -:  224:{
+        -:  225:  return __obstack_vprintf_chk (__obstack, __USE_FORTIFY_LEVEL - 1, __fmt,
+        -:  226:				__ap);
+        -:  227:}
+        -:  228:
+        -:  229:# endif
+        -:  230:
+        -:  231:#endif
+        -:  232:
+        -:  233:#if __GLIBC_USE (DEPRECATED_GETS)
+        -:  234:extern char *__gets_chk (char *__str, size_t) __wur;
+        -:  235:extern char *__REDIRECT (__gets_warn, (char *__str), gets)
+        -:  236:     __wur __warnattr ("please use fgets or getline instead, gets can't "
+        -:  237:		       "specify buffer size");
+        -:  238:
+        -:  239:__fortify_function __wur char *
+        -:  240:gets (char *__str)
+        -:  241:{
+        -:  242:  if (__glibc_objsize (__str) != (size_t) -1)
+        -:  243:    return __gets_chk (__str, __glibc_objsize (__str));
+        -:  244:  return __gets_warn (__str);
+        -:  245:}
+        -:  246:#endif
+        -:  247:
+        -:  248:extern char *__fgets_chk (char *__restrict __s, size_t __size, int __n,
+        -:  249:			  FILE *__restrict __stream)
+        -:  250:    __wur __attr_access ((__write_only__, 1, 3));
+        -:  251:extern char *__REDIRECT (__fgets_alias,
+        -:  252:			 (char *__restrict __s, int __n,
+        -:  253:			  FILE *__restrict __stream), fgets)
+        -:  254:    __wur __attr_access ((__write_only__, 1, 2));
+        -:  255:extern char *__REDIRECT (__fgets_chk_warn,
+        -:  256:			 (char *__restrict __s, size_t __size, int __n,
+        -:  257:			  FILE *__restrict __stream), __fgets_chk)
+        -:  258:     __wur __warnattr ("fgets called with bigger size than length "
+        -:  259:		       "of destination buffer");
+        -:  260:
+        -:  261:__fortify_function __wur __fortified_attr_access (__write_only__, 1, 2) char *
+        -:  262:fgets (char *__restrict __s, int __n, FILE *__restrict __stream)
+        -:  263:{
+        -:  264:  size_t sz = __glibc_objsize (__s);
+        -:  265:  if (__glibc_safe_or_unknown_len (__n, sizeof (char), sz))
+    5280*:  266:    return __fgets_alias (__s, __n, __stream);
+call    0 never executed
+call    1 returned 100%
+        -:  267:  if (__glibc_unsafe_len (__n, sizeof (char), sz))
+        -:  268:    return __fgets_chk_warn (__s, sz, __n, __stream);
+        -:  269:  return __fgets_chk (__s, sz, __n, __stream);
+        -:  270:}
+        -:  271:
+        -:  272:extern size_t __fread_chk (void *__restrict __ptr, size_t __ptrlen,
+        -:  273:			   size_t __size, size_t __n,
+        -:  274:			   FILE *__restrict __stream) __wur;
+        -:  275:extern size_t __REDIRECT (__fread_alias,
+        -:  276:			  (void *__restrict __ptr, size_t __size,
+        -:  277:			   size_t __n, FILE *__restrict __stream),
+        -:  278:			  fread) __wur;
+        -:  279:extern size_t __REDIRECT (__fread_chk_warn,
+        -:  280:			  (void *__restrict __ptr, size_t __ptrlen,
+        -:  281:			   size_t __size, size_t __n,
+        -:  282:			   FILE *__restrict __stream),
+        -:  283:			  __fread_chk)
+        -:  284:     __wur __warnattr ("fread called with bigger size * nmemb than length "
+        -:  285:		       "of destination buffer");
+        -:  286:
+        -:  287:__fortify_function __wur size_t
+        -:  288:fread (void *__restrict __ptr, size_t __size, size_t __n,
+        -:  289:       FILE *__restrict __stream)
+        -:  290:{
+        -:  291:  size_t sz = __glibc_objsize0 (__ptr);
+        -:  292:  if (__glibc_safe_or_unknown_len (__n, __size, sz))
+        -:  293:    return __fread_alias (__ptr, __size, __n, __stream);
+        -:  294:  if (__glibc_unsafe_len (__n, __size, sz))
+        -:  295:    return __fread_chk_warn (__ptr, sz, __size, __n, __stream);
+        -:  296:  return __fread_chk (__ptr, sz, __size, __n, __stream);
+        -:  297:}
+        -:  298:
+        -:  299:#ifdef __USE_GNU
+        -:  300:extern char *__fgets_unlocked_chk (char *__restrict __s, size_t __size,
+        -:  301:				   int __n, FILE *__restrict __stream)
+        -:  302:    __wur __attr_access ((__write_only__, 1, 3));
+        -:  303:extern char *__REDIRECT (__fgets_unlocked_alias,
+        -:  304:			 (char *__restrict __s, int __n,
+        -:  305:			  FILE *__restrict __stream), fgets_unlocked)
+        -:  306:    __wur __attr_access ((__write_only__, 1, 2));
+        -:  307:extern char *__REDIRECT (__fgets_unlocked_chk_warn,
+        -:  308:			 (char *__restrict __s, size_t __size, int __n,
+        -:  309:			  FILE *__restrict __stream), __fgets_unlocked_chk)
+        -:  310:     __wur __warnattr ("fgets_unlocked called with bigger size than length "
+        -:  311:		       "of destination buffer");
+        -:  312:
+        -:  313:__fortify_function __wur __fortified_attr_access (__write_only__, 1, 2) char *
+        -:  314:fgets_unlocked (char *__restrict __s, int __n, FILE *__restrict __stream)
+        -:  315:{
+        -:  316:  size_t sz = __glibc_objsize (__s);
+        -:  317:  if (__glibc_safe_or_unknown_len (__n, sizeof (char), sz))
+        -:  318:    return __fgets_unlocked_alias (__s, __n, __stream);
+        -:  319:  if (__glibc_unsafe_len (__n, sizeof (char), sz))
+        -:  320:    return __fgets_unlocked_chk_warn (__s, sz, __n, __stream);
+        -:  321:  return __fgets_unlocked_chk (__s, sz, __n, __stream);
+        -:  322:}
+        -:  323:#endif
+        -:  324:
+        -:  325:#ifdef __USE_MISC
+        -:  326:# undef fread_unlocked
+        -:  327:extern size_t __fread_unlocked_chk (void *__restrict __ptr, size_t __ptrlen,
+        -:  328:				    size_t __size, size_t __n,
+        -:  329:				    FILE *__restrict __stream) __wur;
+        -:  330:extern size_t __REDIRECT (__fread_unlocked_alias,
+        -:  331:			  (void *__restrict __ptr, size_t __size,
+        -:  332:			   size_t __n, FILE *__restrict __stream),
+        -:  333:			  fread_unlocked) __wur;
+        -:  334:extern size_t __REDIRECT (__fread_unlocked_chk_warn,
+        -:  335:			  (void *__restrict __ptr, size_t __ptrlen,
+        -:  336:			   size_t __size, size_t __n,
+        -:  337:			   FILE *__restrict __stream),
+        -:  338:			  __fread_unlocked_chk)
+        -:  339:     __wur __warnattr ("fread_unlocked called with bigger size * nmemb than "
+        -:  340:		       "length of destination buffer");
+        -:  341:
+        -:  342:__fortify_function __wur size_t
+        -:  343:fread_unlocked (void *__restrict __ptr, size_t __size, size_t __n,
+        -:  344:		FILE *__restrict __stream)
+        -:  345:{
+        -:  346:  size_t sz = __glibc_objsize0 (__ptr);
+        -:  347:  if (__glibc_safe_or_unknown_len (__n, __size, sz))
+        -:  348:    {
+        -:  349:# ifdef __USE_EXTERN_INLINES
+        -:  350:      if (__builtin_constant_p (__size)
+        -:  351:	  && __builtin_constant_p (__n)
+        -:  352:	  && (__size | __n) < (((size_t) 1) << (8 * sizeof (size_t) / 2))
+        -:  353:	  && __size * __n <= 8)
+        -:  354:	{
+        -:  355:	  size_t __cnt = __size * __n;
+        -:  356:	  char *__cptr = (char *) __ptr;
+        -:  357:	  if (__cnt == 0)
+        -:  358:	    return 0;
+        -:  359:
+        -:  360:	  for (; __cnt > 0; --__cnt)
+        -:  361:	    {
+        -:  362:	      int __c = getc_unlocked (__stream);
+        -:  363:	      if (__c == EOF)
+        -:  364:		break;
+        -:  365:	      *__cptr++ = __c;
+        -:  366:	    }
+        -:  367:	  return (__cptr - (char *) __ptr) / __size;
+        -:  368:	}
+        -:  369:# endif
+        -:  370:      return __fread_unlocked_alias (__ptr, __size, __n, __stream);
+        -:  371:    }
+        -:  372:  if (__glibc_unsafe_len (__n, __size, sz))
+        -:  373:    return __fread_unlocked_chk_warn (__ptr, sz, __size, __n, __stream);
+        -:  374:  return __fread_unlocked_chk (__ptr, sz, __size, __n, __stream);
+        -:  375:
+        -:  376:}
+        -:  377:#endif
+        -:  378:
+        -:  379:#endif /* bits/stdio2.h.  */

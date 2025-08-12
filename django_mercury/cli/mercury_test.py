@@ -100,7 +100,25 @@ def main():
         help='Settings module to use'
     )
     
+    # C Extension verification
+    parser.add_argument(
+        '--ext',
+        action='store_true',
+        help='Check if C extensions are loaded and working'
+    )
+    
+    parser.add_argument(
+        '--benchmark',
+        action='store_true',
+        help='Run performance comparison between C extensions and pure Python (use with --ext)'
+    )
+    
     args = parser.parse_args()
+    
+    # Check C extensions if requested
+    if args.ext:
+        from .verify_extensions import verify_c_extensions
+        return verify_c_extensions(benchmark=args.benchmark)
     
     # Set up Mercury educational environment
     os.environ['MERCURY_EDU'] = '1'
@@ -109,6 +127,12 @@ def main():
     
     if args.no_pause:
         os.environ['MERCURY_NON_INTERACTIVE'] = '1'
+    else:
+        # Explicitly set interactive mode
+        os.environ['MERCURY_INTERACTIVE'] = '1'
+        # Make sure non-interactive is not set
+        if 'MERCURY_NON_INTERACTIVE' in os.environ:
+            del os.environ['MERCURY_NON_INTERACTIVE']
     
     # Find manage.py
     manage_py = find_manage_py()
@@ -150,9 +174,22 @@ def main():
     print("=" * 60)
     print()
     
-    # Execute Django test command
+    # Execute Django test command with proper stdin/stdout/stderr handling
     import subprocess
-    result = subprocess.run(cmd_args)
+    
+    # For interactive mode, we need to preserve TTY
+    if not args.no_pause:
+        # Pass through stdin/stdout/stderr to preserve TTY
+        result = subprocess.run(
+            cmd_args,
+            stdin=sys.stdin,
+            stdout=sys.stdout, 
+            stderr=sys.stderr
+        )
+    else:
+        # Non-interactive mode, normal subprocess
+        result = subprocess.run(cmd_args)
+    
     sys.exit(result.returncode)
 
 

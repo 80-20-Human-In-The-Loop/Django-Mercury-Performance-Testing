@@ -21,7 +21,7 @@ from django_mercury.python_bindings.logging_config import (
 class TestLoggingConfigConstants(unittest.TestCase):
     """Test cases for logging configuration constants."""
 
-    def test_default_log_format_defined(self):
+    def test_default_log_format_defined(self) -> None:
         """Test that default log format is properly defined."""
         self.assertIsInstance(DEFAULT_LOG_FORMAT, str)
         self.assertIn('%(asctime)s', DEFAULT_LOG_FORMAT)
@@ -29,7 +29,7 @@ class TestLoggingConfigConstants(unittest.TestCase):
         self.assertIn('%(levelname)s', DEFAULT_LOG_FORMAT)
         self.assertIn('%(message)s', DEFAULT_LOG_FORMAT)
 
-    def test_detailed_log_format_defined(self):
+    def test_detailed_log_format_defined(self) -> None:
         """Test that detailed log format is properly defined."""
         self.assertIsInstance(DETAILED_LOG_FORMAT, str)
         self.assertIn('%(asctime)s', DETAILED_LOG_FORMAT)
@@ -40,7 +40,7 @@ class TestLoggingConfigConstants(unittest.TestCase):
         self.assertIn('%(lineno)d', DETAILED_LOG_FORMAT)
         self.assertIn('%(funcName)s', DETAILED_LOG_FORMAT)
 
-    def test_detailed_format_more_detailed_than_default(self):
+    def test_detailed_format_more_detailed_than_default(self) -> None:
         """Test that detailed format contains more information than default."""
         # Detailed format should be longer and contain more fields
         self.assertGreater(len(DETAILED_LOG_FORMAT), len(DEFAULT_LOG_FORMAT))
@@ -52,13 +52,13 @@ class TestLoggingConfigConstants(unittest.TestCase):
 class TestGetLogLevel(unittest.TestCase):
     """Test cases for get_log_level function."""
 
-    def test_get_log_level_default(self):
+    def test_get_log_level_default(self) -> None:
         """Test get_log_level returns INFO by default."""
         with patch.dict(os.environ, {}, clear=True):
             log_level = get_log_level()
             self.assertEqual(log_level, 'INFO')
 
-    def test_get_log_level_from_environment(self):
+    def test_get_log_level_from_environment(self) -> None:
         """Test get_log_level reads from MERCURY_LOG_LEVEL environment variable."""
         test_cases = [
             ('DEBUG', 'DEBUG'),
@@ -74,13 +74,13 @@ class TestGetLogLevel(unittest.TestCase):
                     log_level = get_log_level()
                     self.assertEqual(log_level, expected_result)
 
-    def test_get_log_level_case_insensitive(self):
+    def test_get_log_level_case_insensitive(self) -> None:
         """Test get_log_level handles case conversion correctly."""
         with patch.dict(os.environ, {'MERCURY_LOG_LEVEL': 'debug'}):
             log_level = get_log_level()
             self.assertEqual(log_level, 'DEBUG')
 
-    def test_get_log_level_with_whitespace(self):
+    def test_get_log_level_with_whitespace(self) -> None:
         """Test get_log_level handles whitespace correctly."""
         with patch.dict(os.environ, {'MERCURY_LOG_LEVEL': '  INFO  '}):
             log_level = get_log_level()
@@ -90,7 +90,7 @@ class TestGetLogLevel(unittest.TestCase):
 class TestGetLogConfig(unittest.TestCase):
     """Test cases for get_log_config function."""
 
-    def test_get_log_config_structure(self):
+    def test_get_log_config_structure(self) -> None:
         """Test get_log_config returns properly structured configuration."""
         config = get_log_config()
         
@@ -103,17 +103,17 @@ class TestGetLogConfig(unittest.TestCase):
         self.assertIn('loggers', config)
         self.assertIn('root', config)
 
-    def test_get_log_config_version(self):
+    def test_get_log_config_version(self) -> None:
         """Test log config has correct version."""
         config = get_log_config()
         self.assertEqual(config['version'], 1)
 
-    def test_get_log_config_disable_existing_loggers(self):
+    def test_get_log_config_disable_existing_loggers(self) -> None:
         """Test log config preserves existing loggers."""
         config = get_log_config()
         self.assertFalse(config['disable_existing_loggers'])
 
-    def test_get_log_config_formatters(self):
+    def test_get_log_config_formatters(self) -> None:
         """Test log config defines required formatters."""
         config = get_log_config()
         formatters = config['formatters']
@@ -123,7 +123,7 @@ class TestGetLogConfig(unittest.TestCase):
             self.assertIn(formatter_name, formatters)
             self.assertIsInstance(formatters[formatter_name], dict)
 
-    def test_get_log_config_formatters_content(self):
+    def test_get_log_config_formatters_content(self) -> None:
         """Test formatter configurations are correct."""
         config = get_log_config()
         formatters = config['formatters']
@@ -144,7 +144,7 @@ class TestGetLogConfig(unittest.TestCase):
         self.assertIn('format', colored_formatter)
         self.assertIn('log_colors', colored_formatter)
 
-    def test_get_log_config_handlers(self):
+    def test_get_log_config_handlers(self) -> None:
         """Test log config defines required handlers."""
         config = get_log_config()
         handlers = config['handlers']
@@ -154,7 +154,7 @@ class TestGetLogConfig(unittest.TestCase):
             self.assertIn(handler_name, handlers)
             self.assertIsInstance(handlers[handler_name], dict)
 
-    def test_get_log_config_handlers_content(self):
+    def test_get_log_config_handlers_content(self) -> None:
         """Test handler configurations are correct."""
         config = get_log_config()
         handlers = config['handlers']
@@ -179,7 +179,7 @@ class TestGetLogConfig(unittest.TestCase):
         self.assertIn('filename', error_handler)
         self.assertEqual(error_handler['level'], 'ERROR')
 
-    def test_get_log_config_loggers(self):
+    def test_get_log_config_loggers(self) -> None:
         """Test log config defines performance testing loggers."""
         config = get_log_config()
         loggers = config['loggers']
@@ -193,7 +193,7 @@ class TestGetLogConfig(unittest.TestCase):
         # Should not propagate to avoid double logging
         self.assertFalse(pt_logger.get('propagate', True))
 
-    def test_get_log_config_root_logger(self):
+    def test_get_log_config_root_logger(self) -> None:
         """Test root logger configuration."""
         config = get_log_config()
         root_config = config['root']
@@ -203,14 +203,14 @@ class TestGetLogConfig(unittest.TestCase):
         self.assertIsInstance(root_config['handlers'], list)
 
     @patch('pathlib.Path.mkdir')
-    def test_get_log_config_creates_log_directory(self, mock_mkdir):
+    def test_get_log_config_creates_log_directory(self, mock_mkdir) -> None:
         """Test that get_log_config creates log directory."""
         get_log_config()
         
         # Should call mkdir with parents=True, exist_ok=True
         mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
-    def test_get_log_config_log_file_paths(self):
+    def test_get_log_config_log_file_paths(self) -> None:
         """Test that log file paths are correctly constructed."""
         config = get_log_config()
         handlers = config['handlers']
@@ -228,7 +228,7 @@ class TestGetLogConfig(unittest.TestCase):
         self.assertTrue(file_handler['filename'].endswith('performance_testing.log'))
         self.assertTrue(error_handler['filename'].endswith('performance_testing_errors.log'))
 
-    def test_get_log_config_colored_formatter_colors(self):
+    def test_get_log_config_colored_formatter_colors(self) -> None:
         """Test colored formatter defines all required log level colors."""
         config = get_log_config()
         colored_formatter = config['formatters']['colored']
@@ -239,7 +239,7 @@ class TestGetLogConfig(unittest.TestCase):
             self.assertIn(level, log_colors)
             self.assertIsInstance(log_colors[level], str)
 
-    def test_get_log_config_file_handler_rotation(self):
+    def test_get_log_config_file_handler_rotation(self) -> None:
         """Test file handlers have rotation configured."""
         config = get_log_config()
         handlers = config['handlers']
@@ -260,14 +260,14 @@ class TestGetLogConfig(unittest.TestCase):
 class TestGetLogger(unittest.TestCase):
     """Test cases for get_logger function."""
 
-    def test_get_logger_returns_logger(self):
+    def test_get_logger_returns_logger(self) -> None:
         """Test get_logger returns a logger instance."""
         logger = get_logger('test_logger')
         
         self.assertIsInstance(logger, logging.Logger)
         self.assertEqual(logger.name, 'performance_testing.test_logger')
 
-    def test_get_logger_different_names(self):
+    def test_get_logger_different_names(self) -> None:
         """Test get_logger with different names returns different loggers."""
         logger1 = get_logger('logger1')
         logger2 = get_logger('logger2')
@@ -276,7 +276,7 @@ class TestGetLogger(unittest.TestCase):
         self.assertEqual(logger1.name, 'performance_testing.logger1')
         self.assertEqual(logger2.name, 'performance_testing.logger2')
 
-    def test_get_logger_same_name_returns_same_logger(self):
+    def test_get_logger_same_name_returns_same_logger(self) -> None:
         """Test get_logger with same name returns same logger instance."""
         logger1 = get_logger('same_logger')
         logger2 = get_logger('same_logger')
@@ -284,14 +284,14 @@ class TestGetLogger(unittest.TestCase):
         self.assertEqual(logger1, logger2)
         self.assertEqual(logger1.name, logger2.name)
 
-    def test_get_logger_empty_name(self):
+    def test_get_logger_empty_name(self) -> None:
         """Test get_logger with empty name."""
         logger = get_logger('')
         
         self.assertIsInstance(logger, logging.Logger)
         self.assertEqual(logger.name, 'performance_testing.')
 
-    def test_get_logger_none_name(self):
+    def test_get_logger_none_name(self) -> None:
         """Test get_logger with None name."""
         logger = get_logger(None)
         
@@ -299,7 +299,7 @@ class TestGetLogger(unittest.TestCase):
         # Logger name should be prefixed string representation of None
         self.assertEqual(logger.name, 'performance_testing.None')
 
-    def test_get_logger_same_logger_functionality(self):
+    def test_get_logger_same_logger_functionality(self) -> None:
         """Test that get_logger sets up logging and returns functional loggers."""
         # This test verifies the logger works without testing implementation details
         logger = get_logger('functional_test')
@@ -314,14 +314,14 @@ class TestGetLogger(unittest.TestCase):
         except Exception as e:
             self.fail(f"Logger should work without errors: {e}")
 
-    def test_get_logger_with_performance_testing_prefix(self):
+    def test_get_logger_with_performance_testing_prefix(self) -> None:
         """Test get_logger with performance_testing module prefix."""
         logger = get_logger('performance_testing.test_module')
         
         self.assertIsInstance(logger, logging.Logger)
         self.assertEqual(logger.name, 'performance_testing.test_module')
 
-    def test_get_logger_handles_special_characters(self):
+    def test_get_logger_handles_special_characters(self) -> None:
         """Test get_logger handles special characters in logger names."""
         special_names = [
             'logger.with.dots',
@@ -341,7 +341,7 @@ class TestGetLogger(unittest.TestCase):
 class TestLoggingConfiguration(unittest.TestCase):
     """Integration tests for logging configuration."""
 
-    def test_logger_can_log_messages(self):
+    def test_logger_can_log_messages(self) -> None:
         """Test that created loggers can actually log messages."""
         logger = get_logger('test_integration')
         
@@ -355,7 +355,7 @@ class TestLoggingConfiguration(unittest.TestCase):
         except Exception as e:
             self.fail(f"Logging should not raise exceptions: {e}")
 
-    def test_logger_respects_log_level(self):
+    def test_logger_respects_log_level(self) -> None:
         """Test that logger respects configured log level."""
         logger = get_logger('test_level')
         
@@ -370,7 +370,7 @@ class TestLoggingConfiguration(unittest.TestCase):
         ]
         self.assertIn(effective_level, valid_levels)
 
-    def test_multiple_loggers_work_independently(self):
+    def test_multiple_loggers_work_independently(self) -> None:
         """Test that multiple loggers work independently."""
         logger1 = get_logger('independent1')
         logger2 = get_logger('independent2')
@@ -383,7 +383,7 @@ class TestLoggingConfiguration(unittest.TestCase):
             self.fail(f"Independent loggers should work: {e}")
 
     @patch('django_mercury.python_bindings.logging_config.get_log_level')
-    def test_configuration_uses_log_level_function(self, mock_get_log_level):
+    def test_configuration_uses_log_level_function(self, mock_get_log_level) -> None:
         """Test that configuration uses get_log_level function."""
         mock_get_log_level.return_value = 'DEBUG'
         
@@ -397,7 +397,7 @@ class TestLoggingConfiguration(unittest.TestCase):
 class TestLoggingEdgeCases(unittest.TestCase):
     """Test edge cases and error conditions."""
 
-    def test_get_log_config_with_missing_colorlog(self):
+    def test_get_log_config_with_missing_colorlog(self) -> None:
         """Test get_log_config handles missing colorlog gracefully."""
         # This test assumes colorlog might not be available
         # The function should still work and return a valid config
@@ -411,7 +411,7 @@ class TestLoggingEdgeCases(unittest.TestCase):
         colored = config['formatters']['colored']
         self.assertIn('()', colored)
 
-    def test_logging_config_directory_creation_failure(self):
+    def test_logging_config_directory_creation_failure(self) -> None:
         """Test behavior when log directory creation fails."""
         with patch('pathlib.Path.mkdir', side_effect=PermissionError("Cannot create directory")):
             # Should still return configuration even if directory creation fails
@@ -422,7 +422,7 @@ class TestLoggingEdgeCases(unittest.TestCase):
                 # It's also acceptable for this to raise an error
                 pass
 
-    def test_get_logger_with_numeric_name(self):
+    def test_get_logger_with_numeric_name(self) -> None:
         """Test get_logger with numeric name."""
         logger = get_logger(123)
         

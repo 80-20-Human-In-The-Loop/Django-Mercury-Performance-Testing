@@ -19,18 +19,18 @@ try:
     C_EXTENSIONS_AVAILABLE = True
 except ImportError:
     # Direct execution fallback
-    from metrics import PerformanceMetrics, PerformanceStatus
+    from metrics import PerformanceMetrics, PerformanceStatus  # type: ignore[import,no-redef]
 
     C_EXTENSIONS_AVAILABLE = False
     try:
-        from django_hooks import DjangoQueryTracker, DjangoCacheTracker
-        from colors import colors, get_status_icon, EduLiteColorScheme
-        from c_bindings import c_extensions
+        from django_hooks import DjangoQueryTracker, DjangoCacheTracker  # type: ignore[import,no-redef]
+        from colors import colors, get_status_icon, EduLiteColorScheme  # type: ignore[import,no-redef]
+        from c_bindings import c_extensions  # type: ignore[import,no-redef]
 
         C_EXTENSIONS_AVAILABLE = True  # Enable c_extensions for performance monitoring
     except ImportError:
-        DjangoQueryTracker = None
-        DjangoCacheTracker = None
+        DjangoQueryTracker = None  # type: ignore[assignment]
+        DjangoCacheTracker = None  # type: ignore[assignment]
         c_extensions = None
 
 # Type checking imports

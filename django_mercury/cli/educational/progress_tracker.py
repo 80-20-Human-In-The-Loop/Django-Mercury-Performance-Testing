@@ -28,8 +28,8 @@ class ProgressTracker:
         self.storage_path = storage_path or (
             Path.home() / ".django_mercury" / "learning_progress.json"
         )
-        self.progress_data = self._load_progress()
-        self.session_data = {
+        self.progress_data: Dict[str, Any] = self._load_progress()
+        self.session_data: Dict[str, Any] = {
             "concepts_covered": [],
             "quiz_results": [],
             "optimizations_learned": [],

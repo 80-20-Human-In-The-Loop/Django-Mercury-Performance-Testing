@@ -25,7 +25,7 @@ class TestWindowsCBindings(unittest.TestCase):
     """Test Windows-specific behavior in c_bindings.py."""
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_library_config(self):
+    def test_windows_library_config(self) -> None:
         """Test Windows library configuration (lines 74-96)."""
         from django_mercury.python_bindings import c_bindings
         
@@ -41,7 +41,7 @@ class TestWindowsCBindings(unittest.TestCase):
         self.assertEqual(config["test_orchestrator"]["name"], "_c_orchestrator")
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_pyd_loading(self):
+    def test_windows_pyd_loading(self) -> None:
         """Test Windows .pyd extension loading (lines 414-449)."""
         manager = CExtensionManager()
         
@@ -58,7 +58,7 @@ class TestWindowsCBindings(unittest.TestCase):
             self.assertIn("Python module", lib_info.path)
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_import_error_handling(self):
+    def test_windows_import_error_handling(self) -> None:
         """Test Windows import error handling (lines 442-449)."""
         manager = CExtensionManager()
         
@@ -74,7 +74,7 @@ class TestWindowsCBindings(unittest.TestCase):
             self.assertIn("Failed to import Python extension", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_system_paths(self):
+    def test_windows_system_paths(self) -> None:
         """Test Windows system paths (lines 208-214)."""
         from django_mercury.python_bindings.c_bindings import get_library_paths
         
@@ -86,7 +86,7 @@ class TestWindowsCBindings(unittest.TestCase):
         self.assertTrue(any('Program Files' in p for p in paths_str))
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_ci_paths(self):
+    def test_windows_ci_paths(self) -> None:
         """Test Windows CI paths on GitHub Actions (lines 184-190)."""
         # Mock GitHub Actions environment
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
@@ -99,7 +99,7 @@ class TestWindowsCBindings(unittest.TestCase):
             self.assertTrue(any('D:/a' in p or 'D:\\a' in p for p in paths_str))
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_dll_directory(self):
+    def test_windows_dll_directory(self) -> None:
         """Test Windows DLL directory handling."""
         manager = CExtensionManager()
         
@@ -112,7 +112,7 @@ class TestWindowsCBindings(unittest.TestCase):
             self.assertTrue(package_dir.parent.exists())
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_function_configuration(self):
+    def test_windows_function_configuration(self) -> None:
         """Test Windows-specific function configuration (lines 431-433)."""
         manager = CExtensionManager()
         
@@ -133,7 +133,7 @@ class TestWindowsCBindings(unittest.TestCase):
                 self.assertGreater(lib_info.function_count, 0)
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_platform_detection(self):
+    def test_windows_platform_detection(self) -> None:
         """Test Windows platform detection."""
         import platform
         
@@ -146,7 +146,7 @@ class TestWindowsCBindings(unittest.TestCase):
         self.assertEqual(os.environ.get("SYSTEMROOT"), "C:\\Windows")
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_ctypes_incompatibility(self):
+    def test_windows_ctypes_incompatibility(self) -> None:
         """Test that ctypes.CDLL fails on Windows for .so files."""
         import ctypes
         
@@ -155,7 +155,7 @@ class TestWindowsCBindings(unittest.TestCase):
             ctypes.CDLL("libtest.so")
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_temp_paths(self):
+    def test_windows_temp_paths(self) -> None:
         """Test Windows temp directory paths."""
         temp_dir = os.environ.get("TEMP")
         self.assertIsNotNone(temp_dir)
@@ -166,7 +166,7 @@ class TestWindowsEdgeCases(unittest.TestCase):
     """Test Windows edge cases and error scenarios."""
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_missing_dll(self):
+    def test_windows_missing_dll(self) -> None:
         """Test handling of missing DLL dependencies."""
         manager = CExtensionManager()
         
@@ -182,7 +182,7 @@ class TestWindowsEdgeCases(unittest.TestCase):
             self.assertIn("DLL load failed", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_permission_error(self):
+    def test_windows_permission_error(self) -> None:
         """Test handling of Windows permission errors."""
         manager = CExtensionManager()
         
@@ -211,7 +211,7 @@ class TestWindowsEdgeCases(unittest.TestCase):
             self.assertIn("Permission denied", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Windows", "Windows-specific test")
-    def test_windows_unicode_paths(self):
+    def test_windows_unicode_paths(self) -> None:
         """Test Windows Unicode path handling."""
         # Use PureWindowsPath directly for Unicode path testing
         from pathlib import PureWindowsPath

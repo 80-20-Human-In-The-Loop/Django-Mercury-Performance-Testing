@@ -1,0 +1,3034 @@
+        -:    0:Source:metrics_engine.c
+        -:    0:Source is newer than graph
+        -:    1:/**
+        -:    2: * @file metrics_engine.c
+        -:    3: * @brief High-Performance Metrics Collection Engine
+        -:    4: * 
+        -:    5: * This library implements a high-performance metrics collection engine for the
+        -:    6: * Mercury Performance Testing Framework. It replaces the Python-based metrics
+        -:    7: * collection in monitor.py with optimized C implementations.
+        -:    8: *
+        -:    9: * Key Features:
+        -:   10: * - RDTSC high-resolution timing with nanosecond precision
+        -:   11: * - SIMD-accelerated threshold checking using SSE2/AVX
+        -:   12: * - Native stack frame walking with libunwind
+        -:   13: * - Cache-aligned data structures for optimal performance
+        -:   14: * - Memory-efficient metrics storage and aggregation
+        -:   15: *
+        -:   16: * Performance Target: 67% reduction in metrics collection overhead
+        -:   17: * Memory Usage: Cache-aligned structures for SIMD operations
+        -:   18: */
+        -:   19:
+        -:   20:/* Suppress deprecation warnings on Windows */
+        -:   21:#ifdef _MSC_VER
+        -:   22:    #define _CRT_SECURE_NO_WARNINGS
+        -:   23:#endif
+        -:   24:
+        -:   25:#include "common.h"
+        -:   26:#include <stdlib.h>  /* For malloc, free */
+        -:   27:#include <string.h>  /* For strcpy, strncpy, strlen */
+        -:   28:#include <math.h>    /* For sqrt, fabs */
+        -:   29:#include <unistd.h>  /* For dup, dup2, close */
+        -:   30:#include <fcntl.h>   /* For open, O_WRONLY */
+        -:   31:
+        -:   32:// Platform-specific includes
+        -:   33:#ifdef MERCURY_MACOS
+        -:   34:#include <mach/task.h>
+        -:   35:#include <mach/mach_init.h>
+        -:   36:#endif
+        -:   37:
+        -:   38:#ifdef MERCURY_WINDOWS
+        -:   39:#include <windows.h>
+        -:   40:#include <psapi.h>  // For PROCESS_MEMORY_COUNTERS and GetProcessMemoryInfo
+        -:   41:#endif
+        -:   42:
+        -:   43:// Conditional includes for stack unwinding
+        -:   44:// Check if MERCURY_HAS_LIBUNWIND was set by the build system
+        -:   45:#ifndef MERCURY_HAS_LIBUNWIND
+        -:   46:    // If not set by build system, auto-detect
+        -:   47:    #ifdef MERCURY_LINUX
+        -:   48:        // Check if libunwind is available
+        -:   49:        #ifdef __has_include
+        -:   50:            #if __has_include(<libunwind.h>)
+        -:   51:                #define MERCURY_HAS_LIBUNWIND 1
+        -:   52:            #else
+        -:   53:                #define MERCURY_HAS_LIBUNWIND 0
+        -:   54:            #endif
+        -:   55:        #else
+        -:   56:            // Assume libunwind is available on Linux (fallback)
+        -:   57:            #define MERCURY_HAS_LIBUNWIND 1
+        -:   58:        #endif
+        -:   59:    #else
+        -:   60:        #define MERCURY_HAS_LIBUNWIND 0
+        -:   61:    #endif
+        -:   62:#endif
+        -:   63:
+        -:   64:// Include libunwind headers if available
+        -:   65:#if MERCURY_HAS_LIBUNWIND
+        -:   66:    #define UNW_LOCAL_ONLY
+        -:   67:    #include <libunwind.h>
+        -:   68:    #include <dlfcn.h>
+        -:   69:#endif
+        -:   70:
+        -:   71:// === CONSTANTS ===
+        -:   72:
+        -:   73:#define MAX_ACTIVE_MONITORS 64
+        -:   74:#define MAX_METRICS_HISTORY 1000
+        -:   75:#define THRESHOLD_CACHE_SIZE 32
+        -:   76:#define STACK_TRACE_MAX_DEPTH 16
+        -:   77:
+        -:   78:// Violation flags (bit field)
+        -:   79:#define VIOLATION_RESPONSE_TIME  (1ULL << 0)
+        -:   80:#define VIOLATION_MEMORY_USAGE   (1ULL << 1)
+        -:   81:#define VIOLATION_QUERY_COUNT    (1ULL << 2)
+        -:   82:#define VIOLATION_CACHE_RATIO    (1ULL << 3)
+        -:   83:#define VIOLATION_N_PLUS_ONE     (1ULL << 4)
+        -:   84:
+        -:   85:// === DATA STRUCTURES ===
+        -:   86:
+        -:   87:/**
+        -:   88: * @struct StackFrame
+        -:   89: * @brief Stack frame information for debugging and profiling
+        -:   90: * 
+        -:   91: * @var StackFrame::address
+        -:   92: * Memory address of the stack frame
+        -:   93: * 
+        -:   94: * @var StackFrame::function_name
+        -:   95: * Name of the function (demangled if C++)
+        -:   96: * 
+        -:   97: * @var StackFrame::file_name
+        -:   98: * Source file containing the function
+        -:   99: * 
+        -:  100: * @var StackFrame::line_number
+        -:  101: * Line number in the source file
+        -:  102: */
+        -:  103:typedef struct {
+        -:  104:    void* address;
+        -:  105:    char function_name[128];
+        -:  106:    char file_name[256];
+        -:  107:    int line_number;
+        -:  108:} StackFrame;
+        -:  109:
+        -:  110:/**
+        -:  111: * @struct ThresholdConfig
+        -:  112: * @brief Performance threshold configuration
+        -:  113: * 
+        -:  114: * SIMD-aligned structure for efficient threshold checking.
+        -:  115: * 
+        -:  116: * @var ThresholdConfig::response_time_ms
+        -:  117: * Maximum allowed response time in milliseconds
+        -:  118: * 
+        -:  119: * @var ThresholdConfig::memory_usage_mb
+        -:  120: * Maximum allowed memory usage in megabytes
+        -:  121: * 
+        -:  122: * @var ThresholdConfig::query_count_max
+        -:  123: * Maximum number of database queries allowed
+        -:  124: * 
+        -:  125: * @var ThresholdConfig::cache_hit_ratio_min
+        -:  126: * Minimum required cache hit ratio (0.0-1.0)
+        -:  127: * 
+        -:  128: * @var ThresholdConfig::flags
+        -:  129: * Configuration flags for enabling/disabling checks
+        -:  130: */
+        -:  131:typedef struct MERCURY_ALIGNED(32) {
+        -:  132:    double response_time_ms;
+        -:  133:    double memory_usage_mb;
+        -:  134:    uint32_t query_count_max;
+        -:  135:    double cache_hit_ratio_min;
+        -:  136:    uint32_t flags;  // Configuration flags
+        -:  137:} ThresholdConfig;
+        -:  138:
+        -:  139:// Performance monitor session
+        -:  140:typedef struct MERCURY_ALIGNED(64) {
+        -:  141:    int64_t session_id;
+        -:  142:    MercuryTimestamp start_time;
+        -:  143:    MercuryTimestamp end_time;
+        -:  144:    
+        -:  145:    // Metrics
+        -:  146:    uint32_t query_count_start;
+        -:  147:    uint32_t query_count_end;
+        -:  148:    uint32_t cache_hits;
+        -:  149:    uint32_t cache_misses;
+        -:  150:    size_t memory_start_bytes;
+        -:  151:    size_t memory_peak_bytes;
+        -:  152:    size_t memory_end_bytes;
+        -:  153:    
+        -:  154:    // Configuration
+        -:  155:    ThresholdConfig thresholds;
+        -:  156:    
+        -:  157:    // Context information
+        -:  158:    char operation_name[128];
+        -:  159:    char operation_type[64];
+        -:  160:    
+        -:  161:    // Stack trace for error reporting
+        -:  162:    StackFrame stack_trace[STACK_TRACE_MAX_DEPTH];
+        -:  163:    int stack_depth;
+        -:  164:    
+        -:  165:    // Status
+        -:  166:    uint64_t violation_flags;
+        -:  167:    bool is_active;
+        -:  168:    
+        -:  169:} PerformanceMonitor;
+        -:  170:
+        -:  171:// Global metrics engine state
+        -:  172:typedef struct {
+        -:  173:    PerformanceMonitor* monitors;
+        -:  174:    size_t monitor_count;
+        -:  175:    size_t max_monitors;
+        -:  176:    
+        -:  177:    // Thread synchronization for monitor allocation
+        -:  178:    mercury_mutex_t monitor_lock;
+        -:  179:    
+        -:  180:    // SIMD-aligned threshold cache for fast checking
+        -:  181:    ThresholdConfig* threshold_cache;  /* Alignment handled at allocation */
+        -:  182:    size_t cache_size;
+        -:  183:    
+        -:  184:    // Statistics
+        -:  185:    MERCURY_ATOMIC(uint64_t) total_sessions;
+        -:  186:    MERCURY_ATOMIC(uint64_t) violations_detected;
+        -:  187:    MERCURY_ATOMIC(uint64_t) timing_overhead_ns;  // Self-monitoring
+        -:  188:    
+        -:  189:    // Django hook counters
+        -:  190:    MERCURY_ATOMIC(uint64_t) global_query_count;
+        -:  191:    MERCURY_ATOMIC(uint64_t) global_cache_hits;
+        -:  192:    MERCURY_ATOMIC(uint64_t) global_cache_misses;
+        -:  193:    
+        -:  194:    // RDTSC calibration
+        -:  195:    uint64_t rdtsc_frequency;
+        -:  196:    bool rdtsc_available;
+        -:  197:    
+        -:  198:} MetricsEngine;
+        -:  199:
+        -:  200:// Global engine instance
+        -:  201:static MetricsEngine* g_engine = NULL;
+        -:  202:
+        -:  203:// === TIMING UTILITIES ===
+        -:  204:
+        -:  205:// Get current memory usage (RSS) in bytes
+     240*:  206:static size_t get_memory_usage(void) {
+        -:  207:#ifdef MERCURY_LINUX
+     240*:  208:    FILE* file = fopen("/proc/self/status", "r");
+     240*:  209:    if (!file) return 0;
+        -:  210:    
+        -:  211:    char line[256];
+     240*:  212:    size_t memory_kb = 0;
+        -:  213:    
+    5520*:  214:    while (fgets(line, sizeof(line), file)) {
+    5280*:  215:        if (strncmp(line, "VmRSS:", 6) == 0) {
+     240*:  216:            sscanf(line, "VmRSS: %zu kB", &memory_kb);
+     240*:  217:            break;
+        -:  218:        }
+        -:  219:    }
+        -:  220:    
+     240*:  221:    fclose(file);
+     240*:  222:    return memory_kb * 1024;  // Convert to bytes
+        -:  223:    
+        -:  224:#elif defined(MERCURY_MACOS)
+        -:  225:    // macOS implementation using task_info
+        -:  226:    struct task_basic_info info;
+        -:  227:    mach_msg_type_number_t info_count = TASK_BASIC_INFO_COUNT;
+        -:  228:    
+        -:  229:    if (task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&info, &info_count) == KERN_SUCCESS) {
+        -:  230:        return info.resident_size;
+        -:  231:    }
+        -:  232:    return 0;
+        -:  233:    
+        -:  234:#elif defined(MERCURY_WINDOWS)
+        -:  235:    PROCESS_MEMORY_COUNTERS pmc;
+        -:  236:    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        -:  237:        return pmc.WorkingSetSize;
+        -:  238:    }
+        -:  239:    return 0;
+        -:  240:    
+        -:  241:#else
+        -:  242:    return 0;  // Fallback for unsupported platforms
+        -:  243:#endif
+        -:  244:}
+------------------
+get_memory_usage:
+function get_memory_usage called 0 returned 0% blocks executed 0%
+    #####:  206:static size_t get_memory_usage(void) {
+        -:  207:#ifdef MERCURY_LINUX
+    #####:  208:    FILE* file = fopen("/proc/self/status", "r");
+call    0 never executed
+    #####:  209:    if (!file) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  210:    
+        -:  211:    char line[256];
+    #####:  212:    size_t memory_kb = 0;
+        -:  213:    
+    #####:  214:    while (fgets(line, sizeof(line), file)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  215:        if (strncmp(line, "VmRSS:", 6) == 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  216:            sscanf(line, "VmRSS: %zu kB", &memory_kb);
+    #####:  217:            break;
+        -:  218:        }
+        -:  219:    }
+        -:  220:    
+    #####:  221:    fclose(file);
+call    0 never executed
+    #####:  222:    return memory_kb * 1024;  // Convert to bytes
+        -:  223:    
+        -:  224:#elif defined(MERCURY_MACOS)
+        -:  225:    // macOS implementation using task_info
+        -:  226:    struct task_basic_info info;
+        -:  227:    mach_msg_type_number_t info_count = TASK_BASIC_INFO_COUNT;
+        -:  228:    
+        -:  229:    if (task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&info, &info_count) == KERN_SUCCESS) {
+        -:  230:        return info.resident_size;
+        -:  231:    }
+        -:  232:    return 0;
+        -:  233:    
+        -:  234:#elif defined(MERCURY_WINDOWS)
+        -:  235:    PROCESS_MEMORY_COUNTERS pmc;
+        -:  236:    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        -:  237:        return pmc.WorkingSetSize;
+        -:  238:    }
+        -:  239:    return 0;
+        -:  240:    
+        -:  241:#else
+        -:  242:    return 0;  // Fallback for unsupported platforms
+        -:  243:#endif
+        -:  244:}
+------------------
+get_memory_usage:
+function get_memory_usage called 240 returned 100% blocks executed 100%
+      240:  206:static size_t get_memory_usage(void) {
+        -:  207:#ifdef MERCURY_LINUX
+      240:  208:    FILE* file = fopen("/proc/self/status", "r");
+call    0 returned 100%
+      240:  209:    if (!file) return 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  210:    
+        -:  211:    char line[256];
+      240:  212:    size_t memory_kb = 0;
+        -:  213:    
+     5520:  214:    while (fgets(line, sizeof(line), file)) {
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+     5280:  215:        if (strncmp(line, "VmRSS:", 6) == 0) {
+branch  0 taken 5% (fallthrough)
+branch  1 taken 95%
+      240:  216:            sscanf(line, "VmRSS: %zu kB", &memory_kb);
+      240:  217:            break;
+        -:  218:        }
+        -:  219:    }
+        -:  220:    
+      240:  221:    fclose(file);
+call    0 returned 100%
+      240:  222:    return memory_kb * 1024;  // Convert to bytes
+        -:  223:    
+        -:  224:#elif defined(MERCURY_MACOS)
+        -:  225:    // macOS implementation using task_info
+        -:  226:    struct task_basic_info info;
+        -:  227:    mach_msg_type_number_t info_count = TASK_BASIC_INFO_COUNT;
+        -:  228:    
+        -:  229:    if (task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&info, &info_count) == KERN_SUCCESS) {
+        -:  230:        return info.resident_size;
+        -:  231:    }
+        -:  232:    return 0;
+        -:  233:    
+        -:  234:#elif defined(MERCURY_WINDOWS)
+        -:  235:    PROCESS_MEMORY_COUNTERS pmc;
+        -:  236:    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        -:  237:        return pmc.WorkingSetSize;
+        -:  238:    }
+        -:  239:    return 0;
+        -:  240:    
+        -:  241:#else
+        -:  242:    return 0;  // Fallback for unsupported platforms
+        -:  243:#endif
+        -:  244:}
+------------------
+        -:  245:
+        -:  246:// Capture stack trace for error reporting
+     120*:  247:static int capture_stack_trace(StackFrame* frames, int max_frames) {
+        -:  248:    int frame_count = 0;
+        -:  249:    
+        -:  250:#if defined(MERCURY_LINUX) && MERCURY_HAS_LIBUNWIND
+        -:  251:    unw_cursor_t cursor;
+        -:  252:    unw_context_t context;
+        -:  253:    
+     120*:  254:    if (unw_getcontext(&context) != 0) {
+        -:  255:        return 0;
+        -:  256:    }
+        -:  257:    
+        -:  258:    // Suppress libunwind warnings about invalid file descriptors
+        -:  259:    // This is a known issue when libunwind looks for debug symbols
+        -:  260:    int saved_stderr = -1;
+        -:  261:    int null_fd = -1;
+     120*:  262:    if (getenv("SUPPRESS_LIBUNWIND_WARNINGS")) {
+    #####:  263:        saved_stderr = dup(STDERR_FILENO);
+        -:  264:        null_fd = open("/dev/null", O_WRONLY);
+    #####:  265:        if (null_fd >= 0) {
+    #####:  266:            dup2(null_fd, STDERR_FILENO);
+        -:  267:        }
+        -:  268:    }
+        -:  269:    
+     120*:  270:    int init_result = unw_init_local(&cursor, &context);
+        -:  271:    
+        -:  272:    // Restore stderr
+     120*:  273:    if (saved_stderr >= 0) {
+    #####:  274:        dup2(saved_stderr, STDERR_FILENO);
+    #####:  275:        close(saved_stderr);
+        -:  276:    }
+     120*:  277:    if (null_fd >= 0) {
+    #####:  278:        close(null_fd);
+        -:  279:    }
+        -:  280:    
+     120*:  281:    if (init_result != 0) {
+        -:  282:        return 0;
+        -:  283:    }
+        -:  284:    
+     760*:  285:    while (frame_count < max_frames && unw_step(&cursor) > 0) {
+     640*:  286:        StackFrame* frame = &frames[frame_count];
+        -:  287:        
+        -:  288:        // Get instruction pointer
+        -:  289:        unw_word_t ip;
+     640*:  290:        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) != 0) {
+        -:  291:            break;
+        -:  292:        }
+     640*:  293:        frame->address = (void*)ip;
+        -:  294:        
+        -:  295:        // Get function name
+        -:  296:        char func_name[128];
+        -:  297:        unw_word_t offset;
+     640*:  298:        if (unw_get_proc_name(&cursor, func_name, sizeof(func_name), &offset) == 0) {
+     640*:  299:            strncpy(frame->function_name, func_name, sizeof(frame->function_name) - 1);
+     640*:  300:            frame->function_name[sizeof(frame->function_name) - 1] = '\0';
+        -:  301:        } else {
+    #####:  302:            strcpy(frame->function_name, "<unknown>");
+        -:  303:        }
+        -:  304:        
+        -:  305:        // Get file and line info using dladdr
+        -:  306:        Dl_info dl_info;
+     640*:  307:        if (dladdr(frame->address, &dl_info) && dl_info.dli_fname) {
+     640*:  308:            strncpy(frame->file_name, dl_info.dli_fname, sizeof(frame->file_name) - 1);
+     640*:  309:            frame->file_name[sizeof(frame->file_name) - 1] = '\0';
+        -:  310:        } else {
+    #####:  311:            strcpy(frame->file_name, "<unknown>");
+        -:  312:        }
+        -:  313:        
+     640*:  314:        frame->line_number = 0;  // Line numbers require debug info
+     640*:  315:        frame_count++;
+        -:  316:    }
+        -:  317:#else
+        -:  318:    // Fallback: Use backtrace if available, or create minimal stack info
+        -:  319:    if (max_frames > 0 && frames) {
+        -:  320:        // Create a minimal stack frame entry
+        -:  321:        StackFrame* frame = &frames[0];
+        -:  322:        strcpy(frame->function_name, "<capture_stack_trace>");
+        -:  323:        strcpy(frame->file_name, "metrics_engine.c");
+        -:  324:        frame->address = (void*)capture_stack_trace;
+        -:  325:        frame->line_number = __LINE__;
+        -:  326:        frame_count = 1;
+        -:  327:    }
+        -:  328:#endif
+        -:  329:    
+        -:  330:    return frame_count;
+        -:  331:}
+------------------
+capture_stack_trace:
+function capture_stack_trace called 0 returned 0% blocks executed 0%
+    #####:  247:static int capture_stack_trace(StackFrame* frames, int max_frames) {
+        -:  248:    int frame_count = 0;
+        -:  249:    
+        -:  250:#if defined(MERCURY_LINUX) && MERCURY_HAS_LIBUNWIND
+        -:  251:    unw_cursor_t cursor;
+        -:  252:    unw_context_t context;
+        -:  253:    
+    #####:  254:    if (unw_getcontext(&context) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  255:        return 0;
+        -:  256:    }
+        -:  257:    
+        -:  258:    // Suppress libunwind warnings about invalid file descriptors
+        -:  259:    // This is a known issue when libunwind looks for debug symbols
+        -:  260:    int saved_stderr = -1;
+        -:  261:    int null_fd = -1;
+    #####:  262:    if (getenv("SUPPRESS_LIBUNWIND_WARNINGS")) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  263:        saved_stderr = dup(STDERR_FILENO);
+call    0 never executed
+        -:  264:        null_fd = open("/dev/null", O_WRONLY);
+    #####:  265:        if (null_fd >= 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  266:            dup2(null_fd, STDERR_FILENO);
+call    0 never executed
+        -:  267:        }
+        -:  268:    }
+        -:  269:    
+    #####:  270:    int init_result = unw_init_local(&cursor, &context);
+call    0 never executed
+        -:  271:    
+        -:  272:    // Restore stderr
+    #####:  273:    if (saved_stderr >= 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  274:        dup2(saved_stderr, STDERR_FILENO);
+call    0 never executed
+    #####:  275:        close(saved_stderr);
+call    0 never executed
+        -:  276:    }
+    #####:  277:    if (null_fd >= 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  278:        close(null_fd);
+call    0 never executed
+        -:  279:    }
+        -:  280:    
+    #####:  281:    if (init_result != 0) {
+branch  0 never executed
+branch  1 never executed
+        -:  282:        return 0;
+        -:  283:    }
+        -:  284:    
+    #####:  285:    while (frame_count < max_frames && unw_step(&cursor) > 0) {
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  286:        StackFrame* frame = &frames[frame_count];
+        -:  287:        
+        -:  288:        // Get instruction pointer
+        -:  289:        unw_word_t ip;
+    #####:  290:        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) != 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  291:            break;
+        -:  292:        }
+    #####:  293:        frame->address = (void*)ip;
+        -:  294:        
+        -:  295:        // Get function name
+        -:  296:        char func_name[128];
+        -:  297:        unw_word_t offset;
+    #####:  298:        if (unw_get_proc_name(&cursor, func_name, sizeof(func_name), &offset) == 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  299:            strncpy(frame->function_name, func_name, sizeof(frame->function_name) - 1);
+    #####:  300:            frame->function_name[sizeof(frame->function_name) - 1] = '\0';
+        -:  301:        } else {
+    #####:  302:            strcpy(frame->function_name, "<unknown>");
+        -:  303:        }
+        -:  304:        
+        -:  305:        // Get file and line info using dladdr
+        -:  306:        Dl_info dl_info;
+    #####:  307:        if (dladdr(frame->address, &dl_info) && dl_info.dli_fname) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  308:            strncpy(frame->file_name, dl_info.dli_fname, sizeof(frame->file_name) - 1);
+    #####:  309:            frame->file_name[sizeof(frame->file_name) - 1] = '\0';
+        -:  310:        } else {
+    #####:  311:            strcpy(frame->file_name, "<unknown>");
+        -:  312:        }
+        -:  313:        
+    #####:  314:        frame->line_number = 0;  // Line numbers require debug info
+    #####:  315:        frame_count++;
+        -:  316:    }
+        -:  317:#else
+        -:  318:    // Fallback: Use backtrace if available, or create minimal stack info
+        -:  319:    if (max_frames > 0 && frames) {
+        -:  320:        // Create a minimal stack frame entry
+        -:  321:        StackFrame* frame = &frames[0];
+        -:  322:        strcpy(frame->function_name, "<capture_stack_trace>");
+        -:  323:        strcpy(frame->file_name, "metrics_engine.c");
+        -:  324:        frame->address = (void*)capture_stack_trace;
+        -:  325:        frame->line_number = __LINE__;
+        -:  326:        frame_count = 1;
+        -:  327:    }
+        -:  328:#endif
+        -:  329:    
+        -:  330:    return frame_count;
+        -:  331:}
+------------------
+capture_stack_trace:
+function capture_stack_trace called 120 returned 100% blocks executed 69%
+      120:  247:static int capture_stack_trace(StackFrame* frames, int max_frames) {
+        -:  248:    int frame_count = 0;
+        -:  249:    
+        -:  250:#if defined(MERCURY_LINUX) && MERCURY_HAS_LIBUNWIND
+        -:  251:    unw_cursor_t cursor;
+        -:  252:    unw_context_t context;
+        -:  253:    
+      120:  254:    if (unw_getcontext(&context) != 0) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  255:        return 0;
+        -:  256:    }
+        -:  257:    
+        -:  258:    // Suppress libunwind warnings about invalid file descriptors
+        -:  259:    // This is a known issue when libunwind looks for debug symbols
+        -:  260:    int saved_stderr = -1;
+        -:  261:    int null_fd = -1;
+      120:  262:    if (getenv("SUPPRESS_LIBUNWIND_WARNINGS")) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  263:        saved_stderr = dup(STDERR_FILENO);
+call    0 never executed
+        -:  264:        null_fd = open("/dev/null", O_WRONLY);
+    #####:  265:        if (null_fd >= 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  266:            dup2(null_fd, STDERR_FILENO);
+call    0 never executed
+        -:  267:        }
+        -:  268:    }
+        -:  269:    
+      120:  270:    int init_result = unw_init_local(&cursor, &context);
+call    0 returned 100%
+        -:  271:    
+        -:  272:    // Restore stderr
+      120:  273:    if (saved_stderr >= 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  274:        dup2(saved_stderr, STDERR_FILENO);
+call    0 never executed
+    #####:  275:        close(saved_stderr);
+call    0 never executed
+        -:  276:    }
+      120:  277:    if (null_fd >= 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  278:        close(null_fd);
+call    0 never executed
+        -:  279:    }
+        -:  280:    
+      120:  281:    if (init_result != 0) {
+branch  0 taken 100%
+branch  1 taken 0%
+        -:  282:        return 0;
+        -:  283:    }
+        -:  284:    
+      760:  285:    while (frame_count < max_frames && unw_step(&cursor) > 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+branch  3 taken 84%
+branch  4 taken 16% (fallthrough)
+      640:  286:        StackFrame* frame = &frames[frame_count];
+        -:  287:        
+        -:  288:        // Get instruction pointer
+        -:  289:        unw_word_t ip;
+      640:  290:        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) != 0) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  291:            break;
+        -:  292:        }
+      640:  293:        frame->address = (void*)ip;
+        -:  294:        
+        -:  295:        // Get function name
+        -:  296:        char func_name[128];
+        -:  297:        unw_word_t offset;
+      640:  298:        if (unw_get_proc_name(&cursor, func_name, sizeof(func_name), &offset) == 0) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+      640:  299:            strncpy(frame->function_name, func_name, sizeof(frame->function_name) - 1);
+      640:  300:            frame->function_name[sizeof(frame->function_name) - 1] = '\0';
+        -:  301:        } else {
+    #####:  302:            strcpy(frame->function_name, "<unknown>");
+        -:  303:        }
+        -:  304:        
+        -:  305:        // Get file and line info using dladdr
+        -:  306:        Dl_info dl_info;
+      640:  307:        if (dladdr(frame->address, &dl_info) && dl_info.dli_fname) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+      640:  308:            strncpy(frame->file_name, dl_info.dli_fname, sizeof(frame->file_name) - 1);
+      640:  309:            frame->file_name[sizeof(frame->file_name) - 1] = '\0';
+        -:  310:        } else {
+    #####:  311:            strcpy(frame->file_name, "<unknown>");
+        -:  312:        }
+        -:  313:        
+      640:  314:        frame->line_number = 0;  // Line numbers require debug info
+      640:  315:        frame_count++;
+        -:  316:    }
+        -:  317:#else
+        -:  318:    // Fallback: Use backtrace if available, or create minimal stack info
+        -:  319:    if (max_frames > 0 && frames) {
+        -:  320:        // Create a minimal stack frame entry
+        -:  321:        StackFrame* frame = &frames[0];
+        -:  322:        strcpy(frame->function_name, "<capture_stack_trace>");
+        -:  323:        strcpy(frame->file_name, "metrics_engine.c");
+        -:  324:        frame->address = (void*)capture_stack_trace;
+        -:  325:        frame->line_number = __LINE__;
+        -:  326:        frame_count = 1;
+        -:  327:    }
+        -:  328:#endif
+        -:  329:    
+        -:  330:    return frame_count;
+        -:  331:}
+------------------
+        -:  332:
+        -:  333:// === SIMD THRESHOLD CHECKING ===
+        -:  334:
+        -:  335:#ifdef USE_SIMD
+     120*:  336:static void check_thresholds_simd_impl(const PerformanceMonitor* monitors, size_t count,
+        -:  337:                                       uint64_t* violations) {
+        -:  338:    #ifdef MERCURY_X86_64
+        -:  339:        // Process 4 monitors at a time using AVX
+     120*:  340:        size_t simd_count = count & ~3UL;  // Round down to multiple of 4
+        -:  341:        
+     120*:  342:        for (size_t i = 0; i < simd_count; i += 4) {
+        -:  343:            // Load response time thresholds
+        -:  344:            __m256d response_thresholds = _mm256_set_pd(
+    #####:  345:                monitors[i+3].thresholds.response_time_ms,
+    #####:  346:                monitors[i+2].thresholds.response_time_ms,
+    #####:  347:                monitors[i+1].thresholds.response_time_ms,
+    #####:  348:                monitors[i+0].thresholds.response_time_ms
+        -:  349:            );
+        -:  350:            
+        -:  351:            // Calculate actual response times
+    #####:  352:            __m256d response_times = _mm256_set_pd(
+    #####:  353:                mercury_ns_to_ms(monitors[i+3].end_time.nanoseconds - monitors[i+3].start_time.nanoseconds),
+    #####:  354:                mercury_ns_to_ms(monitors[i+2].end_time.nanoseconds - monitors[i+2].start_time.nanoseconds),
+    #####:  355:                mercury_ns_to_ms(monitors[i+1].end_time.nanoseconds - monitors[i+1].start_time.nanoseconds),
+    #####:  356:                mercury_ns_to_ms(monitors[i+0].end_time.nanoseconds - monitors[i+0].start_time.nanoseconds)
+        -:  357:            );
+        -:  358:            
+        -:  359:            // Compare response times
+        -:  360:            __m256d response_violations = _mm256_cmp_pd(response_times, response_thresholds, _CMP_GT_OQ);
+        -:  361:            int response_mask = _mm256_movemask_pd(response_violations);
+        -:  362:            
+        -:  363:            // Load memory thresholds
+        -:  364:            __m256d memory_thresholds = _mm256_set_pd(
+    #####:  365:                monitors[i+3].thresholds.memory_usage_mb,
+    #####:  366:                monitors[i+2].thresholds.memory_usage_mb,
+    #####:  367:                monitors[i+1].thresholds.memory_usage_mb,
+    #####:  368:                monitors[i+0].thresholds.memory_usage_mb
+        -:  369:            );
+        -:  370:            
+        -:  371:            // Calculate actual memory usage
+    #####:  372:            __m256d memory_usage = _mm256_set_pd(
+    #####:  373:                (double)monitors[i+3].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  374:                (double)monitors[i+2].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  375:                (double)monitors[i+1].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  376:                (double)monitors[i+0].memory_peak_bytes / (1024.0 * 1024.0)
+        -:  377:            );
+        -:  378:            
+        -:  379:            // Compare memory usage
+        -:  380:            __m256d memory_violations = _mm256_cmp_pd(memory_usage, memory_thresholds, _CMP_GT_OQ);
+        -:  381:            int memory_mask = _mm256_movemask_pd(memory_violations);
+        -:  382:            
+        -:  383:            // Set violation flags
+    #####:  384:            for (int j = 0; j < 4; j++) {
+    #####:  385:                if (response_mask & (1 << j)) {
+    #####:  386:                    violations[i + j] |= VIOLATION_RESPONSE_TIME;
+        -:  387:                }
+    #####:  388:                if (memory_mask & (1 << j)) {
+    #####:  389:                    violations[i + j] |= VIOLATION_MEMORY_USAGE;
+        -:  390:                }
+        -:  391:            }
+        -:  392:        }
+        -:  393:        
+        -:  394:        // Handle remaining monitors with scalar operations
+     240*:  395:        for (size_t i = simd_count; i < count; i++) {
+     120*:  396:            const PerformanceMonitor* monitor = &monitors[i];
+     120*:  397:            double response_time = mercury_ns_to_ms(monitor->end_time.nanoseconds - monitor->start_time.nanoseconds);
+     120*:  398:            double memory_mb = (double)monitor->memory_peak_bytes / (1024.0 * 1024.0);
+        -:  399:            
+     120*:  400:            if (response_time > monitor->thresholds.response_time_ms) {
+    #####:  401:                violations[i] |= VIOLATION_RESPONSE_TIME;
+        -:  402:            }
+     120*:  403:            if (memory_mb > monitor->thresholds.memory_usage_mb) {
+    #####:  404:                violations[i] |= VIOLATION_MEMORY_USAGE;
+        -:  405:            }
+        -:  406:        }
+        -:  407:    #endif
+     120*:  408:}
+------------------
+check_thresholds_simd_impl:
+function check_thresholds_simd_impl called 0 returned 0% blocks executed 0%
+    #####:  336:static void check_thresholds_simd_impl(const PerformanceMonitor* monitors, size_t count,
+        -:  337:                                       uint64_t* violations) {
+        -:  338:    #ifdef MERCURY_X86_64
+        -:  339:        // Process 4 monitors at a time using AVX
+    #####:  340:        size_t simd_count = count & ~3UL;  // Round down to multiple of 4
+        -:  341:        
+    #####:  342:        for (size_t i = 0; i < simd_count; i += 4) {
+branch  0 never executed
+branch  1 never executed
+        -:  343:            // Load response time thresholds
+        -:  344:            __m256d response_thresholds = _mm256_set_pd(
+    #####:  345:                monitors[i+3].thresholds.response_time_ms,
+    #####:  346:                monitors[i+2].thresholds.response_time_ms,
+    #####:  347:                monitors[i+1].thresholds.response_time_ms,
+    #####:  348:                monitors[i+0].thresholds.response_time_ms
+        -:  349:            );
+        -:  350:            
+        -:  351:            // Calculate actual response times
+    #####:  352:            __m256d response_times = _mm256_set_pd(
+    #####:  353:                mercury_ns_to_ms(monitors[i+3].end_time.nanoseconds - monitors[i+3].start_time.nanoseconds),
+    #####:  354:                mercury_ns_to_ms(monitors[i+2].end_time.nanoseconds - monitors[i+2].start_time.nanoseconds),
+    #####:  355:                mercury_ns_to_ms(monitors[i+1].end_time.nanoseconds - monitors[i+1].start_time.nanoseconds),
+    #####:  356:                mercury_ns_to_ms(monitors[i+0].end_time.nanoseconds - monitors[i+0].start_time.nanoseconds)
+        -:  357:            );
+        -:  358:            
+        -:  359:            // Compare response times
+        -:  360:            __m256d response_violations = _mm256_cmp_pd(response_times, response_thresholds, _CMP_GT_OQ);
+        -:  361:            int response_mask = _mm256_movemask_pd(response_violations);
+        -:  362:            
+        -:  363:            // Load memory thresholds
+        -:  364:            __m256d memory_thresholds = _mm256_set_pd(
+    #####:  365:                monitors[i+3].thresholds.memory_usage_mb,
+    #####:  366:                monitors[i+2].thresholds.memory_usage_mb,
+    #####:  367:                monitors[i+1].thresholds.memory_usage_mb,
+    #####:  368:                monitors[i+0].thresholds.memory_usage_mb
+        -:  369:            );
+        -:  370:            
+        -:  371:            // Calculate actual memory usage
+    #####:  372:            __m256d memory_usage = _mm256_set_pd(
+    #####:  373:                (double)monitors[i+3].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  374:                (double)monitors[i+2].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  375:                (double)monitors[i+1].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  376:                (double)monitors[i+0].memory_peak_bytes / (1024.0 * 1024.0)
+        -:  377:            );
+        -:  378:            
+        -:  379:            // Compare memory usage
+        -:  380:            __m256d memory_violations = _mm256_cmp_pd(memory_usage, memory_thresholds, _CMP_GT_OQ);
+        -:  381:            int memory_mask = _mm256_movemask_pd(memory_violations);
+        -:  382:            
+        -:  383:            // Set violation flags
+    #####:  384:            for (int j = 0; j < 4; j++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  385:                if (response_mask & (1 << j)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  386:                    violations[i + j] |= VIOLATION_RESPONSE_TIME;
+        -:  387:                }
+    #####:  388:                if (memory_mask & (1 << j)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  389:                    violations[i + j] |= VIOLATION_MEMORY_USAGE;
+        -:  390:                }
+        -:  391:            }
+        -:  392:        }
+        -:  393:        
+        -:  394:        // Handle remaining monitors with scalar operations
+    #####:  395:        for (size_t i = simd_count; i < count; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  396:            const PerformanceMonitor* monitor = &monitors[i];
+    #####:  397:            double response_time = mercury_ns_to_ms(monitor->end_time.nanoseconds - monitor->start_time.nanoseconds);
+branch  0 never executed
+branch  1 never executed
+    #####:  398:            double memory_mb = (double)monitor->memory_peak_bytes / (1024.0 * 1024.0);
+        -:  399:            
+    #####:  400:            if (response_time > monitor->thresholds.response_time_ms) {
+branch  0 never executed
+branch  1 never executed
+    #####:  401:                violations[i] |= VIOLATION_RESPONSE_TIME;
+        -:  402:            }
+    #####:  403:            if (memory_mb > monitor->thresholds.memory_usage_mb) {
+branch  0 never executed
+branch  1 never executed
+    #####:  404:                violations[i] |= VIOLATION_MEMORY_USAGE;
+        -:  405:            }
+        -:  406:        }
+        -:  407:    #endif
+    #####:  408:}
+------------------
+check_thresholds_simd_impl:
+function check_thresholds_simd_impl called 120 returned 100% blocks executed 41%
+      120:  336:static void check_thresholds_simd_impl(const PerformanceMonitor* monitors, size_t count,
+        -:  337:                                       uint64_t* violations) {
+        -:  338:    #ifdef MERCURY_X86_64
+        -:  339:        // Process 4 monitors at a time using AVX
+      120:  340:        size_t simd_count = count & ~3UL;  // Round down to multiple of 4
+        -:  341:        
+     120*:  342:        for (size_t i = 0; i < simd_count; i += 4) {
+branch  0 taken 0%
+branch  1 taken 100%
+        -:  343:            // Load response time thresholds
+        -:  344:            __m256d response_thresholds = _mm256_set_pd(
+    #####:  345:                monitors[i+3].thresholds.response_time_ms,
+    #####:  346:                monitors[i+2].thresholds.response_time_ms,
+    #####:  347:                monitors[i+1].thresholds.response_time_ms,
+    #####:  348:                monitors[i+0].thresholds.response_time_ms
+        -:  349:            );
+        -:  350:            
+        -:  351:            // Calculate actual response times
+    #####:  352:            __m256d response_times = _mm256_set_pd(
+    #####:  353:                mercury_ns_to_ms(monitors[i+3].end_time.nanoseconds - monitors[i+3].start_time.nanoseconds),
+    #####:  354:                mercury_ns_to_ms(monitors[i+2].end_time.nanoseconds - monitors[i+2].start_time.nanoseconds),
+    #####:  355:                mercury_ns_to_ms(monitors[i+1].end_time.nanoseconds - monitors[i+1].start_time.nanoseconds),
+    #####:  356:                mercury_ns_to_ms(monitors[i+0].end_time.nanoseconds - monitors[i+0].start_time.nanoseconds)
+        -:  357:            );
+        -:  358:            
+        -:  359:            // Compare response times
+        -:  360:            __m256d response_violations = _mm256_cmp_pd(response_times, response_thresholds, _CMP_GT_OQ);
+        -:  361:            int response_mask = _mm256_movemask_pd(response_violations);
+        -:  362:            
+        -:  363:            // Load memory thresholds
+        -:  364:            __m256d memory_thresholds = _mm256_set_pd(
+    #####:  365:                monitors[i+3].thresholds.memory_usage_mb,
+    #####:  366:                monitors[i+2].thresholds.memory_usage_mb,
+    #####:  367:                monitors[i+1].thresholds.memory_usage_mb,
+    #####:  368:                monitors[i+0].thresholds.memory_usage_mb
+        -:  369:            );
+        -:  370:            
+        -:  371:            // Calculate actual memory usage
+    #####:  372:            __m256d memory_usage = _mm256_set_pd(
+    #####:  373:                (double)monitors[i+3].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  374:                (double)monitors[i+2].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  375:                (double)monitors[i+1].memory_peak_bytes / (1024.0 * 1024.0),
+    #####:  376:                (double)monitors[i+0].memory_peak_bytes / (1024.0 * 1024.0)
+        -:  377:            );
+        -:  378:            
+        -:  379:            // Compare memory usage
+        -:  380:            __m256d memory_violations = _mm256_cmp_pd(memory_usage, memory_thresholds, _CMP_GT_OQ);
+        -:  381:            int memory_mask = _mm256_movemask_pd(memory_violations);
+        -:  382:            
+        -:  383:            // Set violation flags
+    #####:  384:            for (int j = 0; j < 4; j++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  385:                if (response_mask & (1 << j)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  386:                    violations[i + j] |= VIOLATION_RESPONSE_TIME;
+        -:  387:                }
+    #####:  388:                if (memory_mask & (1 << j)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  389:                    violations[i + j] |= VIOLATION_MEMORY_USAGE;
+        -:  390:                }
+        -:  391:            }
+        -:  392:        }
+        -:  393:        
+        -:  394:        // Handle remaining monitors with scalar operations
+      240:  395:        for (size_t i = simd_count; i < count; i++) {
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+      120:  396:            const PerformanceMonitor* monitor = &monitors[i];
+      120:  397:            double response_time = mercury_ns_to_ms(monitor->end_time.nanoseconds - monitor->start_time.nanoseconds);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      120:  398:            double memory_mb = (double)monitor->memory_peak_bytes / (1024.0 * 1024.0);
+        -:  399:            
+      120:  400:            if (response_time > monitor->thresholds.response_time_ms) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  401:                violations[i] |= VIOLATION_RESPONSE_TIME;
+        -:  402:            }
+      120:  403:            if (memory_mb > monitor->thresholds.memory_usage_mb) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  404:                violations[i] |= VIOLATION_MEMORY_USAGE;
+        -:  405:            }
+        -:  406:        }
+        -:  407:    #endif
+      120:  408:}
+------------------
+        -:  409:#endif
+        -:  410:
+        -:  411:// Scalar threshold checking (fallback)
+        -:  412:#ifndef USE_SIMD
+        -:  413:static void check_thresholds_scalar(const PerformanceMonitor* monitors, size_t count,
+        -:  414:                                   uint64_t* violations) {
+        -:  415:    for (size_t i = 0; i < count; i++) {
+        -:  416:        const PerformanceMonitor* monitor = &monitors[i];
+        -:  417:        
+        -:  418:        // Check response time
+        -:  419:        double response_time = mercury_ns_to_ms(monitor->end_time.nanoseconds - monitor->start_time.nanoseconds);
+        -:  420:        if (response_time > monitor->thresholds.response_time_ms) {
+        -:  421:            violations[i] |= VIOLATION_RESPONSE_TIME;
+        -:  422:        }
+        -:  423:        
+        -:  424:        // Check memory usage
+        -:  425:        double memory_mb = (double)monitor->memory_peak_bytes / (1024.0 * 1024.0);
+        -:  426:        if (memory_mb > monitor->thresholds.memory_usage_mb) {
+        -:  427:            violations[i] |= VIOLATION_MEMORY_USAGE;
+        -:  428:        }
+        -:  429:        
+        -:  430:        // Check query count
+        -:  431:        uint32_t query_count = monitor->query_count_end - monitor->query_count_start;
+        -:  432:        if (query_count > monitor->thresholds.query_count_max) {
+        -:  433:            violations[i] |= VIOLATION_QUERY_COUNT;
+        -:  434:        }
+        -:  435:        
+        -:  436:        // Check cache hit ratio
+        -:  437:        uint32_t total_cache_ops = monitor->cache_hits + monitor->cache_misses;
+        -:  438:        if (total_cache_ops > 0) {
+        -:  439:            double hit_ratio = (double)monitor->cache_hits / (double)total_cache_ops;
+        -:  440:            if (hit_ratio < monitor->thresholds.cache_hit_ratio_min) {
+        -:  441:                violations[i] |= VIOLATION_CACHE_RATIO;
+        -:  442:            }
+        -:  443:        }
+        -:  444:    }
+        -:  445:}
+        -:  446:#endif
+        -:  447:
+        -:  448:// === ENGINE INITIALIZATION ===
+        -:  449:
+       1*:  450:static MercuryError init_metrics_engine(void) {
+       1*:  451:    if (g_engine) {
+        -:  452:        return MERCURY_SUCCESS;  // Already initialized
+        -:  453:    }
+        -:  454:    
+       1*:  455:    g_engine = mercury_aligned_alloc(sizeof(MetricsEngine), 64);
+       1*:  456:    if (!g_engine) {
+    #####:  457:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate metrics engine");
+    #####:  458:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  459:    }
+        -:  460:    
+        -:  461:    // Initialize monitor pool
+       1*:  462:    g_engine->max_monitors = MAX_ACTIVE_MONITORS;
+       1*:  463:    g_engine->monitors = mercury_aligned_alloc(g_engine->max_monitors * sizeof(PerformanceMonitor), 64);
+       1*:  464:    if (!g_engine->monitors) {
+    #####:  465:        mercury_aligned_free(g_engine);
+    #####:  466:        g_engine = NULL;
+    #####:  467:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate monitor pool");
+    #####:  468:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  469:    }
+        -:  470:    
+       1*:  471:    g_engine->monitor_count = 0;
+        -:  472:    
+        -:  473:    // Initialize mutex for thread-safe monitor allocation
+       1*:  474:    MERCURY_MUTEX_INIT(g_engine->monitor_lock);
+        -:  475:    
+        -:  476:    // Initialize SIMD-aligned threshold cache
+       1*:  477:    g_engine->cache_size = THRESHOLD_CACHE_SIZE;
+       1*:  478:    g_engine->threshold_cache = mercury_aligned_alloc(g_engine->cache_size * sizeof(ThresholdConfig), 32);
+       1*:  479:    if (!g_engine->threshold_cache) {
+    #####:  480:        mercury_aligned_free(g_engine->monitors);
+    #####:  481:        mercury_aligned_free(g_engine);
+    #####:  482:        g_engine = NULL;
+    #####:  483:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate threshold cache");
+    #####:  484:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  485:    }
+        -:  486:    
+        -:  487:    // Initialize statistics
+       1*:  488:    atomic_store(&g_engine->total_sessions, 0);
+       1*:  489:    atomic_store(&g_engine->violations_detected, 0);
+       1*:  490:    atomic_store(&g_engine->timing_overhead_ns, 0);
+        -:  491:    
+        -:  492:    // Initialize Django hook counters
+       1*:  493:    atomic_store(&g_engine->global_query_count, 0);
+       1*:  494:    atomic_store(&g_engine->global_cache_hits, 0);
+       1*:  495:    atomic_store(&g_engine->global_cache_misses, 0);
+        -:  496:    
+        -:  497:    // Initialize timing
+        -:  498:    #ifdef MERCURY_X86_64
+       1*:  499:    mercury_calibrate_rdtsc();
+       1*:  500:    g_engine->rdtsc_frequency = mercury_rdtsc_frequency;
+       1*:  501:    g_engine->rdtsc_available = (g_engine->rdtsc_frequency > 0);
+        -:  502:    #else
+        -:  503:    g_engine->rdtsc_available = false;
+        -:  504:    #endif
+        -:  505:    
+        -:  506:    // Initialize all monitors as inactive
+      65*:  507:    for (size_t i = 0; i < g_engine->max_monitors; i++) {
+      64*:  508:        g_engine->monitors[i].is_active = false;
+      64*:  509:        g_engine->monitors[i].session_id = -1;
+        -:  510:    }
+        -:  511:    
+       1*:  512:    MERCURY_INFO("Metrics engine initialized with %zu monitor slots", g_engine->max_monitors);
+        -:  513:    return MERCURY_SUCCESS;
+        -:  514:}
+------------------
+init_metrics_engine:
+function init_metrics_engine called 0 returned 0% blocks executed 0%
+    #####:  450:static MercuryError init_metrics_engine(void) {
+    #####:  451:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+        -:  452:        return MERCURY_SUCCESS;  // Already initialized
+        -:  453:    }
+        -:  454:    
+    #####:  455:    g_engine = mercury_aligned_alloc(sizeof(MetricsEngine), 64);
+call    0 never executed
+    #####:  456:    if (!g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  457:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate metrics engine");
+    #####:  458:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  459:    }
+        -:  460:    
+        -:  461:    // Initialize monitor pool
+    #####:  462:    g_engine->max_monitors = MAX_ACTIVE_MONITORS;
+    #####:  463:    g_engine->monitors = mercury_aligned_alloc(g_engine->max_monitors * sizeof(PerformanceMonitor), 64);
+call    0 never executed
+    #####:  464:    if (!g_engine->monitors) {
+branch  0 never executed
+branch  1 never executed
+    #####:  465:        mercury_aligned_free(g_engine);
+call    0 never executed
+    #####:  466:        g_engine = NULL;
+    #####:  467:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate monitor pool");
+    #####:  468:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  469:    }
+        -:  470:    
+    #####:  471:    g_engine->monitor_count = 0;
+        -:  472:    
+        -:  473:    // Initialize mutex for thread-safe monitor allocation
+    #####:  474:    MERCURY_MUTEX_INIT(g_engine->monitor_lock);
+call    0 never executed
+        -:  475:    
+        -:  476:    // Initialize SIMD-aligned threshold cache
+    #####:  477:    g_engine->cache_size = THRESHOLD_CACHE_SIZE;
+    #####:  478:    g_engine->threshold_cache = mercury_aligned_alloc(g_engine->cache_size * sizeof(ThresholdConfig), 32);
+call    0 never executed
+    #####:  479:    if (!g_engine->threshold_cache) {
+branch  0 never executed
+branch  1 never executed
+    #####:  480:        mercury_aligned_free(g_engine->monitors);
+call    0 never executed
+    #####:  481:        mercury_aligned_free(g_engine);
+call    0 never executed
+    #####:  482:        g_engine = NULL;
+    #####:  483:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate threshold cache");
+    #####:  484:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  485:    }
+        -:  486:    
+        -:  487:    // Initialize statistics
+    #####:  488:    atomic_store(&g_engine->total_sessions, 0);
+    #####:  489:    atomic_store(&g_engine->violations_detected, 0);
+    #####:  490:    atomic_store(&g_engine->timing_overhead_ns, 0);
+        -:  491:    
+        -:  492:    // Initialize Django hook counters
+    #####:  493:    atomic_store(&g_engine->global_query_count, 0);
+    #####:  494:    atomic_store(&g_engine->global_cache_hits, 0);
+    #####:  495:    atomic_store(&g_engine->global_cache_misses, 0);
+        -:  496:    
+        -:  497:    // Initialize timing
+        -:  498:    #ifdef MERCURY_X86_64
+    #####:  499:    mercury_calibrate_rdtsc();
+call    0 never executed
+    #####:  500:    g_engine->rdtsc_frequency = mercury_rdtsc_frequency;
+    #####:  501:    g_engine->rdtsc_available = (g_engine->rdtsc_frequency > 0);
+        -:  502:    #else
+        -:  503:    g_engine->rdtsc_available = false;
+        -:  504:    #endif
+        -:  505:    
+        -:  506:    // Initialize all monitors as inactive
+    #####:  507:    for (size_t i = 0; i < g_engine->max_monitors; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  508:        g_engine->monitors[i].is_active = false;
+    #####:  509:        g_engine->monitors[i].session_id = -1;
+        -:  510:    }
+        -:  511:    
+    #####:  512:    MERCURY_INFO("Metrics engine initialized with %zu monitor slots", g_engine->max_monitors);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  513:    return MERCURY_SUCCESS;
+        -:  514:}
+------------------
+init_metrics_engine:
+function init_metrics_engine called 1 returned 100% blocks executed 71%
+        1:  450:static MercuryError init_metrics_engine(void) {
+        1:  451:    if (g_engine) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  452:        return MERCURY_SUCCESS;  // Already initialized
+        -:  453:    }
+        -:  454:    
+        1:  455:    g_engine = mercury_aligned_alloc(sizeof(MetricsEngine), 64);
+call    0 returned 100%
+        1:  456:    if (!g_engine) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  457:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate metrics engine");
+    #####:  458:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  459:    }
+        -:  460:    
+        -:  461:    // Initialize monitor pool
+        1:  462:    g_engine->max_monitors = MAX_ACTIVE_MONITORS;
+        1:  463:    g_engine->monitors = mercury_aligned_alloc(g_engine->max_monitors * sizeof(PerformanceMonitor), 64);
+call    0 returned 100%
+        1:  464:    if (!g_engine->monitors) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  465:        mercury_aligned_free(g_engine);
+call    0 never executed
+    #####:  466:        g_engine = NULL;
+    #####:  467:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate monitor pool");
+    #####:  468:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  469:    }
+        -:  470:    
+        1:  471:    g_engine->monitor_count = 0;
+        -:  472:    
+        -:  473:    // Initialize mutex for thread-safe monitor allocation
+        1:  474:    MERCURY_MUTEX_INIT(g_engine->monitor_lock);
+call    0 returned 100%
+        -:  475:    
+        -:  476:    // Initialize SIMD-aligned threshold cache
+        1:  477:    g_engine->cache_size = THRESHOLD_CACHE_SIZE;
+        1:  478:    g_engine->threshold_cache = mercury_aligned_alloc(g_engine->cache_size * sizeof(ThresholdConfig), 32);
+call    0 returned 100%
+        1:  479:    if (!g_engine->threshold_cache) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  480:        mercury_aligned_free(g_engine->monitors);
+call    0 never executed
+    #####:  481:        mercury_aligned_free(g_engine);
+call    0 never executed
+    #####:  482:        g_engine = NULL;
+    #####:  483:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate threshold cache");
+    #####:  484:        return MERCURY_ERROR_OUT_OF_MEMORY;
+        -:  485:    }
+        -:  486:    
+        -:  487:    // Initialize statistics
+        1:  488:    atomic_store(&g_engine->total_sessions, 0);
+        1:  489:    atomic_store(&g_engine->violations_detected, 0);
+        1:  490:    atomic_store(&g_engine->timing_overhead_ns, 0);
+        -:  491:    
+        -:  492:    // Initialize Django hook counters
+        1:  493:    atomic_store(&g_engine->global_query_count, 0);
+        1:  494:    atomic_store(&g_engine->global_cache_hits, 0);
+        1:  495:    atomic_store(&g_engine->global_cache_misses, 0);
+        -:  496:    
+        -:  497:    // Initialize timing
+        -:  498:    #ifdef MERCURY_X86_64
+        1:  499:    mercury_calibrate_rdtsc();
+call    0 returned 100%
+        1:  500:    g_engine->rdtsc_frequency = mercury_rdtsc_frequency;
+        1:  501:    g_engine->rdtsc_available = (g_engine->rdtsc_frequency > 0);
+        -:  502:    #else
+        -:  503:    g_engine->rdtsc_available = false;
+        -:  504:    #endif
+        -:  505:    
+        -:  506:    // Initialize all monitors as inactive
+       65:  507:    for (size_t i = 0; i < g_engine->max_monitors; i++) {
+branch  0 taken 98%
+branch  1 taken 2% (fallthrough)
+       64:  508:        g_engine->monitors[i].is_active = false;
+       64:  509:        g_engine->monitors[i].session_id = -1;
+        -:  510:    }
+        -:  511:    
+        1:  512:    MERCURY_INFO("Metrics engine initialized with %zu monitor slots", g_engine->max_monitors);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  513:    return MERCURY_SUCCESS;
+        -:  514:}
+------------------
+        -:  515:
+        2:  516:static void cleanup_metrics_engine(void) {
+        2:  517:    if (!g_engine) return;
+        -:  518:    
+        -:  519:    // Destroy the mutex before freeing memory
+       1*:  520:    MERCURY_MUTEX_DESTROY(g_engine->monitor_lock);
+        -:  521:    
+       1*:  522:    mercury_aligned_free(g_engine->threshold_cache);
+       1*:  523:    mercury_aligned_free(g_engine->monitors);
+       1*:  524:    mercury_aligned_free(g_engine);
+       1*:  525:    g_engine = NULL;
+        -:  526:    
+       1*:  527:    MERCURY_INFO("Metrics engine cleaned up");
+        -:  528:}
+------------------
+cleanup_metrics_engine:
+function cleanup_metrics_engine called 1 returned 100% blocks executed 25%
+        1:  516:static void cleanup_metrics_engine(void) {
+        1:  517:    if (!g_engine) return;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  518:    
+        -:  519:    // Destroy the mutex before freeing memory
+    #####:  520:    MERCURY_MUTEX_DESTROY(g_engine->monitor_lock);
+call    0 never executed
+        -:  521:    
+    #####:  522:    mercury_aligned_free(g_engine->threshold_cache);
+call    0 never executed
+    #####:  523:    mercury_aligned_free(g_engine->monitors);
+call    0 never executed
+    #####:  524:    mercury_aligned_free(g_engine);
+call    0 never executed
+    #####:  525:    g_engine = NULL;
+        -:  526:    
+    #####:  527:    MERCURY_INFO("Metrics engine cleaned up");
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  528:}
+------------------
+cleanup_metrics_engine:
+function cleanup_metrics_engine called 1 returned 100% blocks executed 100%
+        1:  516:static void cleanup_metrics_engine(void) {
+        1:  517:    if (!g_engine) return;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  518:    
+        -:  519:    // Destroy the mutex before freeing memory
+        1:  520:    MERCURY_MUTEX_DESTROY(g_engine->monitor_lock);
+call    0 returned 100%
+        -:  521:    
+        1:  522:    mercury_aligned_free(g_engine->threshold_cache);
+call    0 returned 100%
+        1:  523:    mercury_aligned_free(g_engine->monitors);
+call    0 returned 100%
+        1:  524:    mercury_aligned_free(g_engine);
+call    0 returned 100%
+        1:  525:    g_engine = NULL;
+        -:  526:    
+        1:  527:    MERCURY_INFO("Metrics engine cleaned up");
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  528:}
+------------------
+        -:  529:
+        -:  530:// === PUBLIC API FUNCTIONS ===
+        -:  531:
+        -:  532:// Start performance monitoring session
+     158*:  533:int64_t start_performance_monitoring_enhanced(const char* operation_name, const char* operation_type) {
+     158*:  534:    if (!operation_name || !operation_type) {
+       2*:  535:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation name and type cannot be NULL");
+       2*:  536:        return -1;
+        -:  537:    }
+        -:  538:    
+        -:  539:    // Initialize engine if needed
+     156*:  540:    if (!g_engine) {
+       1*:  541:        if (init_metrics_engine() != MERCURY_SUCCESS) {
+        -:  542:            return -1;
+        -:  543:        }
+        -:  544:    }
+        -:  545:    
+        -:  546:    // Find available monitor slot - PROTECTED SECTION
+        -:  547:    PerformanceMonitor* monitor = NULL;
+        -:  548:    int64_t session_id = -1;
+        -:  549:    
+     156*:  550:    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
+        -:  551:    
+    4546*:  552:    for (size_t i = 0; i < g_engine->max_monitors; i++) {
+    4510*:  553:        if (!g_engine->monitors[i].is_active) {
+        -:  554:            monitor = &g_engine->monitors[i];
+     120*:  555:            session_id = (int64_t)i;
+     120*:  556:            break;
+        -:  557:        }
+        -:  558:    }
+        -:  559:    
+     156*:  560:    if (!monitor) {
+      36*:  561:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+      36*:  562:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available monitor slots");
+      36*:  563:        return -1;
+        -:  564:    }
+        -:  565:    
+        -:  566:    // Initialize monitor
+     120*:  567:    monitor->session_id = session_id;
+     120*:  568:    monitor->start_time = mercury_get_timestamp();
+     120*:  569:    monitor->end_time = monitor->start_time;  // Will be updated on stop
+        -:  570:    
+        -:  571:    // Initialize metrics - capture baseline counters
+     120*:  572:    monitor->query_count_start = (uint32_t)atomic_load(&g_engine->global_query_count);
+     120*:  573:    monitor->query_count_end = 0;
+     120*:  574:    monitor->cache_hits = 0;
+     120*:  575:    monitor->cache_misses = 0;
+     120*:  576:    monitor->memory_start_bytes = get_memory_usage();
+     120*:  577:    monitor->memory_peak_bytes = monitor->memory_start_bytes;
+     120*:  578:    monitor->memory_end_bytes = 0;
+        -:  579:    
+        -:  580:    // Set default thresholds
+     120*:  581:    monitor->thresholds.response_time_ms = 1000.0;  // 1 second default
+     120*:  582:    monitor->thresholds.memory_usage_mb = 200.0;    // 200MB default
+     120*:  583:    monitor->thresholds.query_count_max = 50;       // 50 queries default
+     120*:  584:    monitor->thresholds.cache_hit_ratio_min = 0.7;  // 70% cache hit ratio
+     120*:  585:    monitor->thresholds.flags = 0;
+        -:  586:    
+        -:  587:    // Copy operation info
+     120*:  588:    strncpy(monitor->operation_name, operation_name, sizeof(monitor->operation_name) - 1);
+     120*:  589:    monitor->operation_name[sizeof(monitor->operation_name) - 1] = '\0';
+     120*:  590:    strncpy(monitor->operation_type, operation_type, sizeof(monitor->operation_type) - 1);
+     120*:  591:    monitor->operation_type[sizeof(monitor->operation_type) - 1] = '\0';
+        -:  592:    
+        -:  593:    // Capture stack trace for context
+     120*:  594:    monitor->stack_depth = capture_stack_trace(monitor->stack_trace, STACK_TRACE_MAX_DEPTH);
+        -:  595:    
+        -:  596:    // Initialize status
+     120*:  597:    monitor->violation_flags = 0;
+     120*:  598:    monitor->is_active = true;  // Mark active before releasing lock
+        -:  599:    
+     120*:  600:    atomic_fetch_add(&g_engine->total_sessions, 1);
+     120*:  601:    g_engine->monitor_count++;
+        -:  602:    
+     120*:  603:    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+        -:  604:    
+     120*:  605:    return session_id;
+        -:  606:}
+------------------
+start_performance_monitoring_enhanced:
+function start_performance_monitoring_enhanced called 0 returned 0% blocks executed 0%
+    #####:  533:int64_t start_performance_monitoring_enhanced(const char* operation_name, const char* operation_type) {
+    #####:  534:    if (!operation_name || !operation_type) {
+branch  0 never executed
+branch  1 never executed
+    #####:  535:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation name and type cannot be NULL");
+    #####:  536:        return -1;
+        -:  537:    }
+        -:  538:    
+        -:  539:    // Initialize engine if needed
+    #####:  540:    if (!g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  541:        if (init_metrics_engine() != MERCURY_SUCCESS) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  542:            return -1;
+        -:  543:        }
+        -:  544:    }
+        -:  545:    
+        -:  546:    // Find available monitor slot - PROTECTED SECTION
+        -:  547:    PerformanceMonitor* monitor = NULL;
+        -:  548:    int64_t session_id = -1;
+        -:  549:    
+    #####:  550:    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
+call    0 never executed
+        -:  551:    
+    #####:  552:    for (size_t i = 0; i < g_engine->max_monitors; i++) {
+branch  0 never executed
+branch  1 never executed
+    #####:  553:        if (!g_engine->monitors[i].is_active) {
+branch  0 never executed
+branch  1 never executed
+        -:  554:            monitor = &g_engine->monitors[i];
+    #####:  555:            session_id = (int64_t)i;
+    #####:  556:            break;
+        -:  557:        }
+        -:  558:    }
+        -:  559:    
+    #####:  560:    if (!monitor) {
+branch  0 never executed
+branch  1 never executed
+    #####:  561:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 never executed
+    #####:  562:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available monitor slots");
+    #####:  563:        return -1;
+        -:  564:    }
+        -:  565:    
+        -:  566:    // Initialize monitor
+    #####:  567:    monitor->session_id = session_id;
+    #####:  568:    monitor->start_time = mercury_get_timestamp();
+call    0 never executed
+    #####:  569:    monitor->end_time = monitor->start_time;  // Will be updated on stop
+        -:  570:    
+        -:  571:    // Initialize metrics - capture baseline counters
+    #####:  572:    monitor->query_count_start = (uint32_t)atomic_load(&g_engine->global_query_count);
+    #####:  573:    monitor->query_count_end = 0;
+    #####:  574:    monitor->cache_hits = 0;
+    #####:  575:    monitor->cache_misses = 0;
+    #####:  576:    monitor->memory_start_bytes = get_memory_usage();
+call    0 never executed
+    #####:  577:    monitor->memory_peak_bytes = monitor->memory_start_bytes;
+    #####:  578:    monitor->memory_end_bytes = 0;
+        -:  579:    
+        -:  580:    // Set default thresholds
+    #####:  581:    monitor->thresholds.response_time_ms = 1000.0;  // 1 second default
+    #####:  582:    monitor->thresholds.memory_usage_mb = 200.0;    // 200MB default
+    #####:  583:    monitor->thresholds.query_count_max = 50;       // 50 queries default
+    #####:  584:    monitor->thresholds.cache_hit_ratio_min = 0.7;  // 70% cache hit ratio
+    #####:  585:    monitor->thresholds.flags = 0;
+        -:  586:    
+        -:  587:    // Copy operation info
+    #####:  588:    strncpy(monitor->operation_name, operation_name, sizeof(monitor->operation_name) - 1);
+call    0 never executed
+    #####:  589:    monitor->operation_name[sizeof(monitor->operation_name) - 1] = '\0';
+    #####:  590:    strncpy(monitor->operation_type, operation_type, sizeof(monitor->operation_type) - 1);
+    #####:  591:    monitor->operation_type[sizeof(monitor->operation_type) - 1] = '\0';
+        -:  592:    
+        -:  593:    // Capture stack trace for context
+    #####:  594:    monitor->stack_depth = capture_stack_trace(monitor->stack_trace, STACK_TRACE_MAX_DEPTH);
+call    0 never executed
+        -:  595:    
+        -:  596:    // Initialize status
+    #####:  597:    monitor->violation_flags = 0;
+    #####:  598:    monitor->is_active = true;  // Mark active before releasing lock
+        -:  599:    
+    #####:  600:    atomic_fetch_add(&g_engine->total_sessions, 1);
+    #####:  601:    g_engine->monitor_count++;
+        -:  602:    
+    #####:  603:    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 never executed
+        -:  604:    
+    #####:  605:    return session_id;
+        -:  606:}
+------------------
+start_performance_monitoring_enhanced:
+function start_performance_monitoring_enhanced called 158 returned 100% blocks executed 100%
+      158:  533:int64_t start_performance_monitoring_enhanced(const char* operation_name, const char* operation_type) {
+      158:  534:    if (!operation_name || !operation_type) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        2:  535:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Operation name and type cannot be NULL");
+        2:  536:        return -1;
+        -:  537:    }
+        -:  538:    
+        -:  539:    // Initialize engine if needed
+      156:  540:    if (!g_engine) {
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        1:  541:        if (init_metrics_engine() != MERCURY_SUCCESS) {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  542:            return -1;
+        -:  543:        }
+        -:  544:    }
+        -:  545:    
+        -:  546:    // Find available monitor slot - PROTECTED SECTION
+        -:  547:    PerformanceMonitor* monitor = NULL;
+        -:  548:    int64_t session_id = -1;
+        -:  549:    
+      156:  550:    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
+call    0 returned 100%
+        -:  551:    
+     4546:  552:    for (size_t i = 0; i < g_engine->max_monitors; i++) {
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+     4510:  553:        if (!g_engine->monitors[i].is_active) {
+branch  0 taken 3% (fallthrough)
+branch  1 taken 97%
+        -:  554:            monitor = &g_engine->monitors[i];
+      120:  555:            session_id = (int64_t)i;
+      120:  556:            break;
+        -:  557:        }
+        -:  558:    }
+        -:  559:    
+      156:  560:    if (!monitor) {
+branch  0 taken 23% (fallthrough)
+branch  1 taken 77%
+       36:  561:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 returned 100%
+       36:  562:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "No available monitor slots");
+       36:  563:        return -1;
+        -:  564:    }
+        -:  565:    
+        -:  566:    // Initialize monitor
+      120:  567:    monitor->session_id = session_id;
+      120:  568:    monitor->start_time = mercury_get_timestamp();
+call    0 returned 100%
+      120:  569:    monitor->end_time = monitor->start_time;  // Will be updated on stop
+        -:  570:    
+        -:  571:    // Initialize metrics - capture baseline counters
+      120:  572:    monitor->query_count_start = (uint32_t)atomic_load(&g_engine->global_query_count);
+      120:  573:    monitor->query_count_end = 0;
+      120:  574:    monitor->cache_hits = 0;
+      120:  575:    monitor->cache_misses = 0;
+      120:  576:    monitor->memory_start_bytes = get_memory_usage();
+call    0 returned 100%
+      120:  577:    monitor->memory_peak_bytes = monitor->memory_start_bytes;
+      120:  578:    monitor->memory_end_bytes = 0;
+        -:  579:    
+        -:  580:    // Set default thresholds
+      120:  581:    monitor->thresholds.response_time_ms = 1000.0;  // 1 second default
+      120:  582:    monitor->thresholds.memory_usage_mb = 200.0;    // 200MB default
+      120:  583:    monitor->thresholds.query_count_max = 50;       // 50 queries default
+      120:  584:    monitor->thresholds.cache_hit_ratio_min = 0.7;  // 70% cache hit ratio
+      120:  585:    monitor->thresholds.flags = 0;
+        -:  586:    
+        -:  587:    // Copy operation info
+      120:  588:    strncpy(monitor->operation_name, operation_name, sizeof(monitor->operation_name) - 1);
+call    0 returned 100%
+      120:  589:    monitor->operation_name[sizeof(monitor->operation_name) - 1] = '\0';
+      120:  590:    strncpy(monitor->operation_type, operation_type, sizeof(monitor->operation_type) - 1);
+      120:  591:    monitor->operation_type[sizeof(monitor->operation_type) - 1] = '\0';
+        -:  592:    
+        -:  593:    // Capture stack trace for context
+      120:  594:    monitor->stack_depth = capture_stack_trace(monitor->stack_trace, STACK_TRACE_MAX_DEPTH);
+call    0 returned 100%
+        -:  595:    
+        -:  596:    // Initialize status
+      120:  597:    monitor->violation_flags = 0;
+      120:  598:    monitor->is_active = true;  // Mark active before releasing lock
+        -:  599:    
+      120:  600:    atomic_fetch_add(&g_engine->total_sessions, 1);
+      120:  601:    g_engine->monitor_count++;
+        -:  602:    
+      120:  603:    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 returned 100%
+        -:  604:    
+      120:  605:    return session_id;
+        -:  606:}
+------------------
+        -:  607:
+        -:  608:// Stop performance monitoring and return metrics
+     123*:  609:MercuryMetrics* stop_performance_monitoring_enhanced(int64_t session_id) {
+     123*:  610:    if (!g_engine || session_id < 0 || session_id >= (int64_t)g_engine->max_monitors) {
+       2*:  611:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid session ID");
+       2*:  612:        return NULL;
+        -:  613:    }
+        -:  614:    
+     121*:  615:    PerformanceMonitor* monitor = &g_engine->monitors[session_id];
+        -:  616:    
+     121*:  617:    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
+        -:  618:    
+     121*:  619:    if (!monitor->is_active || monitor->session_id != session_id) {
+       1*:  620:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+       1*:  621:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Session not active");
+       1*:  622:        return NULL;
+        -:  623:    }
+        -:  624:    
+        -:  625:    // Record end time and final metrics
+     120*:  626:    monitor->end_time = mercury_get_timestamp();
+     120*:  627:    monitor->memory_end_bytes = get_memory_usage();
+        -:  628:    
+        -:  629:    // Update peak memory if current is higher
+     120*:  630:    if (monitor->memory_end_bytes > monitor->memory_peak_bytes) {
+      79*:  631:        monitor->memory_peak_bytes = monitor->memory_end_bytes;
+        -:  632:    }
+        -:  633:    
+        -:  634:    // Capture final Django hook counters
+     120*:  635:    monitor->query_count_end = (uint32_t)atomic_load(&g_engine->global_query_count);
+        -:  636:    
+        -:  637:    // Check thresholds
+     120*:  638:    uint64_t violations = 0;
+        -:  639:    
+        -:  640:    #ifdef USE_SIMD
+     120*:  641:        check_thresholds_simd_impl(monitor, 1, &violations);
+        -:  642:    #else
+        -:  643:        check_thresholds_scalar(monitor, 1, &violations);
+        -:  644:    #endif
+        -:  645:    
+     120*:  646:    monitor->violation_flags = violations;
+     120*:  647:    if (violations > 0) {
+    #####:  648:        atomic_fetch_add(&g_engine->violations_detected, 1);
+        -:  649:    }
+        -:  650:    
+        -:  651:    // Create result metrics
+     120*:  652:    MercuryMetrics* metrics = mercury_aligned_alloc(sizeof(MercuryMetrics), 64);
+     120*:  653:    if (!metrics) {
+    #####:  654:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+    #####:  655:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate result metrics");
+    #####:  656:        return NULL;
+        -:  657:    }
+        -:  658:    
+        -:  659:    // Copy data to result
+     120*:  660:    metrics->start_time = monitor->start_time;
+     120*:  661:    metrics->end_time = monitor->end_time;
+     120*:  662:    metrics->query_count = monitor->query_count_end - monitor->query_count_start;
+     120*:  663:    metrics->cache_hits = monitor->cache_hits;
+     120*:  664:    metrics->cache_misses = monitor->cache_misses;
+     120*:  665:    metrics->memory_bytes = monitor->memory_peak_bytes;
+     120*:  666:    metrics->violation_flags = monitor->violation_flags;
+        -:  667:    
+     120*:  668:    strncpy(metrics->operation_name, monitor->operation_name, sizeof(metrics->operation_name) - 1);
+     120*:  669:    metrics->operation_name[sizeof(metrics->operation_name) - 1] = '\0';
+     120*:  670:    strncpy(metrics->operation_type, monitor->operation_type, sizeof(metrics->operation_type) - 1);
+     120*:  671:    metrics->operation_type[sizeof(metrics->operation_type) - 1] = '\0';
+        -:  672:    
+        -:  673:    // Deactivate monitor - PROTECTED SECTION
+     120*:  674:    monitor->is_active = false;
+     120*:  675:    monitor->session_id = -1;
+     120*:  676:    g_engine->monitor_count--;
+        -:  677:    
+     120*:  678:    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+        -:  679:    
+     120*:  680:    return metrics;
+        -:  681:}
+------------------
+stop_performance_monitoring_enhanced:
+function stop_performance_monitoring_enhanced called 0 returned 0% blocks executed 0%
+    #####:  609:MercuryMetrics* stop_performance_monitoring_enhanced(int64_t session_id) {
+    #####:  610:    if (!g_engine || session_id < 0 || session_id >= (int64_t)g_engine->max_monitors) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  611:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid session ID");
+    #####:  612:        return NULL;
+        -:  613:    }
+        -:  614:    
+    #####:  615:    PerformanceMonitor* monitor = &g_engine->monitors[session_id];
+        -:  616:    
+    #####:  617:    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
+call    0 never executed
+        -:  618:    
+    #####:  619:    if (!monitor->is_active || monitor->session_id != session_id) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  620:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 never executed
+    #####:  621:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Session not active");
+    #####:  622:        return NULL;
+        -:  623:    }
+        -:  624:    
+        -:  625:    // Record end time and final metrics
+    #####:  626:    monitor->end_time = mercury_get_timestamp();
+call    0 never executed
+    #####:  627:    monitor->memory_end_bytes = get_memory_usage();
+call    0 never executed
+        -:  628:    
+        -:  629:    // Update peak memory if current is higher
+    #####:  630:    if (monitor->memory_end_bytes > monitor->memory_peak_bytes) {
+branch  0 never executed
+branch  1 never executed
+    #####:  631:        monitor->memory_peak_bytes = monitor->memory_end_bytes;
+        -:  632:    }
+        -:  633:    
+        -:  634:    // Capture final Django hook counters
+    #####:  635:    monitor->query_count_end = (uint32_t)atomic_load(&g_engine->global_query_count);
+        -:  636:    
+        -:  637:    // Check thresholds
+    #####:  638:    uint64_t violations = 0;
+        -:  639:    
+        -:  640:    #ifdef USE_SIMD
+    #####:  641:        check_thresholds_simd_impl(monitor, 1, &violations);
+call    0 never executed
+        -:  642:    #else
+        -:  643:        check_thresholds_scalar(monitor, 1, &violations);
+        -:  644:    #endif
+        -:  645:    
+    #####:  646:    monitor->violation_flags = violations;
+    #####:  647:    if (violations > 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  648:        atomic_fetch_add(&g_engine->violations_detected, 1);
+        -:  649:    }
+        -:  650:    
+        -:  651:    // Create result metrics
+    #####:  652:    MercuryMetrics* metrics = mercury_aligned_alloc(sizeof(MercuryMetrics), 64);
+call    0 never executed
+    #####:  653:    if (!metrics) {
+branch  0 never executed
+branch  1 never executed
+    #####:  654:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 never executed
+    #####:  655:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate result metrics");
+    #####:  656:        return NULL;
+        -:  657:    }
+        -:  658:    
+        -:  659:    // Copy data to result
+    #####:  660:    metrics->start_time = monitor->start_time;
+    #####:  661:    metrics->end_time = monitor->end_time;
+    #####:  662:    metrics->query_count = monitor->query_count_end - monitor->query_count_start;
+    #####:  663:    metrics->cache_hits = monitor->cache_hits;
+    #####:  664:    metrics->cache_misses = monitor->cache_misses;
+    #####:  665:    metrics->memory_bytes = monitor->memory_peak_bytes;
+    #####:  666:    metrics->violation_flags = monitor->violation_flags;
+        -:  667:    
+    #####:  668:    strncpy(metrics->operation_name, monitor->operation_name, sizeof(metrics->operation_name) - 1);
+call    0 never executed
+    #####:  669:    metrics->operation_name[sizeof(metrics->operation_name) - 1] = '\0';
+    #####:  670:    strncpy(metrics->operation_type, monitor->operation_type, sizeof(metrics->operation_type) - 1);
+    #####:  671:    metrics->operation_type[sizeof(metrics->operation_type) - 1] = '\0';
+        -:  672:    
+        -:  673:    // Deactivate monitor - PROTECTED SECTION
+    #####:  674:    monitor->is_active = false;
+    #####:  675:    monitor->session_id = -1;
+    #####:  676:    g_engine->monitor_count--;
+        -:  677:    
+    #####:  678:    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 never executed
+        -:  679:    
+    #####:  680:    return metrics;
+        -:  681:}
+------------------
+stop_performance_monitoring_enhanced:
+function stop_performance_monitoring_enhanced called 123 returned 100% blocks executed 87%
+      123:  609:MercuryMetrics* stop_performance_monitoring_enhanced(int64_t session_id) {
+      123:  610:    if (!g_engine || session_id < 0 || session_id >= (int64_t)g_engine->max_monitors) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 99% (fallthrough)
+branch  3 taken 1%
+branch  4 taken 1% (fallthrough)
+branch  5 taken 99%
+        2:  611:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Invalid session ID");
+        2:  612:        return NULL;
+        -:  613:    }
+        -:  614:    
+      121:  615:    PerformanceMonitor* monitor = &g_engine->monitors[session_id];
+        -:  616:    
+      121:  617:    MERCURY_MUTEX_LOCK(g_engine->monitor_lock);
+call    0 returned 100%
+        -:  618:    
+      121:  619:    if (!monitor->is_active || monitor->session_id != session_id) {
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        1:  620:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 returned 100%
+        1:  621:        MERCURY_SET_ERROR(MERCURY_ERROR_INVALID_ARGUMENT, "Session not active");
+        1:  622:        return NULL;
+        -:  623:    }
+        -:  624:    
+        -:  625:    // Record end time and final metrics
+      120:  626:    monitor->end_time = mercury_get_timestamp();
+call    0 returned 100%
+      120:  627:    monitor->memory_end_bytes = get_memory_usage();
+call    0 returned 100%
+        -:  628:    
+        -:  629:    // Update peak memory if current is higher
+      120:  630:    if (monitor->memory_end_bytes > monitor->memory_peak_bytes) {
+branch  0 taken 66% (fallthrough)
+branch  1 taken 34%
+       79:  631:        monitor->memory_peak_bytes = monitor->memory_end_bytes;
+        -:  632:    }
+        -:  633:    
+        -:  634:    // Capture final Django hook counters
+      120:  635:    monitor->query_count_end = (uint32_t)atomic_load(&g_engine->global_query_count);
+        -:  636:    
+        -:  637:    // Check thresholds
+      120:  638:    uint64_t violations = 0;
+        -:  639:    
+        -:  640:    #ifdef USE_SIMD
+      120:  641:        check_thresholds_simd_impl(monitor, 1, &violations);
+call    0 returned 100%
+        -:  642:    #else
+        -:  643:        check_thresholds_scalar(monitor, 1, &violations);
+        -:  644:    #endif
+        -:  645:    
+      120:  646:    monitor->violation_flags = violations;
+      120:  647:    if (violations > 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  648:        atomic_fetch_add(&g_engine->violations_detected, 1);
+        -:  649:    }
+        -:  650:    
+        -:  651:    // Create result metrics
+      120:  652:    MercuryMetrics* metrics = mercury_aligned_alloc(sizeof(MercuryMetrics), 64);
+call    0 returned 100%
+      120:  653:    if (!metrics) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  654:        MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 never executed
+    #####:  655:        MERCURY_SET_ERROR(MERCURY_ERROR_OUT_OF_MEMORY, "Failed to allocate result metrics");
+    #####:  656:        return NULL;
+        -:  657:    }
+        -:  658:    
+        -:  659:    // Copy data to result
+      120:  660:    metrics->start_time = monitor->start_time;
+      120:  661:    metrics->end_time = monitor->end_time;
+      120:  662:    metrics->query_count = monitor->query_count_end - monitor->query_count_start;
+      120:  663:    metrics->cache_hits = monitor->cache_hits;
+      120:  664:    metrics->cache_misses = monitor->cache_misses;
+      120:  665:    metrics->memory_bytes = monitor->memory_peak_bytes;
+      120:  666:    metrics->violation_flags = monitor->violation_flags;
+        -:  667:    
+      120:  668:    strncpy(metrics->operation_name, monitor->operation_name, sizeof(metrics->operation_name) - 1);
+call    0 returned 100%
+      120:  669:    metrics->operation_name[sizeof(metrics->operation_name) - 1] = '\0';
+      120:  670:    strncpy(metrics->operation_type, monitor->operation_type, sizeof(metrics->operation_type) - 1);
+      120:  671:    metrics->operation_type[sizeof(metrics->operation_type) - 1] = '\0';
+        -:  672:    
+        -:  673:    // Deactivate monitor - PROTECTED SECTION
+      120:  674:    monitor->is_active = false;
+      120:  675:    monitor->session_id = -1;
+      120:  676:    g_engine->monitor_count--;
+        -:  677:    
+      120:  678:    MERCURY_MUTEX_UNLOCK(g_engine->monitor_lock);
+call    0 returned 100%
+        -:  679:    
+      120:  680:    return metrics;
+        -:  681:}
+------------------
+        -:  682:
+        -:  683:// Helper functions for Python integration
+       2*:  684:double get_elapsed_time_ms(const MercuryMetrics* metrics) {
+       2*:  685:    if (!metrics) return 0.0;
+       2*:  686:    return mercury_ns_to_ms(metrics->end_time.nanoseconds - metrics->start_time.nanoseconds);
+        -:  687:}
+------------------
+get_elapsed_time_ms:
+function get_elapsed_time_ms called 0 returned 0% blocks executed 0%
+    #####:  684:double get_elapsed_time_ms(const MercuryMetrics* metrics) {
+    #####:  685:    if (!metrics) return 0.0;
+branch  0 never executed
+branch  1 never executed
+    #####:  686:    return mercury_ns_to_ms(metrics->end_time.nanoseconds - metrics->start_time.nanoseconds);
+        -:  687:}
+------------------
+get_elapsed_time_ms:
+function get_elapsed_time_ms called 2 returned 100% blocks executed 100%
+        2:  684:double get_elapsed_time_ms(const MercuryMetrics* metrics) {
+        2:  685:    if (!metrics) return 0.0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2:  686:    return mercury_ns_to_ms(metrics->end_time.nanoseconds - metrics->start_time.nanoseconds);
+        -:  687:}
+------------------
+        -:  688:
+       1*:  689:double get_memory_usage_mb(const MercuryMetrics* metrics) {
+       1*:  690:    if (!metrics) return 0.0;
+       1*:  691:    return (double)metrics->memory_bytes / (1024.0 * 1024.0);
+        -:  692:}
+------------------
+get_memory_usage_mb:
+function get_memory_usage_mb called 0 returned 0% blocks executed 0%
+    #####:  689:double get_memory_usage_mb(const MercuryMetrics* metrics) {
+    #####:  690:    if (!metrics) return 0.0;
+branch  0 never executed
+branch  1 never executed
+    #####:  691:    return (double)metrics->memory_bytes / (1024.0 * 1024.0);
+        -:  692:}
+------------------
+get_memory_usage_mb:
+function get_memory_usage_mb called 1 returned 100% blocks executed 100%
+        1:  689:double get_memory_usage_mb(const MercuryMetrics* metrics) {
+        1:  690:    if (!metrics) return 0.0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  691:    return (double)metrics->memory_bytes / (1024.0 * 1024.0);
+        -:  692:}
+------------------
+        -:  693:
+       1*:  694:uint32_t get_query_count(const MercuryMetrics* metrics) {
+       1*:  695:    if (!metrics) return 0;
+       1*:  696:    return metrics->query_count;
+        -:  697:}
+------------------
+get_query_count:
+function get_query_count called 0 returned 0% blocks executed 0%
+    #####:  694:uint32_t get_query_count(const MercuryMetrics* metrics) {
+    #####:  695:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  696:    return metrics->query_count;
+        -:  697:}
+------------------
+get_query_count:
+function get_query_count called 1 returned 100% blocks executed 100%
+        1:  694:uint32_t get_query_count(const MercuryMetrics* metrics) {
+        1:  695:    if (!metrics) return 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  696:    return metrics->query_count;
+        -:  697:}
+------------------
+        -:  698:
+       1*:  699:uint32_t get_cache_hit_count(const MercuryMetrics* metrics) {
+       1*:  700:    if (!metrics) return 0;
+       1*:  701:    return metrics->cache_hits;
+        -:  702:}
+------------------
+get_cache_hit_count:
+function get_cache_hit_count called 0 returned 0% blocks executed 0%
+    #####:  699:uint32_t get_cache_hit_count(const MercuryMetrics* metrics) {
+    #####:  700:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  701:    return metrics->cache_hits;
+        -:  702:}
+------------------
+get_cache_hit_count:
+function get_cache_hit_count called 1 returned 100% blocks executed 100%
+        1:  699:uint32_t get_cache_hit_count(const MercuryMetrics* metrics) {
+        1:  700:    if (!metrics) return 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  701:    return metrics->cache_hits;
+        -:  702:}
+------------------
+        -:  703:
+       1*:  704:uint32_t get_cache_miss_count(const MercuryMetrics* metrics) {
+       1*:  705:    if (!metrics) return 0;
+       1*:  706:    return metrics->cache_misses;
+        -:  707:}
+------------------
+get_cache_miss_count:
+function get_cache_miss_count called 0 returned 0% blocks executed 0%
+    #####:  704:uint32_t get_cache_miss_count(const MercuryMetrics* metrics) {
+    #####:  705:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  706:    return metrics->cache_misses;
+        -:  707:}
+------------------
+get_cache_miss_count:
+function get_cache_miss_count called 1 returned 100% blocks executed 100%
+        1:  704:uint32_t get_cache_miss_count(const MercuryMetrics* metrics) {
+        1:  705:    if (!metrics) return 0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  706:    return metrics->cache_misses;
+        -:  707:}
+------------------
+        -:  708:
+       1*:  709:double get_cache_hit_ratio(const MercuryMetrics* metrics) {
+       1*:  710:    if (!metrics) return 0.0;
+       1*:  711:    uint32_t total = metrics->cache_hits + metrics->cache_misses;
+       1*:  712:    return (total > 0) ? (double)metrics->cache_hits / (double)total : 0.0;
+        -:  713:}
+------------------
+get_cache_hit_ratio:
+function get_cache_hit_ratio called 0 returned 0% blocks executed 0%
+    #####:  709:double get_cache_hit_ratio(const MercuryMetrics* metrics) {
+    #####:  710:    if (!metrics) return 0.0;
+branch  0 never executed
+branch  1 never executed
+    #####:  711:    uint32_t total = metrics->cache_hits + metrics->cache_misses;
+    #####:  712:    return (total > 0) ? (double)metrics->cache_hits / (double)total : 0.0;
+branch  0 never executed
+branch  1 never executed
+        -:  713:}
+------------------
+get_cache_hit_ratio:
+function get_cache_hit_ratio called 1 returned 100% blocks executed 75%
+        1:  709:double get_cache_hit_ratio(const MercuryMetrics* metrics) {
+        1:  710:    if (!metrics) return 0.0;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1:  711:    uint32_t total = metrics->cache_hits + metrics->cache_misses;
+       1*:  712:    return (total > 0) ? (double)metrics->cache_hits / (double)total : 0.0;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  713:}
+------------------
+        -:  714:
+        -:  715:// N+1 detection functions (would integrate with query analyzer)
+    #####:  716:int has_n_plus_one_pattern(const MercuryMetrics* metrics) {
+    #####:  717:    if (!metrics) return 0;
+    #####:  718:    return (metrics->violation_flags & VIOLATION_N_PLUS_ONE) ? 1 : 0;
+        -:  719:}
+------------------
+has_n_plus_one_pattern:
+function has_n_plus_one_pattern called 0 returned 0% blocks executed 0%
+    #####:  716:int has_n_plus_one_pattern(const MercuryMetrics* metrics) {
+    #####:  717:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  718:    return (metrics->violation_flags & VIOLATION_N_PLUS_ONE) ? 1 : 0;
+        -:  719:}
+------------------
+has_n_plus_one_pattern:
+function has_n_plus_one_pattern called 0 returned 0% blocks executed 0%
+    #####:  716:int has_n_plus_one_pattern(const MercuryMetrics* metrics) {
+    #####:  717:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  718:    return (metrics->violation_flags & VIOLATION_N_PLUS_ONE) ? 1 : 0;
+        -:  719:}
+------------------
+        -:  720:
+    #####:  721:int detect_n_plus_one_severe(const MercuryMetrics* metrics) {
+    #####:  722:    if (!metrics) return 0;
+    #####:  723:    return (metrics->query_count > 50) ? 1 : 0;
+        -:  724:}
+------------------
+detect_n_plus_one_severe:
+function detect_n_plus_one_severe called 0 returned 0% blocks executed 0%
+    #####:  721:int detect_n_plus_one_severe(const MercuryMetrics* metrics) {
+    #####:  722:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  723:    return (metrics->query_count > 50) ? 1 : 0;
+        -:  724:}
+------------------
+detect_n_plus_one_severe:
+function detect_n_plus_one_severe called 0 returned 0% blocks executed 0%
+    #####:  721:int detect_n_plus_one_severe(const MercuryMetrics* metrics) {
+    #####:  722:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  723:    return (metrics->query_count > 50) ? 1 : 0;
+        -:  724:}
+------------------
+        -:  725:
+    #####:  726:int detect_n_plus_one_moderate(const MercuryMetrics* metrics) {
+    #####:  727:    if (!metrics) return 0;
+    #####:  728:    return (metrics->query_count > 20 && metrics->query_count <= 50) ? 1 : 0;
+        -:  729:}
+------------------
+detect_n_plus_one_moderate:
+function detect_n_plus_one_moderate called 0 returned 0% blocks executed 0%
+    #####:  726:int detect_n_plus_one_moderate(const MercuryMetrics* metrics) {
+    #####:  727:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  728:    return (metrics->query_count > 20 && metrics->query_count <= 50) ? 1 : 0;
+        -:  729:}
+------------------
+detect_n_plus_one_moderate:
+function detect_n_plus_one_moderate called 0 returned 0% blocks executed 0%
+    #####:  726:int detect_n_plus_one_moderate(const MercuryMetrics* metrics) {
+    #####:  727:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  728:    return (metrics->query_count > 20 && metrics->query_count <= 50) ? 1 : 0;
+        -:  729:}
+------------------
+        -:  730:
+        -:  731:// Get memory delta in megabytes
+    #####:  732:double get_memory_delta_mb(const MercuryMetrics* metrics) {
+        -:  733:    // MercuryMetrics only stores peak memory, not start/end
+        -:  734:    // So we can't calculate a true delta - return 0 for compatibility
+    #####:  735:    return 0.0;
+        -:  736:}
+------------------
+get_memory_delta_mb:
+function get_memory_delta_mb called 0 returned 0% blocks executed 0%
+    #####:  732:double get_memory_delta_mb(const MercuryMetrics* metrics) {
+        -:  733:    // MercuryMetrics only stores peak memory, not start/end
+        -:  734:    // So we can't calculate a true delta - return 0 for compatibility
+    #####:  735:    return 0.0;
+        -:  736:}
+------------------
+get_memory_delta_mb:
+function get_memory_delta_mb called 0 returned 0% blocks executed 0%
+    #####:  732:double get_memory_delta_mb(const MercuryMetrics* metrics) {
+        -:  733:    // MercuryMetrics only stores peak memory, not start/end
+        -:  734:    // So we can't calculate a true delta - return 0 for compatibility
+    #####:  735:    return 0.0;
+        -:  736:}
+------------------
+        -:  737:
+        -:  738:// Check if operation is memory intensive
+    #####:  739:int is_memory_intensive(const MercuryMetrics* metrics) {
+    #####:  740:    if (!metrics) return 0;
+        -:  741:    
+        -:  742:    // Check if peak memory usage exceeds 100MB
+    #####:  743:    double memory_mb = (double)metrics->memory_bytes / (1024.0 * 1024.0);
+        -:  744:    
+        -:  745:    // Consider memory intensive if:
+        -:  746:    // - Peak memory > 100MB
+    #####:  747:    return (memory_mb > 100.0) ? 1 : 0;
+        -:  748:}
+------------------
+is_memory_intensive:
+function is_memory_intensive called 0 returned 0% blocks executed 0%
+    #####:  739:int is_memory_intensive(const MercuryMetrics* metrics) {
+    #####:  740:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  741:    
+        -:  742:    // Check if peak memory usage exceeds 100MB
+    #####:  743:    double memory_mb = (double)metrics->memory_bytes / (1024.0 * 1024.0);
+        -:  744:    
+        -:  745:    // Consider memory intensive if:
+        -:  746:    // - Peak memory > 100MB
+    #####:  747:    return (memory_mb > 100.0) ? 1 : 0;
+        -:  748:}
+------------------
+is_memory_intensive:
+function is_memory_intensive called 0 returned 0% blocks executed 0%
+    #####:  739:int is_memory_intensive(const MercuryMetrics* metrics) {
+    #####:  740:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  741:    
+        -:  742:    // Check if peak memory usage exceeds 100MB
+    #####:  743:    double memory_mb = (double)metrics->memory_bytes / (1024.0 * 1024.0);
+        -:  744:    
+        -:  745:    // Consider memory intensive if:
+        -:  746:    // - Peak memory > 100MB
+    #####:  747:    return (memory_mb > 100.0) ? 1 : 0;
+        -:  748:}
+------------------
+        -:  749:
+        -:  750:// Check for poor cache performance
+    #####:  751:int has_poor_cache_performance(const MercuryMetrics* metrics) {
+    #####:  752:    if (!metrics) return 0;
+        -:  753:    
+    #####:  754:    uint32_t total = metrics->cache_hits + metrics->cache_misses;
+    #####:  755:    if (total == 0) return 0;  // No cache operations, not poor performance
+        -:  756:    
+    #####:  757:    double hit_ratio = (double)metrics->cache_hits / (double)total;
+        -:  758:    
+        -:  759:    // Poor cache performance if hit ratio < 70%
+    #####:  760:    return (hit_ratio < 0.7) ? 1 : 0;
+        -:  761:}
+------------------
+has_poor_cache_performance:
+function has_poor_cache_performance called 0 returned 0% blocks executed 0%
+    #####:  751:int has_poor_cache_performance(const MercuryMetrics* metrics) {
+    #####:  752:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  753:    
+    #####:  754:    uint32_t total = metrics->cache_hits + metrics->cache_misses;
+    #####:  755:    if (total == 0) return 0;  // No cache operations, not poor performance
+branch  0 never executed
+branch  1 never executed
+        -:  756:    
+    #####:  757:    double hit_ratio = (double)metrics->cache_hits / (double)total;
+        -:  758:    
+        -:  759:    // Poor cache performance if hit ratio < 70%
+    #####:  760:    return (hit_ratio < 0.7) ? 1 : 0;
+        -:  761:}
+------------------
+has_poor_cache_performance:
+function has_poor_cache_performance called 0 returned 0% blocks executed 0%
+    #####:  751:int has_poor_cache_performance(const MercuryMetrics* metrics) {
+    #####:  752:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  753:    
+    #####:  754:    uint32_t total = metrics->cache_hits + metrics->cache_misses;
+    #####:  755:    if (total == 0) return 0;  // No cache operations, not poor performance
+branch  0 never executed
+branch  1 never executed
+        -:  756:    
+    #####:  757:    double hit_ratio = (double)metrics->cache_hits / (double)total;
+        -:  758:    
+        -:  759:    // Poor cache performance if hit ratio < 70%
+    #####:  760:    return (hit_ratio < 0.7) ? 1 : 0;
+        -:  761:}
+------------------
+        -:  762:
+        -:  763:// Free metrics memory
+    #####:  764:void free_metrics(MercuryMetrics* metrics) {
+    #####:  765:    if (metrics) {
+    #####:  766:        mercury_aligned_free(metrics);
+        -:  767:    }
+    #####:  768:}
+------------------
+free_metrics:
+function free_metrics called 0 returned 0% blocks executed 0%
+    #####:  764:void free_metrics(MercuryMetrics* metrics) {
+    #####:  765:    if (metrics) {
+branch  0 never executed
+branch  1 never executed
+    #####:  766:        mercury_aligned_free(metrics);
+call    0 never executed
+        -:  767:    }
+    #####:  768:}
+------------------
+free_metrics:
+function free_metrics called 0 returned 0% blocks executed 0%
+    #####:  764:void free_metrics(MercuryMetrics* metrics) {
+    #####:  765:    if (metrics) {
+branch  0 never executed
+branch  1 never executed
+    #####:  766:        mercury_aligned_free(metrics);
+call    0 never executed
+        -:  767:    }
+    #####:  768:}
+------------------
+        -:  769:
+        -:  770:// Increment counters (called by Django hooks)
+    #####:  771:void increment_query_count(void) {
+    #####:  772:    if (g_engine) {
+    #####:  773:        atomic_fetch_add(&g_engine->global_query_count, 1);
+        -:  774:    }
+    #####:  775:}
+------------------
+increment_query_count:
+function increment_query_count called 0 returned 0% blocks executed 0%
+    #####:  771:void increment_query_count(void) {
+    #####:  772:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  773:        atomic_fetch_add(&g_engine->global_query_count, 1);
+        -:  774:    }
+    #####:  775:}
+------------------
+increment_query_count:
+function increment_query_count called 0 returned 0% blocks executed 0%
+    #####:  771:void increment_query_count(void) {
+    #####:  772:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  773:        atomic_fetch_add(&g_engine->global_query_count, 1);
+        -:  774:    }
+    #####:  775:}
+------------------
+        -:  776:
+    #####:  777:void increment_cache_hits(void) {
+    #####:  778:    if (g_engine) {
+    #####:  779:        atomic_fetch_add(&g_engine->global_cache_hits, 1);
+        -:  780:    }
+    #####:  781:}
+------------------
+increment_cache_hits:
+function increment_cache_hits called 0 returned 0% blocks executed 0%
+    #####:  777:void increment_cache_hits(void) {
+    #####:  778:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  779:        atomic_fetch_add(&g_engine->global_cache_hits, 1);
+        -:  780:    }
+    #####:  781:}
+------------------
+increment_cache_hits:
+function increment_cache_hits called 0 returned 0% blocks executed 0%
+    #####:  777:void increment_cache_hits(void) {
+    #####:  778:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  779:        atomic_fetch_add(&g_engine->global_cache_hits, 1);
+        -:  780:    }
+    #####:  781:}
+------------------
+        -:  782:
+    #####:  783:void increment_cache_misses(void) {
+    #####:  784:    if (g_engine) {
+    #####:  785:        atomic_fetch_add(&g_engine->global_cache_misses, 1);
+        -:  786:    }
+    #####:  787:}
+------------------
+increment_cache_misses:
+function increment_cache_misses called 0 returned 0% blocks executed 0%
+    #####:  783:void increment_cache_misses(void) {
+    #####:  784:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  785:        atomic_fetch_add(&g_engine->global_cache_misses, 1);
+        -:  786:    }
+    #####:  787:}
+------------------
+increment_cache_misses:
+function increment_cache_misses called 0 returned 0% blocks executed 0%
+    #####:  783:void increment_cache_misses(void) {
+    #####:  784:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  785:        atomic_fetch_add(&g_engine->global_cache_misses, 1);
+        -:  786:    }
+    #####:  787:}
+------------------
+        -:  788:
+        -:  789:// Reset global counters (called before test execution)
+    #####:  790:void reset_global_counters(void) {
+    #####:  791:    if (g_engine) {
+    #####:  792:        atomic_store(&g_engine->global_query_count, 0);
+    #####:  793:        atomic_store(&g_engine->global_cache_hits, 0);
+    #####:  794:        atomic_store(&g_engine->global_cache_misses, 0);
+        -:  795:    }
+    #####:  796:}
+------------------
+reset_global_counters:
+function reset_global_counters called 0 returned 0% blocks executed 0%
+    #####:  790:void reset_global_counters(void) {
+    #####:  791:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  792:        atomic_store(&g_engine->global_query_count, 0);
+    #####:  793:        atomic_store(&g_engine->global_cache_hits, 0);
+    #####:  794:        atomic_store(&g_engine->global_cache_misses, 0);
+        -:  795:    }
+    #####:  796:}
+------------------
+reset_global_counters:
+function reset_global_counters called 0 returned 0% blocks executed 0%
+    #####:  790:void reset_global_counters(void) {
+    #####:  791:    if (g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  792:        atomic_store(&g_engine->global_query_count, 0);
+    #####:  793:        atomic_store(&g_engine->global_cache_hits, 0);
+    #####:  794:        atomic_store(&g_engine->global_cache_misses, 0);
+        -:  795:    }
+    #####:  796:}
+------------------
+        -:  797:
+        -:  798:// Get engine statistics
+    #####:  799:void get_engine_statistics(uint64_t* total_sessions, uint64_t* violations_detected,
+        -:  800:                          uint64_t* timing_overhead_ns, size_t* active_monitors) {
+    #####:  801:    if (!g_engine) {
+    #####:  802:        if (total_sessions) *total_sessions = 0;
+    #####:  803:        if (violations_detected) *violations_detected = 0;
+    #####:  804:        if (timing_overhead_ns) *timing_overhead_ns = 0;
+    #####:  805:        if (active_monitors) *active_monitors = 0;
+    #####:  806:        return;
+        -:  807:    }
+        -:  808:    
+    #####:  809:    if (total_sessions) *total_sessions = atomic_load(&g_engine->total_sessions);
+    #####:  810:    if (violations_detected) *violations_detected = atomic_load(&g_engine->violations_detected);
+    #####:  811:    if (timing_overhead_ns) *timing_overhead_ns = atomic_load(&g_engine->timing_overhead_ns);
+    #####:  812:    if (active_monitors) *active_monitors = g_engine->monitor_count;
+        -:  813:}
+------------------
+get_engine_statistics:
+function get_engine_statistics called 0 returned 0% blocks executed 0%
+    #####:  799:void get_engine_statistics(uint64_t* total_sessions, uint64_t* violations_detected,
+        -:  800:                          uint64_t* timing_overhead_ns, size_t* active_monitors) {
+    #####:  801:    if (!g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  802:        if (total_sessions) *total_sessions = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  803:        if (violations_detected) *violations_detected = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  804:        if (timing_overhead_ns) *timing_overhead_ns = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  805:        if (active_monitors) *active_monitors = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  806:        return;
+        -:  807:    }
+        -:  808:    
+    #####:  809:    if (total_sessions) *total_sessions = atomic_load(&g_engine->total_sessions);
+branch  0 never executed
+branch  1 never executed
+    #####:  810:    if (violations_detected) *violations_detected = atomic_load(&g_engine->violations_detected);
+branch  0 never executed
+branch  1 never executed
+    #####:  811:    if (timing_overhead_ns) *timing_overhead_ns = atomic_load(&g_engine->timing_overhead_ns);
+branch  0 never executed
+branch  1 never executed
+    #####:  812:    if (active_monitors) *active_monitors = g_engine->monitor_count;
+branch  0 never executed
+branch  1 never executed
+        -:  813:}
+------------------
+get_engine_statistics:
+function get_engine_statistics called 0 returned 0% blocks executed 0%
+    #####:  799:void get_engine_statistics(uint64_t* total_sessions, uint64_t* violations_detected,
+        -:  800:                          uint64_t* timing_overhead_ns, size_t* active_monitors) {
+    #####:  801:    if (!g_engine) {
+branch  0 never executed
+branch  1 never executed
+    #####:  802:        if (total_sessions) *total_sessions = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  803:        if (violations_detected) *violations_detected = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  804:        if (timing_overhead_ns) *timing_overhead_ns = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  805:        if (active_monitors) *active_monitors = 0;
+branch  0 never executed
+branch  1 never executed
+    #####:  806:        return;
+        -:  807:    }
+        -:  808:    
+    #####:  809:    if (total_sessions) *total_sessions = atomic_load(&g_engine->total_sessions);
+branch  0 never executed
+branch  1 never executed
+    #####:  810:    if (violations_detected) *violations_detected = atomic_load(&g_engine->violations_detected);
+branch  0 never executed
+branch  1 never executed
+    #####:  811:    if (timing_overhead_ns) *timing_overhead_ns = atomic_load(&g_engine->timing_overhead_ns);
+branch  0 never executed
+branch  1 never executed
+    #####:  812:    if (active_monitors) *active_monitors = g_engine->monitor_count;
+branch  0 never executed
+branch  1 never executed
+        -:  813:}
+------------------
+        -:  814:
+        -:  815:// === MISSING FUNCTIONS FROM PERFORMANCE_MONITOR.C ===
+        -:  816:
+        -:  817:// Thread-specific storage for current session ID (for compatibility)
+        -:  818:static pthread_key_t session_id_key;
+        -:  819:static pthread_once_t session_key_once = PTHREAD_ONCE_INIT;
+        -:  820:
+        -:  821:/**
+        -:  822: * @brief Cleanup function for thread-specific session ID storage
+        -:  823: */
+    #####:  824:static void cleanup_session_id(void* ptr) {
+    #####:  825:    if (ptr) {
+    #####:  826:        free(ptr);
+        -:  827:    }
+    #####:  828:}
+------------------
+cleanup_session_id:
+function cleanup_session_id called 0 returned 0% blocks executed 0%
+    #####:  824:static void cleanup_session_id(void* ptr) {
+    #####:  825:    if (ptr) {
+branch  0 never executed
+branch  1 never executed
+    #####:  826:        free(ptr);
+        -:  827:    }
+    #####:  828:}
+------------------
+cleanup_session_id:
+function cleanup_session_id called 0 returned 0% blocks executed 0%
+    #####:  824:static void cleanup_session_id(void* ptr) {
+    #####:  825:    if (ptr) {
+branch  0 never executed
+branch  1 never executed
+    #####:  826:        free(ptr);
+        -:  827:    }
+    #####:  828:}
+------------------
+        -:  829:
+        -:  830:/**
+        -:  831: * @brief Initialize thread-specific storage key (called once)
+        -:  832: */
+    #####:  833:static void init_session_key(void) {
+    #####:  834:    pthread_key_create(&session_id_key, cleanup_session_id);
+    #####:  835:}
+------------------
+init_session_key:
+function init_session_key called 0 returned 0% blocks executed 0%
+    #####:  833:static void init_session_key(void) {
+    #####:  834:    pthread_key_create(&session_id_key, cleanup_session_id);
+call    0 never executed
+    #####:  835:}
+------------------
+init_session_key:
+function init_session_key called 0 returned 0% blocks executed 0%
+    #####:  833:static void init_session_key(void) {
+    #####:  834:    pthread_key_create(&session_id_key, cleanup_session_id);
+call    0 never executed
+    #####:  835:}
+------------------
+        -:  836:
+        -:  837:/**
+        -:  838: * @brief Set the current session ID for this thread
+        -:  839: * @param session_id The session ID to set as current for this thread
+        -:  840: * @warning Not thread-safe during initialization - call pthread_once first
+        -:  841: */
+    #####:  842:void set_current_session_id(int64_t session_id) {
+    #####:  843:    pthread_once(&session_key_once, init_session_key);
+    #####:  844:    int64_t* stored_id = malloc(sizeof(int64_t));
+    #####:  845:    if (stored_id) {
+    #####:  846:        *stored_id = session_id;
+    #####:  847:        pthread_setspecific(session_id_key, stored_id);
+        -:  848:    }
+    #####:  849:}
+------------------
+set_current_session_id:
+function set_current_session_id called 0 returned 0% blocks executed 0%
+    #####:  842:void set_current_session_id(int64_t session_id) {
+    #####:  843:    pthread_once(&session_key_once, init_session_key);
+call    0 never executed
+    #####:  844:    int64_t* stored_id = malloc(sizeof(int64_t));
+    #####:  845:    if (stored_id) {
+branch  0 never executed
+branch  1 never executed
+    #####:  846:        *stored_id = session_id;
+    #####:  847:        pthread_setspecific(session_id_key, stored_id);
+call    0 never executed
+        -:  848:    }
+    #####:  849:}
+------------------
+set_current_session_id:
+function set_current_session_id called 0 returned 0% blocks executed 0%
+    #####:  842:void set_current_session_id(int64_t session_id) {
+    #####:  843:    pthread_once(&session_key_once, init_session_key);
+call    0 never executed
+    #####:  844:    int64_t* stored_id = malloc(sizeof(int64_t));
+    #####:  845:    if (stored_id) {
+branch  0 never executed
+branch  1 never executed
+    #####:  846:        *stored_id = session_id;
+    #####:  847:        pthread_setspecific(session_id_key, stored_id);
+call    0 never executed
+        -:  848:    }
+    #####:  849:}
+------------------
+        -:  850:
+        -:  851:/**
+        -:  852: * @brief Get the current session ID for this thread
+        -:  853: * @return Current session ID, 0 if none set
+        -:  854: * @warning Returns 0 if thread-specific storage not initialized
+        -:  855: */
+    #####:  856:int64_t get_current_session_id(void) {
+    #####:  857:    pthread_once(&session_key_once, init_session_key);
+    #####:  858:    int64_t* stored_id = (int64_t*)pthread_getspecific(session_id_key);
+    #####:  859:    return stored_id ? *stored_id : 0;
+        -:  860:}
+------------------
+get_current_session_id:
+function get_current_session_id called 0 returned 0% blocks executed 0%
+    #####:  856:int64_t get_current_session_id(void) {
+    #####:  857:    pthread_once(&session_key_once, init_session_key);
+call    0 never executed
+    #####:  858:    int64_t* stored_id = (int64_t*)pthread_getspecific(session_id_key);
+call    0 never executed
+    #####:  859:    return stored_id ? *stored_id : 0;
+branch  0 never executed
+branch  1 never executed
+        -:  860:}
+------------------
+get_current_session_id:
+function get_current_session_id called 0 returned 0% blocks executed 0%
+    #####:  856:int64_t get_current_session_id(void) {
+    #####:  857:    pthread_once(&session_key_once, init_session_key);
+call    0 never executed
+    #####:  858:    int64_t* stored_id = (int64_t*)pthread_getspecific(session_id_key);
+call    0 never executed
+    #####:  859:    return stored_id ? *stored_id : 0;
+branch  0 never executed
+branch  1 never executed
+        -:  860:}
+------------------
+        -:  861:
+        -:  862:/**
+        -:  863: * @brief Calculate N+1 severity level with realistic thresholds
+        -:  864: * 
+        -:  865: * Returns severity level from 0-5 based on query count, adjusted for
+        -:  866: * Django applications with complex user models and relationships.
+        -:  867: * 
+        -:  868: * @param metrics Pointer to performance metrics structure
+        -:  869: * @return Severity level (0=none, 1=mild, 2=moderate, 3=high, 4=severe, 5=critical)
+        -:  870: * @warning Returns 0 if metrics is NULL
+        -:  871: */
+    #####:  872:int calculate_n_plus_one_severity(const MercuryMetrics* metrics) {
+    #####:  873:    if (!metrics) return 0;
+        -:  874:    
+    #####:  875:    uint32_t query_count = get_query_count(metrics);
+        -:  876:    
+        -:  877:    // No N+1 issues for 0 queries (static/cached responses)
+    #####:  878:    if (query_count == 0) return 0;
+        -:  879:    
+        -:  880:    // Adjusted thresholds to align with realistic Django app needs
+    #####:  881:    if (query_count >= 50) return 5;  // CRITICAL - extreme N+1 
+    #####:  882:    if (query_count >= 35) return 4;  // SEVERE - very high query count
+    #####:  883:    if (query_count >= 25) return 3;  // HIGH - high query count 
+    #####:  884:    if (query_count >= 18) return 2;  // MODERATE - moderate N+1 issue
+    #####:  885:    if (query_count >= 12) return 1;  // MILD - potential N+1, investigate
+        -:  886:    
+        -:  887:    return 0;  // NONE - acceptable for Django apps with profiles/permissions
+        -:  888:}
+------------------
+calculate_n_plus_one_severity:
+function calculate_n_plus_one_severity called 0 returned 0% blocks executed 0%
+    #####:  872:int calculate_n_plus_one_severity(const MercuryMetrics* metrics) {
+    #####:  873:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  874:    
+    #####:  875:    uint32_t query_count = get_query_count(metrics);
+call    0 never executed
+        -:  876:    
+        -:  877:    // No N+1 issues for 0 queries (static/cached responses)
+    #####:  878:    if (query_count == 0) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  879:    
+        -:  880:    // Adjusted thresholds to align with realistic Django app needs
+    #####:  881:    if (query_count >= 50) return 5;  // CRITICAL - extreme N+1 
+branch  0 never executed
+branch  1 never executed
+    #####:  882:    if (query_count >= 35) return 4;  // SEVERE - very high query count
+branch  0 never executed
+branch  1 never executed
+    #####:  883:    if (query_count >= 25) return 3;  // HIGH - high query count 
+branch  0 never executed
+branch  1 never executed
+    #####:  884:    if (query_count >= 18) return 2;  // MODERATE - moderate N+1 issue
+branch  0 never executed
+branch  1 never executed
+    #####:  885:    if (query_count >= 12) return 1;  // MILD - potential N+1, investigate
+branch  0 never executed
+branch  1 never executed
+        -:  886:    
+        -:  887:    return 0;  // NONE - acceptable for Django apps with profiles/permissions
+        -:  888:}
+------------------
+calculate_n_plus_one_severity:
+function calculate_n_plus_one_severity called 0 returned 0% blocks executed 0%
+    #####:  872:int calculate_n_plus_one_severity(const MercuryMetrics* metrics) {
+    #####:  873:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  874:    
+    #####:  875:    uint32_t query_count = get_query_count(metrics);
+call    0 never executed
+        -:  876:    
+        -:  877:    // No N+1 issues for 0 queries (static/cached responses)
+    #####:  878:    if (query_count == 0) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  879:    
+        -:  880:    // Adjusted thresholds to align with realistic Django app needs
+    #####:  881:    if (query_count >= 50) return 5;  // CRITICAL - extreme N+1 
+branch  0 never executed
+branch  1 never executed
+    #####:  882:    if (query_count >= 35) return 4;  // SEVERE - very high query count
+branch  0 never executed
+branch  1 never executed
+    #####:  883:    if (query_count >= 25) return 3;  // HIGH - high query count 
+branch  0 never executed
+branch  1 never executed
+    #####:  884:    if (query_count >= 18) return 2;  // MODERATE - moderate N+1 issue
+branch  0 never executed
+branch  1 never executed
+    #####:  885:    if (query_count >= 12) return 1;  // MILD - potential N+1, investigate
+branch  0 never executed
+branch  1 never executed
+        -:  886:    
+        -:  887:    return 0;  // NONE - acceptable for Django apps with profiles/permissions
+        -:  888:}
+------------------
+        -:  889:
+        -:  890:/**
+        -:  891: * @brief Detect N+1 pattern by analyzing query count patterns
+        -:  892: * 
+        -:  893: * @param metrics Pointer to performance metrics structure
+        -:  894: * @return 1 if N+1 pattern detected, 0 otherwise
+        -:  895: * @warning Returns 0 if metrics is NULL
+        -:  896: */
+    #####:  897:int detect_n_plus_one_pattern_by_count(const MercuryMetrics* metrics) {
+    #####:  898:    if (!metrics) return 0;
+        -:  899:    
+    #####:  900:    uint32_t query_count = get_query_count(metrics);
+        -:  901:    
+        -:  902:    // Debug logging for false positives
+    #####:  903:    if (query_count == 0) {
+    #####:  904:        fprintf(stderr, "DEBUG: detect_n_plus_one_pattern_by_count called with 0 queries\n");
+    #####:  905:        return 0;  // No N+1 possible with 0 queries
+        -:  906:    }
+        -:  907:    
+        -:  908:    // Pattern detection for list views with individual queries
+    #####:  909:    if (query_count >= 21 && query_count <= 101) {
+        -:  910:        // Likely pattern: 1 query for list + N queries for related data
+        -:  911:        // Common in paginated views: 1 + 10, 1 + 20, 1 + 50, etc.
+    #####:  912:        if ((query_count - 1) % 10 == 0 || 
+    #####:  913:            (query_count - 1) % 20 == 0 ||
+    #####:  914:            (query_count - 1) % 25 == 0) {
+        -:  915:            return 1;
+        -:  916:        }
+        -:  917:    }
+        -:  918:    
+        -:  919:    // Realistic N+1 detection: Django user apps with profiles/permissions typically need 4-8 queries
+        -:  920:    // Only flag as N+1 if significantly above normal Django patterns
+    #####:  921:    if (query_count >= 12) return 1;  // Raised from 3 to 12 for realistic Django apps
+        -:  922:    
+        -:  923:    return 0;
+        -:  924:}
+------------------
+detect_n_plus_one_pattern_by_count:
+function detect_n_plus_one_pattern_by_count called 0 returned 0% blocks executed 0%
+    #####:  897:int detect_n_plus_one_pattern_by_count(const MercuryMetrics* metrics) {
+    #####:  898:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  899:    
+    #####:  900:    uint32_t query_count = get_query_count(metrics);
+call    0 never executed
+        -:  901:    
+        -:  902:    // Debug logging for false positives
+    #####:  903:    if (query_count == 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  904:        fprintf(stderr, "DEBUG: detect_n_plus_one_pattern_by_count called with 0 queries\n");
+call    0 never executed
+    #####:  905:        return 0;  // No N+1 possible with 0 queries
+        -:  906:    }
+        -:  907:    
+        -:  908:    // Pattern detection for list views with individual queries
+    #####:  909:    if (query_count >= 21 && query_count <= 101) {
+branch  0 never executed
+branch  1 never executed
+        -:  910:        // Likely pattern: 1 query for list + N queries for related data
+        -:  911:        // Common in paginated views: 1 + 10, 1 + 20, 1 + 50, etc.
+    #####:  912:        if ((query_count - 1) % 10 == 0 || 
+branch  0 never executed
+branch  1 never executed
+    #####:  913:            (query_count - 1) % 20 == 0 ||
+branch  0 never executed
+branch  1 never executed
+    #####:  914:            (query_count - 1) % 25 == 0) {
+branch  0 never executed
+branch  1 never executed
+        -:  915:            return 1;
+        -:  916:        }
+        -:  917:    }
+        -:  918:    
+        -:  919:    // Realistic N+1 detection: Django user apps with profiles/permissions typically need 4-8 queries
+        -:  920:    // Only flag as N+1 if significantly above normal Django patterns
+    #####:  921:    if (query_count >= 12) return 1;  // Raised from 3 to 12 for realistic Django apps
+branch  0 never executed
+branch  1 never executed
+        -:  922:    
+        -:  923:    return 0;
+        -:  924:}
+------------------
+detect_n_plus_one_pattern_by_count:
+function detect_n_plus_one_pattern_by_count called 0 returned 0% blocks executed 0%
+    #####:  897:int detect_n_plus_one_pattern_by_count(const MercuryMetrics* metrics) {
+    #####:  898:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  899:    
+    #####:  900:    uint32_t query_count = get_query_count(metrics);
+call    0 never executed
+        -:  901:    
+        -:  902:    // Debug logging for false positives
+    #####:  903:    if (query_count == 0) {
+branch  0 never executed
+branch  1 never executed
+    #####:  904:        fprintf(stderr, "DEBUG: detect_n_plus_one_pattern_by_count called with 0 queries\n");
+call    0 never executed
+    #####:  905:        return 0;  // No N+1 possible with 0 queries
+        -:  906:    }
+        -:  907:    
+        -:  908:    // Pattern detection for list views with individual queries
+    #####:  909:    if (query_count >= 21 && query_count <= 101) {
+branch  0 never executed
+branch  1 never executed
+        -:  910:        // Likely pattern: 1 query for list + N queries for related data
+        -:  911:        // Common in paginated views: 1 + 10, 1 + 20, 1 + 50, etc.
+    #####:  912:        if ((query_count - 1) % 10 == 0 || 
+branch  0 never executed
+branch  1 never executed
+    #####:  913:            (query_count - 1) % 20 == 0 ||
+branch  0 never executed
+branch  1 never executed
+    #####:  914:            (query_count - 1) % 25 == 0) {
+branch  0 never executed
+branch  1 never executed
+        -:  915:            return 1;
+        -:  916:        }
+        -:  917:    }
+        -:  918:    
+        -:  919:    // Realistic N+1 detection: Django user apps with profiles/permissions typically need 4-8 queries
+        -:  920:    // Only flag as N+1 if significantly above normal Django patterns
+    #####:  921:    if (query_count >= 12) return 1;  // Raised from 3 to 12 for realistic Django apps
+branch  0 never executed
+branch  1 never executed
+        -:  922:    
+        -:  923:    return 0;
+        -:  924:}
+------------------
+        -:  925:
+        -:  926:/**
+        -:  927: * @brief Estimate the likely cause of N+1 queries
+        -:  928: * 
+        -:  929: * Analyzes query patterns to determine the most probable cause of N+1 issues.
+        -:  930: * 
+        -:  931: * @param metrics Pointer to performance metrics structure
+        -:  932: * @return Cause code (0=none, 1=serializer, 2=related_model, 3=foreign_key, 4=complex)
+        -:  933: * @warning Returns 0 if metrics is NULL
+        -:  934: */
+    #####:  935:int estimate_n_plus_one_cause(const MercuryMetrics* metrics) {
+    #####:  936:    if (!metrics) return 0;
+        -:  937:    
+    #####:  938:    uint32_t query_count = get_query_count(metrics);
+    #####:  939:    double response_time = get_elapsed_time_ms(metrics);
+        -:  940:    
+        -:  941:    // Cause classification:
+        -:  942:    // 0 = No N+1
+        -:  943:    // 1 = Serializer N+1 (many quick queries)
+        -:  944:    // 2 = Related model N+1 (moderate queries)
+        -:  945:    // 3 = Foreign key N+1 (many queries, slow)
+        -:  946:    // 4 = Complex relationship N+1 (very many queries)
+        -:  947:    
+        -:  948:    // No N+1 issues for 0 queries (static/cached responses) or low query counts
+    #####:  949:    if (query_count == 0 || query_count < 12) return 0;
+        -:  950:    
+    #####:  951:    double avg_query_time = response_time / query_count;
+        -:  952:    
+    #####:  953:    if (query_count >= 50) return 4;  // Complex relationship N+1
+    #####:  954:    if (query_count >= 30 && avg_query_time > 2.0) return 3;  // Foreign key N+1
+    #####:  955:    if (query_count >= 20 && avg_query_time < 2.0) return 1;  // Serializer N+1
+    #####:  956:    if (query_count >= 12) return 2;   // Related model N+1
+        -:  957:    
+        -:  958:    return 0;
+        -:  959:}
+------------------
+estimate_n_plus_one_cause:
+function estimate_n_plus_one_cause called 0 returned 0% blocks executed 0%
+    #####:  935:int estimate_n_plus_one_cause(const MercuryMetrics* metrics) {
+    #####:  936:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  937:    
+    #####:  938:    uint32_t query_count = get_query_count(metrics);
+call    0 never executed
+    #####:  939:    double response_time = get_elapsed_time_ms(metrics);
+call    0 never executed
+        -:  940:    
+        -:  941:    // Cause classification:
+        -:  942:    // 0 = No N+1
+        -:  943:    // 1 = Serializer N+1 (many quick queries)
+        -:  944:    // 2 = Related model N+1 (moderate queries)
+        -:  945:    // 3 = Foreign key N+1 (many queries, slow)
+        -:  946:    // 4 = Complex relationship N+1 (very many queries)
+        -:  947:    
+        -:  948:    // No N+1 issues for 0 queries (static/cached responses) or low query counts
+    #####:  949:    if (query_count == 0 || query_count < 12) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  950:    
+    #####:  951:    double avg_query_time = response_time / query_count;
+        -:  952:    
+    #####:  953:    if (query_count >= 50) return 4;  // Complex relationship N+1
+branch  0 never executed
+branch  1 never executed
+    #####:  954:    if (query_count >= 30 && avg_query_time > 2.0) return 3;  // Foreign key N+1
+branch  0 never executed
+branch  1 never executed
+    #####:  955:    if (query_count >= 20 && avg_query_time < 2.0) return 1;  // Serializer N+1
+branch  0 never executed
+branch  1 never executed
+    #####:  956:    if (query_count >= 12) return 2;   // Related model N+1
+        -:  957:    
+        -:  958:    return 0;
+        -:  959:}
+------------------
+estimate_n_plus_one_cause:
+function estimate_n_plus_one_cause called 0 returned 0% blocks executed 0%
+    #####:  935:int estimate_n_plus_one_cause(const MercuryMetrics* metrics) {
+    #####:  936:    if (!metrics) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  937:    
+    #####:  938:    uint32_t query_count = get_query_count(metrics);
+call    0 never executed
+    #####:  939:    double response_time = get_elapsed_time_ms(metrics);
+call    0 never executed
+        -:  940:    
+        -:  941:    // Cause classification:
+        -:  942:    // 0 = No N+1
+        -:  943:    // 1 = Serializer N+1 (many quick queries)
+        -:  944:    // 2 = Related model N+1 (moderate queries)
+        -:  945:    // 3 = Foreign key N+1 (many queries, slow)
+        -:  946:    // 4 = Complex relationship N+1 (very many queries)
+        -:  947:    
+        -:  948:    // No N+1 issues for 0 queries (static/cached responses) or low query counts
+    #####:  949:    if (query_count == 0 || query_count < 12) return 0;
+branch  0 never executed
+branch  1 never executed
+        -:  950:    
+    #####:  951:    double avg_query_time = response_time / query_count;
+        -:  952:    
+    #####:  953:    if (query_count >= 50) return 4;  // Complex relationship N+1
+branch  0 never executed
+branch  1 never executed
+    #####:  954:    if (query_count >= 30 && avg_query_time > 2.0) return 3;  // Foreign key N+1
+branch  0 never executed
+branch  1 never executed
+    #####:  955:    if (query_count >= 20 && avg_query_time < 2.0) return 1;  // Serializer N+1
+branch  0 never executed
+branch  1 never executed
+    #####:  956:    if (query_count >= 12) return 2;   // Related model N+1
+        -:  957:    
+        -:  958:    return 0;
+        -:  959:}
+------------------
+        -:  960:
+        -:  961:/**
+        -:  962: * @brief Get suggested fix for detected N+1 pattern
+        -:  963: * 
+        -:  964: * Returns human-readable suggestion based on estimated cause of N+1 queries.
+        -:  965: * 
+        -:  966: * @param metrics Pointer to performance metrics structure
+        -:  967: * @return String with optimization suggestion
+        -:  968: * @warning Returns "No metrics available" if metrics is NULL - pointer remains valid
+        -:  969: */
+    #####:  970:const char* get_n_plus_one_fix_suggestion(const MercuryMetrics* metrics) {
+    #####:  971:    if (!metrics) return "No metrics available";
+        -:  972:    
+    #####:  973:    int cause = estimate_n_plus_one_cause(metrics);
+        -:  974:    
+    #####:  975:    switch (cause) {
+        -:  976:        case 0:
+        -:  977:            return "No N+1 detected";
+    #####:  978:        case 1:
+    #####:  979:            return "Serializer N+1: Check SerializerMethodField usage, use prefetch_related()";
+    #####:  980:        case 2:
+    #####:  981:            return "Related model N+1: Add select_related() for ForeignKey fields";
+    #####:  982:        case 3:
+    #####:  983:            return "Foreign key N+1: Use select_related() and check for nested relationship access";
+    #####:  984:        case 4:
+    #####:  985:            return "Complex N+1: Review QuerySet optimization, consider using raw SQL or database views";
+    #####:  986:        default:
+    #####:  987:            return "Add select_related() and prefetch_related() to your QuerySet";
+        -:  988:    }
+        -:  989:}
+------------------
+get_n_plus_one_fix_suggestion:
+function get_n_plus_one_fix_suggestion called 0 returned 0% blocks executed 0%
+    #####:  970:const char* get_n_plus_one_fix_suggestion(const MercuryMetrics* metrics) {
+    #####:  971:    if (!metrics) return "No metrics available";
+branch  0 never executed
+branch  1 never executed
+        -:  972:    
+    #####:  973:    int cause = estimate_n_plus_one_cause(metrics);
+call    0 never executed
+        -:  974:    
+    #####:  975:    switch (cause) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  976:        case 0:
+        -:  977:            return "No N+1 detected";
+    #####:  978:        case 1:
+    #####:  979:            return "Serializer N+1: Check SerializerMethodField usage, use prefetch_related()";
+    #####:  980:        case 2:
+    #####:  981:            return "Related model N+1: Add select_related() for ForeignKey fields";
+    #####:  982:        case 3:
+    #####:  983:            return "Foreign key N+1: Use select_related() and check for nested relationship access";
+    #####:  984:        case 4:
+    #####:  985:            return "Complex N+1: Review QuerySet optimization, consider using raw SQL or database views";
+    #####:  986:        default:
+    #####:  987:            return "Add select_related() and prefetch_related() to your QuerySet";
+        -:  988:    }
+        -:  989:}
+------------------
+get_n_plus_one_fix_suggestion:
+function get_n_plus_one_fix_suggestion called 0 returned 0% blocks executed 0%
+    #####:  970:const char* get_n_plus_one_fix_suggestion(const MercuryMetrics* metrics) {
+    #####:  971:    if (!metrics) return "No metrics available";
+branch  0 never executed
+branch  1 never executed
+        -:  972:    
+    #####:  973:    int cause = estimate_n_plus_one_cause(metrics);
+call    0 never executed
+        -:  974:    
+    #####:  975:    switch (cause) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  976:        case 0:
+        -:  977:            return "No N+1 detected";
+    #####:  978:        case 1:
+    #####:  979:            return "Serializer N+1: Check SerializerMethodField usage, use prefetch_related()";
+    #####:  980:        case 2:
+    #####:  981:            return "Related model N+1: Add select_related() for ForeignKey fields";
+    #####:  982:        case 3:
+    #####:  983:            return "Foreign key N+1: Use select_related() and check for nested relationship access";
+    #####:  984:        case 4:
+    #####:  985:            return "Complex N+1: Review QuerySet optimization, consider using raw SQL or database views";
+    #####:  986:        default:
+    #####:  987:            return "Add select_related() and prefetch_related() to your QuerySet";
+        -:  988:    }
+        -:  989:}
+------------------
+        -:  990:
+        -:  991:// === LIBRARY INITIALIZATION ===
+        -:  992:
+        -:  993:// Library constructor
+        -:  994:MERCURY_CONSTRUCTOR(metrics_engine_init) {
+        -:  995:    // MERCURY_INFO("libmetrics_engine.so loaded");  // Too verbose
+        -:  996:}
+        -:  997:
+        -:  998:// Library destructor
+        2:  999:MERCURY_DESTRUCTOR(metrics_engine_cleanup) {
+        2: 1000:    cleanup_metrics_engine();
+        -: 1001:    // MERCURY_INFO("libmetrics_engine.so unloaded");  // Too verbose
+        2: 1002:}
+------------------
+metrics_engine_cleanup:
+function metrics_engine_cleanup called 1 returned 100% blocks executed 100%
+        1:  999:MERCURY_DESTRUCTOR(metrics_engine_cleanup) {
+        1: 1000:    cleanup_metrics_engine();
+call    0 returned 100%
+        -: 1001:    // MERCURY_INFO("libmetrics_engine.so unloaded");  // Too verbose
+        1: 1002:}
+------------------
+metrics_engine_cleanup:
+function metrics_engine_cleanup called 1 returned 100% blocks executed 100%
+        1:  999:MERCURY_DESTRUCTOR(metrics_engine_cleanup) {
+        1: 1000:    cleanup_metrics_engine();
+call    0 returned 100%
+        -: 1001:    // MERCURY_INFO("libmetrics_engine.so unloaded");  // Too verbose
+        1: 1002:}
+------------------

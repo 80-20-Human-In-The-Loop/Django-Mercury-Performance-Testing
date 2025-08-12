@@ -21,7 +21,7 @@ CExtensionManager = CExtensionLoader
 class TestPerformanceSessionContextManager(unittest.TestCase):
     """Test performance_session context manager (lines 806-872)."""
     
-    def test_performance_session_basic(self):
+    def test_performance_session_basic(self) -> None:
         """Test basic performance session context manager usage (lines 806-850)."""
         manager = CExtensionManager()
         
@@ -43,7 +43,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
         # Verify stop was called after exiting
         mock_metrics.stop_performance_monitoring_enhanced.assert_called_once_with(123)
     
-    def test_performance_session_operation_name_sanitization(self):
+    def test_performance_session_operation_name_sanitization(self) -> None:
         """Test operation name sanitization (line 839)."""
         manager = CExtensionManager()
         
@@ -65,7 +65,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
             self.assertNotIn('>', operation_name)
             self.assertNotIn("'", operation_name)
     
-    def test_performance_session_operation_type_validation(self):
+    def test_performance_session_operation_type_validation(self) -> None:
         """Test operation type validation (lines 842-845)."""
         manager = CExtensionManager()
         
@@ -85,7 +85,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
                 op_type = call_args[0][1].decode() if isinstance(call_args[0][1], bytes) else call_args[0][1]
                 self.assertEqual(op_type, "general")
     
-    def test_performance_session_valid_operation_types(self):
+    def test_performance_session_valid_operation_types(self) -> None:
         """Test all valid operation types (lines 816-823)."""
         manager = CExtensionManager()
         
@@ -106,7 +106,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
                 used_type = call_args[0][1].decode() if isinstance(call_args[0][1], bytes) else call_args[0][1]
                 self.assertEqual(used_type, op_type)
     
-    def test_performance_session_no_c_extensions(self):
+    def test_performance_session_no_c_extensions(self) -> None:
         """Test performance session without C extensions (lines 847-850)."""
         manager = CExtensionManager()
         
@@ -117,7 +117,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
         with manager.performance_session("Test", "view") as session_id:
             self.assertIsNone(session_id)
     
-    def test_performance_session_error_handling(self):
+    def test_performance_session_error_handling(self) -> None:
         """Test performance session error handling (lines 851-872)."""
         manager = CExtensionManager()
         
@@ -137,7 +137,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
             # Should still call stop even with error
             mock_metrics.stop_performance_monitoring_enhanced.assert_called_once()
     
-    def test_performance_session_cleanup_on_exception(self):
+    def test_performance_session_cleanup_on_exception(self) -> None:
         """Test cleanup happens even on exception."""
         manager = CExtensionManager()
         
@@ -155,7 +155,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
         # Stop should still be called
         mock_metrics.stop_performance_monitoring_enhanced.assert_called_once_with(300)
     
-    def test_performance_session_nested_contexts(self):
+    def test_performance_session_nested_contexts(self) -> None:
         """Test nested performance sessions."""
         manager = CExtensionManager()
         
@@ -184,7 +184,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
         # Both should be stopped
         self.assertEqual(mock_metrics.stop_performance_monitoring_enhanced.call_count, 2)
     
-    def test_performance_session_long_operation_name(self):
+    def test_performance_session_long_operation_name(self) -> None:
         """Test truncation of long operation names (line 839)."""
         manager = CExtensionManager()
         
@@ -207,7 +207,7 @@ class TestPerformanceSessionContextManager(unittest.TestCase):
 class TestOtherContextManagers(unittest.TestCase):
     """Test other context manager functionality."""
     
-    def test_query_analysis_context(self):
+    def test_query_analysis_context(self) -> None:
         """Test query analysis with threshold context."""
         manager = CExtensionManager()
         
@@ -226,7 +226,7 @@ class TestOtherContextManagers(unittest.TestCase):
             result = mock_analyzer.analyze_query_with_threshold("SELECT * FROM users", 0.8)
             self.assertIsNotNone(result)
     
-    def test_test_context_creation(self):
+    def test_test_context_creation(self) -> None:
         """Test test context creation for orchestrator."""
         manager = CExtensionManager()
         

@@ -26,6 +26,8 @@
 #include <stdlib.h>  /* For malloc, free */
 #include <string.h>  /* For strcpy, strncpy, strlen */
 #include <math.h>    /* For sqrt, fabs */
+#include <unistd.h>  /* For dup, dup2, close */
+#include <fcntl.h>   /* For open, O_WRONLY */
 
 // Platform-specific includes
 #ifdef MERCURY_MACOS
@@ -253,7 +255,30 @@ static int capture_stack_trace(StackFrame* frames, int max_frames) {
         return 0;
     }
     
-    if (unw_init_local(&cursor, &context) != 0) {
+    // Suppress libunwind warnings about invalid file descriptors
+    // This is a known issue when libunwind looks for debug symbols
+    int saved_stderr = -1;
+    int null_fd = -1;
+    if (getenv("SUPPRESS_LIBUNWIND_WARNINGS")) {
+        saved_stderr = dup(STDERR_FILENO);
+        null_fd = open("/dev/null", O_WRONLY);
+        if (null_fd >= 0) {
+            dup2(null_fd, STDERR_FILENO);
+        }
+    }
+    
+    int init_result = unw_init_local(&cursor, &context);
+    
+    // Restore stderr
+    if (saved_stderr >= 0) {
+        dup2(saved_stderr, STDERR_FILENO);
+        close(saved_stderr);
+    }
+    if (null_fd >= 0) {
+        close(null_fd);
+    }
+    
+    if (init_result != 0) {
         return 0;
     }
     

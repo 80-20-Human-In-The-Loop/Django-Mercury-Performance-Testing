@@ -22,7 +22,7 @@ from django_mercury.python_bindings.monitor import (
 class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     """Test DjangoPerformanceAPITestCase functionality."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoPerformanceAPITestCase()
         
@@ -52,12 +52,12 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.mock_monitor = Mock(spec=EnhancedPerformanceMonitor)
         self.mock_monitor.metrics = self.mock_metrics
     
-    def test_test_case_inheritance(self):
+    def test_test_case_inheritance(self) -> None:
         """Test that DjangoPerformanceAPITestCase inherits from APITestCase."""
         from rest_framework.test import APITestCase
         self.assertIsInstance(self.test_case, APITestCase)
     
-    def test_assert_performance_success(self):
+    def test_assert_performance_success(self) -> None:
         """Test assertPerformance with successful performance metrics."""
         # Mock the monitor's assert_performance method
         self.mock_monitor.assert_performance = Mock()
@@ -74,7 +74,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
             100.0, 20.0, 5, 0.7
         )
     
-    def test_assert_performance_failure(self):
+    def test_assert_performance_failure(self) -> None:
         """Test assertPerformance with failing performance metrics."""
         # Mock the monitor to raise AssertionError
         self.mock_monitor.assert_performance = Mock(side_effect=AssertionError("Performance failed"))
@@ -84,7 +84,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Performance failed", str(context.exception))
     
-    def test_assert_performance_failure_with_custom_message(self):
+    def test_assert_performance_failure_with_custom_message(self) -> None:
         """Test assertPerformance with custom failure message."""
         self.mock_monitor.assert_performance = Mock(side_effect=AssertionError("Response time exceeded"))
         
@@ -94,21 +94,21 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.assertIn("Custom test failed", str(context.exception))
         self.assertIn("Response time exceeded", str(context.exception))
     
-    def test_assert_response_time_less_success_with_monitor(self):
+    def test_assert_response_time_less_success_with_monitor(self) -> None:
         """Test assertResponseTimeLess with monitor object (success)."""
         self.mock_metrics.response_time = 50.0
         
         # Should not raise any exception
         self.test_case.assertResponseTimeLess(self.mock_monitor, 100.0)
     
-    def test_assert_response_time_less_success_with_metrics(self):
+    def test_assert_response_time_less_success_with_metrics(self) -> None:
         """Test assertResponseTimeLess with metrics object (success)."""
         self.mock_metrics.response_time = 75.0
         
         # Should not raise any exception
         self.test_case.assertResponseTimeLess(self.mock_metrics, 100.0)
     
-    def test_assert_response_time_less_failure(self):
+    def test_assert_response_time_less_failure(self) -> None:
         """Test assertResponseTimeLess with failing response time."""
         self.mock_metrics.response_time = 150.0
         
@@ -117,7 +117,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Response time 150.00ms is not less than 100.0ms", str(context.exception))
     
-    def test_assert_response_time_less_failure_with_message(self):
+    def test_assert_response_time_less_failure_with_message(self) -> None:
         """Test assertResponseTimeLess with custom failure message."""
         self.mock_metrics.response_time = 150.0
         
@@ -126,14 +126,14 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("API too slow", str(context.exception))
     
-    def test_assert_memory_less_success(self):
+    def test_assert_memory_less_success(self) -> None:
         """Test assertMemoryLess with successful memory usage."""
         self.mock_metrics.memory_usage = 15.0
         
         # Should not raise any exception
         self.test_case.assertMemoryLess(self.mock_monitor, 20.0)
     
-    def test_assert_memory_less_failure(self):
+    def test_assert_memory_less_failure(self) -> None:
         """Test assertMemoryLess with failing memory usage."""
         self.mock_metrics.memory_usage = 25.0
         
@@ -142,14 +142,14 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Memory usage 25.00MB is not less than 20.0MB", str(context.exception))
     
-    def test_assert_queries_less_success(self):
+    def test_assert_queries_less_success(self) -> None:
         """Test assertQueriesLess with successful query count."""
         self.mock_metrics.query_count = 3
         
         # Should not raise any exception
         self.test_case.assertQueriesLess(self.mock_monitor, 5)
     
-    def test_assert_queries_less_failure(self):
+    def test_assert_queries_less_failure(self) -> None:
         """Test assertQueriesLess with failing query count."""
         self.mock_metrics.query_count = 8
         
@@ -158,21 +158,21 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Query count 8 is not less than 5", str(context.exception))
     
-    def test_assert_queries_less_no_query_count_attribute(self):
+    def test_assert_queries_less_no_query_count_attribute(self) -> None:
         """Test assertQueriesLess when metrics has no query_count attribute."""
         delattr(self.mock_metrics, 'query_count')
         
         # Should use default value of 0 and pass
         self.test_case.assertQueriesLess(self.mock_monitor, 5)
     
-    def test_assert_performance_fast_success(self):
+    def test_assert_performance_fast_success(self) -> None:
         """Test assertPerformanceFast with fast performance."""
         self.mock_metrics.is_fast = True
         
         # Should not raise any exception
         self.test_case.assertPerformanceFast(self.mock_monitor)
     
-    def test_assert_performance_fast_failure(self):
+    def test_assert_performance_fast_failure(self) -> None:
         """Test assertPerformanceFast with non-fast performance."""
         self.mock_metrics.is_fast = False
         self.mock_metrics.response_time = 250.0
@@ -182,14 +182,14 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Performance is not fast: 250.00ms", str(context.exception))
     
-    def test_assert_performance_not_slow_success(self):
+    def test_assert_performance_not_slow_success(self) -> None:
         """Test assertPerformanceNotSlow with non-slow performance."""
         self.mock_metrics.is_slow = False
         
         # Should not raise any exception
         self.test_case.assertPerformanceNotSlow(self.mock_monitor)
     
-    def test_assert_performance_not_slow_failure(self):
+    def test_assert_performance_not_slow_failure(self) -> None:
         """Test assertPerformanceNotSlow with slow performance."""
         self.mock_metrics.is_slow = True
         self.mock_metrics.response_time = 750.0
@@ -199,14 +199,14 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Performance is slow: 750.00ms", str(context.exception))
     
-    def test_assert_memory_efficient_success(self):
+    def test_assert_memory_efficient_success(self) -> None:
         """Test assertMemoryEfficient with efficient memory usage."""
         self.mock_metrics.is_memory_intensive = False
         
         # Should not raise any exception
         self.test_case.assertMemoryEfficient(self.mock_monitor)
     
-    def test_assert_memory_efficient_failure(self):
+    def test_assert_memory_efficient_failure(self) -> None:
         """Test assertMemoryEfficient with intensive memory usage."""
         self.mock_metrics.is_memory_intensive = True
         self.mock_metrics.memory_usage = 128.0
@@ -216,14 +216,14 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Memory usage is intensive: 128.00MB", str(context.exception))
     
-    def test_assert_no_n_plus_one_success(self):
+    def test_assert_no_n_plus_one_success(self) -> None:
         """Test assertNoNPlusOne with no N+1 issues."""
         self.mock_django_issues.has_n_plus_one = False
         
         # Should not raise any exception
         self.test_case.assertNoNPlusOne(self.mock_monitor)
     
-    def test_assert_no_n_plus_one_failure(self):
+    def test_assert_no_n_plus_one_failure(self) -> None:
         """Test assertNoNPlusOne with N+1 issues detected."""
         self.mock_django_issues.has_n_plus_one = True
         
@@ -232,21 +232,21 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("N+1 query pattern detected", str(context.exception))
     
-    def test_assert_no_n_plus_one_no_django_issues(self):
+    def test_assert_no_n_plus_one_no_django_issues(self) -> None:
         """Test assertNoNPlusOne when metrics has no django_issues attribute."""
         delattr(self.mock_metrics, 'django_issues')
         
         # Should not raise any exception when attribute is missing
         self.test_case.assertNoNPlusOne(self.mock_monitor)
     
-    def test_assert_good_cache_performance_success(self):
+    def test_assert_good_cache_performance_success(self) -> None:
         """Test assertGoodCachePerformance with good cache ratio."""
         self.mock_metrics.cache_hit_ratio = 0.85
         
         # Should not raise any exception
         self.test_case.assertGoodCachePerformance(self.mock_monitor, min_hit_ratio=0.7)
     
-    def test_assert_good_cache_performance_failure(self):
+    def test_assert_good_cache_performance_failure(self) -> None:
         """Test assertGoodCachePerformance with poor cache ratio."""
         self.mock_metrics.cache_hit_ratio = 0.5
         
@@ -255,7 +255,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         
         self.assertIn("Cache hit ratio 50.0% is below 70.0%", str(context.exception))
     
-    def test_assert_good_cache_performance_no_cache_attribute(self):
+    def test_assert_good_cache_performance_no_cache_attribute(self) -> None:
         """Test assertGoodCachePerformance when metrics has no cache_hit_ratio attribute."""
         delattr(self.mock_metrics, 'cache_hit_ratio')
         
@@ -263,7 +263,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.test_case.assertGoodCachePerformance(self.mock_monitor)
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
-    def test_monitor_django_view(self, mock_monitor_function):
+    def test_monitor_django_view(self, mock_monitor_function) -> None:
         """Test monitor_django_view method."""
         mock_monitor_instance = Mock()
         mock_monitor_function.return_value = mock_monitor_instance
@@ -274,7 +274,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.assertEqual(result, mock_monitor_instance)
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_model')
-    def test_monitor_django_model(self, mock_monitor_function):
+    def test_monitor_django_model(self, mock_monitor_function) -> None:
         """Test monitor_django_model method."""
         mock_monitor_instance = Mock()
         mock_monitor_function.return_value = mock_monitor_instance
@@ -285,7 +285,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.assertEqual(result, mock_monitor_instance)
     
     @patch('django_mercury.python_bindings.django_integration.monitor_serializer')
-    def test_monitor_serializer(self, mock_monitor_function):
+    def test_monitor_serializer(self, mock_monitor_function) -> None:
         """Test monitor_serializer method."""
         mock_monitor_instance = Mock()
         mock_monitor_function.return_value = mock_monitor_instance
@@ -296,7 +296,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.assertEqual(result, mock_monitor_instance)
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
-    def test_measure_django_view_get(self, mock_monitor_function):
+    def test_measure_django_view_get(self, mock_monitor_function) -> None:
         """Test measure_django_view with GET request."""
         # Setup mock monitor and client
         mock_monitor = Mock()
@@ -319,7 +319,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.assertEqual(self.mock_metrics._response, mock_response)
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
-    def test_measure_django_view_post_with_data(self, mock_monitor_function):
+    def test_measure_django_view_post_with_data(self, mock_monitor_function) -> None:
         """Test measure_django_view with POST request and data."""
         # Setup mock monitor
         mock_monitor = Mock()
@@ -346,7 +346,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.assertEqual(result, self.mock_metrics)
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
-    def test_measure_django_view_custom_operation_name(self, mock_monitor_function):
+    def test_measure_django_view_custom_operation_name(self, mock_monitor_function) -> None:
         """Test measure_django_view with custom operation name."""
         mock_monitor = Mock()
         mock_monitor.__enter__ = Mock(return_value=mock_monitor)
@@ -365,7 +365,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_run_comprehensive_analysis_basic(self, mock_logger, mock_monitor_function):
+    def test_run_comprehensive_analysis_basic(self, mock_logger, mock_monitor_function) -> None:
         """Test run_comprehensive_analysis with basic parameters."""
         # Setup mock monitor
         mock_monitor = Mock()
@@ -413,7 +413,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_run_comprehensive_analysis_with_test_context(self, mock_logger, mock_monitor_function):
+    def test_run_comprehensive_analysis_with_test_context(self, mock_logger, mock_monitor_function) -> None:
         """Test run_comprehensive_analysis with test context."""
         mock_monitor = Mock()
         mock_monitor.__enter__ = Mock(return_value=mock_monitor)
@@ -437,7 +437,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_run_comprehensive_analysis_with_educational_guidance(self, mock_logger, mock_monitor_function):
+    def test_run_comprehensive_analysis_with_educational_guidance(self, mock_logger, mock_monitor_function) -> None:
         """Test run_comprehensive_analysis with educational guidance enabled."""
         mock_monitor = Mock()
         mock_monitor.__enter__ = Mock(return_value=mock_monitor)
@@ -463,7 +463,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
     @patch('django_mercury.python_bindings.django_integration.logger')
     @patch('django_mercury.python_bindings.django_integration.colors')
-    def test_run_comprehensive_analysis_n_plus_one_detection(self, mock_colors, mock_logger, mock_monitor_function):
+    def test_run_comprehensive_analysis_n_plus_one_detection(self, mock_colors, mock_logger, mock_monitor_function) -> None:
         """Test run_comprehensive_analysis with N+1 detection."""
         # Setup N+1 detection
         mock_n_plus_one_analysis = Mock()
@@ -497,7 +497,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
         self.assertIn("N+1 query pattern detected", mock_logger.warning.call_args[0][0])
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
-    def test_run_comprehensive_analysis_no_print(self, mock_monitor_function):
+    def test_run_comprehensive_analysis_no_print(self, mock_monitor_function) -> None:
         """Test run_comprehensive_analysis with print_analysis=False."""
         mock_monitor = Mock()
         mock_monitor.__enter__ = Mock(return_value=mock_monitor)
@@ -517,7 +517,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
             # Should not print anything
             mock_print.assert_not_called()
     
-    def test_create_enhanced_performance_dashboard_with_scoring(self):
+    def test_create_enhanced_performance_dashboard_with_scoring(self) -> None:
         """Test create_enhanced_performance_dashboard_with_scoring."""
         self.mock_metrics.get_performance_report_with_scoring = Mock(return_value="Scoring report")
         
@@ -530,7 +530,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.colors')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_create_enhanced_dashboard_basic(self, mock_logger, mock_colors):
+    def test_create_enhanced_dashboard_basic(self, mock_logger, mock_colors) -> None:
         """Test create_enhanced_dashboard with basic metrics."""
         # Mock colors methods
         mock_colors.colorize = Mock(return_value="colored text")
@@ -552,7 +552,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.colors')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_create_enhanced_dashboard_with_response_data(self, mock_logger, mock_colors):
+    def test_create_enhanced_dashboard_with_response_data(self, mock_logger, mock_colors) -> None:
         """Test create_enhanced_dashboard with response data."""
         # Add test result with response data
         mock_test_result = Mock()
@@ -571,7 +571,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.colors')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_create_enhanced_dashboard_with_django_issues(self, mock_logger, mock_colors):
+    def test_create_enhanced_dashboard_with_django_issues(self, mock_logger, mock_colors) -> None:
         """Test create_enhanced_dashboard with Django issues."""
         # Setup Django issues
         self.mock_django_issues.has_issues = True
@@ -596,7 +596,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.colors')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_create_enhanced_dashboard_response_size_calculation(self, mock_logger, mock_colors):
+    def test_create_enhanced_dashboard_response_size_calculation(self, mock_logger, mock_colors) -> None:
         """Test create_enhanced_dashboard response size calculation."""
         # Test with large response (>1KB)
         large_data = {"data": "x" * 2000}  # More than 1KB
@@ -616,7 +616,7 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_integration.colors')
     @patch('django_mercury.python_bindings.django_integration.logger')
-    def test_create_enhanced_dashboard_exception_handling(self, mock_logger, mock_colors):
+    def test_create_enhanced_dashboard_exception_handling(self, mock_logger, mock_colors) -> None:
         """Test create_enhanced_dashboard handles exceptions in response processing."""
         # Setup test result that will cause exception
         mock_test_result = Mock()
@@ -638,11 +638,11 @@ class TestDjangoPerformanceAPITestCase(unittest.TestCase):
 class TestAssertionEdgeCases(unittest.TestCase):
     """Test edge cases and error conditions for assertion methods."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoPerformanceAPITestCase()
     
-    def test_assertion_with_equal_values(self):
+    def test_assertion_with_equal_values(self) -> None:
         """Test assertions when values are exactly equal to thresholds."""
         mock_metrics = Mock()
         mock_metrics.response_time = 100.0  # Exactly equal to threshold
@@ -662,7 +662,7 @@ class TestAssertionEdgeCases(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.test_case.assertQueriesLess(mock_monitor, 5)
     
-    def test_assertion_with_none_values(self):
+    def test_assertion_with_none_values(self) -> None:
         """Test assertions with None values in metrics."""
         mock_metrics = Mock()
         mock_metrics.response_time = None
@@ -676,7 +676,7 @@ class TestAssertionEdgeCases(unittest.TestCase):
         with self.assertRaises((AssertionError, TypeError)):
             self.test_case.assertResponseTimeLess(mock_monitor, 100.0)
     
-    def test_assertion_with_negative_values(self):
+    def test_assertion_with_negative_values(self) -> None:
         """Test assertions with negative values."""
         mock_metrics = Mock()
         mock_metrics.response_time = -10.0
@@ -689,7 +689,7 @@ class TestAssertionEdgeCases(unittest.TestCase):
         self.test_case.assertResponseTimeLess(mock_monitor, 100.0)
         self.test_case.assertMemoryLess(mock_monitor, 20.0)
     
-    def test_assertion_with_zero_values(self):
+    def test_assertion_with_zero_values(self) -> None:
         """Test assertions with zero values."""
         mock_metrics = Mock()
         mock_metrics.response_time = 0.0
@@ -713,12 +713,12 @@ class TestAssertionEdgeCases(unittest.TestCase):
 class TestIntegrationScenarios(unittest.TestCase):
     """Test integration scenarios combining multiple features."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoPerformanceAPITestCase()
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
-    def test_full_workflow_scenario(self, mock_monitor_function):
+    def test_full_workflow_scenario(self, mock_monitor_function) -> None:
         """Test a complete workflow scenario with multiple assertions."""
         # Setup mock monitor and metrics
         mock_metrics = Mock()
@@ -764,7 +764,7 @@ class TestIntegrationScenarios(unittest.TestCase):
         )
     
     @patch('django_mercury.python_bindings.django_integration.monitor_django_view')
-    def test_performance_failure_scenario(self, mock_monitor_function):
+    def test_performance_failure_scenario(self, mock_monitor_function) -> None:
         """Test scenario where performance metrics fail various assertions."""
         # Setup mock monitor with poor performance
         mock_metrics = Mock()

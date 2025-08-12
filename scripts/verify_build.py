@@ -34,7 +34,7 @@ def check_environment() -> Dict[str, str]:
 def find_library_files() -> Dict[str, List[Path]]:
     """Find all library files in the project."""
     root = Path(__file__).parent.parent
-    libraries = {
+    libraries: Dict[str, List[Path]] = {
         'libquery_analyzer': [],
         'libmetrics_engine': [],
         'libtest_orchestrator': [],

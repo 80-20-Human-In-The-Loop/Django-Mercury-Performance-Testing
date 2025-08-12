@@ -20,17 +20,17 @@ from django_mercury.python_bindings.monitor import EnhancedPerformanceMonitor
 class TestErrorReporting(unittest.TestCase):
     """Test error reporting functionality in Mercury framework."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         # Ensure we're testing with fallback implementation to avoid C library issues
         self.patcher = patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
         self.patcher.start()
     
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up test fixtures."""
         self.patcher.stop()
     
-    def test_file_name_in_error_message_with_context(self):
+    def test_file_name_in_error_message_with_context(self) -> None:
         """Test that error messages show correct file name when test context is set."""
         test_file = "/home/mathew/python-3.10.12-Projects/EduLite/backend/EduLite/users/tests/views/test_UserRetrieveView.py"
         test_line = 262
@@ -53,7 +53,7 @@ class TestErrorReporting(unittest.TestCase):
         self.assertIn("test_bulk_user_retrieval_performance", error_message)
         self.assertIn("📁", error_message)  # File icon
         
-    def test_file_name_with_relative_path(self):
+    def test_file_name_with_relative_path(self) -> None:
         """Test that relative paths are displayed correctly."""
         current_file = inspect.getfile(self.__class__)
         test_line = inspect.currentframe().f_lineno + 5  # Line where context manager starts
@@ -75,7 +75,7 @@ class TestErrorReporting(unittest.TestCase):
         self.assertIn(str(test_line), error_message)
         self.assertIn("test_file_name_with_relative_path", error_message)
         
-    def test_error_message_without_context_fallback(self):
+    def test_error_message_without_context_fallback(self) -> None:
         """Test that error messages work even without test context (no context set)."""
         with self.assertRaises(AssertionError) as context:
             with EnhancedPerformanceMonitor("test_operation") as monitor:
@@ -90,7 +90,7 @@ class TestErrorReporting(unittest.TestCase):
         self.assertIn("Performance thresholds exceeded", error_message)
         self.assertIn("Response time", error_message)
         
-    def test_multiple_threshold_violations(self):
+    def test_multiple_threshold_violations(self) -> None:
         """Test error messages with multiple threshold violations."""
         test_file = __file__
         test_line = inspect.currentframe().f_lineno + 5
@@ -116,7 +116,7 @@ class TestErrorReporting(unittest.TestCase):
         found_violations = sum(1 for indicator in violation_indicators if indicator in error_message)
         self.assertGreaterEqual(found_violations, 1, "Should report at least one threshold violation")
         
-    def test_file_path_normalization(self):
+    def test_file_path_normalization(self) -> None:
         """Test that file paths are normalized correctly across different systems."""
         windows_path = "C:\\Users\\test\\project\\tests\\test_file.py"
         test_line = 100
@@ -139,7 +139,7 @@ class TestErrorReporting(unittest.TestCase):
         )
         self.assertIn("test_windows_path", error_message)
         
-    def test_red_coloring_applied(self):
+    def test_red_coloring_applied(self) -> None:
         """Test that red coloring is applied to error messages."""
         test_file = __file__
         test_line = inspect.currentframe().f_lineno + 5
@@ -166,7 +166,7 @@ class TestErrorReporting(unittest.TestCase):
 class TestErrorReportingFixtures(unittest.TestCase):
     """Test error reporting with fixture files to simulate different scenarios."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Create temporary test fixture files and disable C extensions."""
         # Disable C extensions to avoid library issues
         self.patcher = patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
@@ -182,17 +182,17 @@ def test_mock_performance_test():
     pass
 
 class MockTestClass:
-    def test_mock_method(self):
+    def test_mock_method(self) -> None:
         pass
 """)
     
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up temporary files."""
         self.patcher.stop()
         import shutil
         shutil.rmtree(self.temp_dir)
     
-    def test_fixture_file_in_error_message(self):
+    def test_fixture_file_in_error_message(self) -> None:
         """Test error reporting with fixture files."""
         with self.assertRaises(AssertionError) as context:
             with EnhancedPerformanceMonitor("fixture_test") as monitor:
@@ -212,17 +212,17 @@ class MockTestClass:
 class TestEdgeCasesAndErrorConditions(unittest.TestCase):
     """Test edge cases and error conditions in error reporting."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         # Disable C extensions to avoid library issues
         self.patcher = patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
         self.patcher.start()
     
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up test fixtures."""
         self.patcher.stop()
     
-    def test_error_reporting_with_invalid_file_path(self):
+    def test_error_reporting_with_invalid_file_path(self) -> None:
         """Test error reporting with non-existent file path."""
         invalid_path = "/non/existent/path/test_file.py"
         test_line = 999 
@@ -242,7 +242,7 @@ class TestEdgeCasesAndErrorConditions(unittest.TestCase):
         self.assertIn("999", error_message)
         self.assertIn("test_invalid_path", error_message)
     
-    def test_memory_threshold_violation_reporting(self):
+    def test_memory_threshold_violation_reporting(self) -> None:
         """Test specific memory threshold violation reporting."""
         with self.assertRaises(AssertionError) as context:
             with EnhancedPerformanceMonitor("memory_test") as monitor:
@@ -257,7 +257,7 @@ class TestEdgeCasesAndErrorConditions(unittest.TestCase):
         self.assertIn("Memory usage", error_message)
         self.assertIn("MB", error_message)
     
-    def test_no_thresholds_set_no_error(self):
+    def test_no_thresholds_set_no_error(self) -> None:
         """Test that no error is raised when no thresholds are violated."""
         # This should NOT raise an AssertionError
         try:

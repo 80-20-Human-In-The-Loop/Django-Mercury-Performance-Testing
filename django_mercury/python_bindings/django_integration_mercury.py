@@ -153,7 +153,7 @@ class TestExecutionSummary:
 class MercuryThresholdOverride:
     """Context manager for temporarily overriding performance thresholds."""
 
-    def __init__(self, test_instance):
+    def __init__(self, test_instance) -> None:
         self.test_instance = test_instance
         self.original_thresholds = None
         self.override_thresholds = None
@@ -163,13 +163,13 @@ class MercuryThresholdOverride:
         self.override_thresholds = thresholds
         return self
 
-    def __enter__(self):
+    def __enter__(self) -> "Self":
         """Apply the threshold overrides."""
         self.original_thresholds = self.test_instance._per_test_thresholds
         self.test_instance._per_test_thresholds = self.override_thresholds
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Restore the original thresholds."""
         self.test_instance._per_test_thresholds = self.original_thresholds
 
@@ -221,7 +221,7 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
     _test_failures: List[str] = []
     _optimization_recommendations: List[str] = []
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._operation_profiles = self._initialize_operation_profiles()
         self._test_context: Dict[str, Any] = {}
@@ -606,11 +606,23 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                     console=self._educational_ui.console,
                     progress_tracker=self._educational_progress
                 )
+                # Determine interactive mode based on multiple factors
+                interactive = True
+                if os.environ.get('MERCURY_AGENT_MODE') == 'true':
+                    interactive = False
+                elif os.environ.get('MERCURY_NON_INTERACTIVE', '').lower() in ('1', 'true', 'yes'):
+                    interactive = False
+                elif os.environ.get('CI') or os.environ.get('CONTINUOUS_INTEGRATION'):
+                    interactive = False
+                # But if educational mode is explicitly set, respect that
+                elif os.environ.get('MERCURY_EDU') == '1' and os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true':
+                    interactive = True
+                    
                 self._educational_monitor = EducationalMonitor(
                     console=self._educational_ui.console,
                     quiz_system=self._educational_quiz,
                     progress_tracker=self._educational_progress,
-                    interactive_mode=not os.environ.get('MERCURY_AGENT_MODE') == 'true'
+                    interactive_mode=interactive
                 )
             
             # Check for various learning opportunities based on metrics
@@ -818,9 +830,19 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                                 
                                 # Create educational components
                                 ui = InteractiveUI()
+                                # Check if we should be interactive
+                                interactive = True
+                                if os.environ.get('MERCURY_NON_INTERACTIVE', '').lower() in ('1', 'true', 'yes'):
+                                    interactive = False
+                                elif os.environ.get('CI') or os.environ.get('CONTINUOUS_INTEGRATION'):
+                                    interactive = False
+                                # Educational mode override
+                                elif os.environ.get('MERCURY_EDU') == '1':
+                                    interactive = True
+                                    
                                 monitor = EducationalMonitor(
                                     console=ui.console,
-                                    interactive_mode=True
+                                    interactive_mode=interactive
                                 )
                                 
                                 # Handle the performance issue educationally
@@ -1177,7 +1199,7 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
         Set custom performance thresholds for all tests in this class.
 
         Args:
-            thresholds: Dictionary with keys:
+            thresholds: Dict[str, Any]ionary with keys:
                 - response_time_ms: Maximum response time in milliseconds
                 - query_count_max: Maximum number of database queries
                 - memory_overhead_mb: Maximum memory overhead in MB
@@ -1199,14 +1221,14 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
             )
             logger.info(f"   • {key}: {value}{unit}")
 
-    def set_test_performance_thresholds(self, thresholds: Dict[str, Union[int, float]]):
+    def set_test_performance_thresholds(self, thresholds: Dict[str, Union[int, float]]) -> None:
         """
         Set custom performance thresholds for the current test only.
         These thresholds override class-wide thresholds for this test only.
         After the test completes, thresholds revert to class-wide configuration.
 
         Args:
-            thresholds: Dictionary with keys:
+            thresholds: Dict[str, Any]ionary with keys:
                 - response_time_ms: Maximum response time in milliseconds
                 - query_count_max: Maximum number of database queries
                 - memory_overhead_mb: Maximum memory overhead in MB

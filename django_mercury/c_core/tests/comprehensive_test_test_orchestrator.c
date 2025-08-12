@@ -23,7 +23,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include "../common.h"
-#include "simple_tests.h"
+#include "test_enhanced.h"
 
 // Global test counters for the enhanced test framework
 int total_tests = 0;
@@ -32,6 +32,9 @@ int failed_tests = 0;
 
 // Quiet mode variables
 int quiet_mode = 0;
+
+// Test context for enhanced error messages
+DEFINE_TEST_CONTEXT();
 int test_assertions = 0;
 int test_passed = 0;
 int test_failed = 0;

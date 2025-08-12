@@ -113,10 +113,10 @@ class DjangoQueryTracker:
             should_patch = True  # Default to patching if we can't determine DEBUG mode
         
         if should_patch and not hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
-            django.db.backends.utils.CursorWrapper._original_execute = (
+            setattr(django.db.backends.utils.CursorWrapper, '_original_execute',
                 django.db.backends.utils.CursorWrapper.execute
             )
-            django.db.backends.utils.CursorWrapper._original_executemany = (
+            setattr(django.db.backends.utils.CursorWrapper, '_original_executemany',
                 django.db.backends.utils.CursorWrapper.executemany
             )
 
@@ -158,8 +158,8 @@ class DjangoQueryTracker:
                     )
                     raise
 
-            django.db.backends.utils.CursorWrapper.execute = tracked_execute
-            django.db.backends.utils.CursorWrapper.executemany = tracked_executemany
+            setattr(django.db.backends.utils.CursorWrapper, 'execute', tracked_execute)
+            setattr(django.db.backends.utils.CursorWrapper, 'executemany', tracked_executemany)
 
     def stop(self) -> None:
         """
@@ -465,7 +465,7 @@ class PerformanceContextManager:
         print(perf.get_optimization_report())
     """
 
-    def __init__(self, operation_name: str):
+    def __init__(self, operation_name: str) -> None:
         """
         Initializes the context manager.
 

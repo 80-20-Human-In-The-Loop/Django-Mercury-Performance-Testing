@@ -19,7 +19,7 @@ T = TypeVar("T")
 class ThreadSafeCounter:
     """Thread-safe counter implementation."""
 
-    def __init__(self, initial_value: int = 0):
+    def __init__(self, initial_value: int = 0) -> None:
         """Initialize the counter with an optional initial value."""
         self._value = initial_value
         self._lock = threading.Lock()
@@ -51,7 +51,7 @@ class ThreadSafeCounter:
 class ThreadSafeDict(Generic[T]):
     """Thread-safe dictionary wrapper."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the thread-safe dictionary."""
         self._dict: Dict[str, T] = {}
         self._lock = threading.RLock()  # Use RLock for re-entrant locking
@@ -108,7 +108,7 @@ class ThreadSafeDict(Generic[T]):
 class ThreadLocalStorage(Generic[T]):
     """Thread-local storage wrapper for thread-specific data."""
 
-    def __init__(self, factory: Optional[Callable[[], T]] = None):
+    def __init__(self, factory: Optional[Callable[[], T]] = None) -> None:
         """
         Initialize thread-local storage.
 
@@ -176,7 +176,7 @@ def synchronized(lock_attr: str = "_lock"):
 
     Example:
         class MyClass:
-            def __init__(self):
+            def __init__(self) -> None:
                 self._lock = threading.Lock()
 
             @synchronized()
@@ -212,7 +212,7 @@ class SingletonMeta(type):
             pass
     """
 
-    _instances = {}
+    _instances: Dict[type, Any] = {}
     _lock = threading.Lock()
 
     def __call__(cls, *args, **kwargs):

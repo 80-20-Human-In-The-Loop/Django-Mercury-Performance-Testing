@@ -75,11 +75,11 @@ def create_mock_path(target_platform: str):
                 ]
                 return any(str_path.startswith(p) for p in linux_paths)
         
-        def is_dir(self):
+        def is_dir(self) -> bool:
             """Mock is_dir check."""
             return self.exists()
         
-        def is_file(self):
+        def is_file(self) -> bool:
             """Mock is_file check."""
             # For our mocking purposes, treat existing paths as files
             return self.exists() and not str(self).endswith('/')
@@ -168,17 +168,17 @@ class PlatformMocker:
     - Library loading behavior
     """
     
-    def __init__(self, target_platform: str):
+    def __init__(self, target_platform: str) -> None:
         """Initialize platform mocker.
         
         Args:
             target_platform: 'Windows', 'Darwin', or 'Linux'
         """
         self.target = target_platform
-        self.patches = []
-        self.original_values = {}
+        self.patches: List[Any] = []
+        self.original_values: Dict[str, Any] = {}
         
-    def __enter__(self):
+    def __enter__(self) -> "Self":
         """Enter context manager and apply mocks."""
         if self.target == "Windows":
             self._mock_windows()
@@ -188,7 +188,7 @@ class PlatformMocker:
             self._mock_linux()
         return self
             
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit context manager and clean up mocks."""
         for p in reversed(self.patches):
             p.stop()
@@ -415,22 +415,22 @@ class PlatformMocker:
 class CIMocker:
     """Mock CI/CD environment variables and paths."""
     
-    def __init__(self, ci_type: str = 'github_actions'):
+    def __init__(self, ci_type: str = 'github_actions') -> None:
         """Initialize CI mocker.
         
         Args:
             ci_type: Type of CI to mock ('github_actions', 'travis', 'jenkins')
         """
         self.ci_type = ci_type
-        self.patches = []
+        self.patches: List[Any] = []
         
-    def __enter__(self):
+    def __enter__(self) -> "Self":
         """Enter context and apply CI mocks."""
         if self.ci_type == 'github_actions':
             self._mock_github_actions()
         return self
             
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit context and clean up."""
         for p in reversed(self.patches):
             p.stop()

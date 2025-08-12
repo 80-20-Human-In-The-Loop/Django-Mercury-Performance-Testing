@@ -43,7 +43,7 @@ def patch_library_loading(side_effect):
 class TestErrorHandling(unittest.TestCase):
     """Test error handling and recovery in c_bindings.py."""
     
-    def test_no_c_extensions_fallback_warning(self):
+    def test_no_c_extensions_fallback_warning(self) -> None:
         """Test fallback warning when no C extensions load (lines 400-406)."""
         with mock_library_loading_failure():
             manager = CExtensionManager()
@@ -53,7 +53,7 @@ class TestErrorHandling(unittest.TestCase):
             self.assertIsNone(manager.metrics_engine)
             self.assertIsNone(manager.test_orchestrator)
     
-    def test_library_not_found_error(self):
+    def test_library_not_found_error(self) -> None:
         """Test library not found error handling (lines 477-485)."""
         manager = CExtensionManager()
         
@@ -67,7 +67,7 @@ class TestErrorHandling(unittest.TestCase):
             self.assertFalse(lib_info.is_loaded)
             self.assertIn("Failed to import", lib_info.error_message)
     
-    def test_import_error_handling(self):
+    def test_import_error_handling(self) -> None:
         """Test Python import error handling (lines 456-460)."""
         manager = CExtensionManager()
         
@@ -81,7 +81,7 @@ class TestErrorHandling(unittest.TestCase):
             self.assertFalse(lib_info.is_loaded)
             self.assertIsNotNone(lib_info.error_message)
     
-    def test_missing_function_signatures(self):
+    def test_missing_function_signatures(self) -> None:
         """Test handling of missing function signatures (lines 511-541)."""
         manager = CExtensionManager()
         
@@ -100,7 +100,7 @@ class TestErrorHandling(unittest.TestCase):
                 # Should not raise AttributeError
                 self.fail("Should handle missing functions gracefully")
     
-    def test_cleanup_errors(self):
+    def test_cleanup_errors(self) -> None:
         """Test cleanup error handling (lines 876-885)."""
         manager = CExtensionManager()
         
@@ -117,7 +117,7 @@ class TestErrorHandling(unittest.TestCase):
         except Exception as e:
             self.fail(f"Cleanup raised exception: {e}")
     
-    def test_partial_initialization_success(self):
+    def test_partial_initialization_success(self) -> None:
         """Test when only some libraries load successfully."""
         manager = CExtensionManager()
         
@@ -130,7 +130,7 @@ class TestErrorHandling(unittest.TestCase):
             # Note: CExtensionManager loads libraries in __init__
             self.assertIsNotNone(manager)  # Manager still created even with partial loads
     
-    def test_memory_allocation_failure(self):
+    def test_memory_allocation_failure(self) -> None:
         """Test memory allocation failure handling."""
         manager = CExtensionManager()
         
@@ -143,7 +143,7 @@ class TestErrorHandling(unittest.TestCase):
             
             self.assertFalse(lib_info.is_loaded)
     
-    def test_permission_denied_error(self):
+    def test_permission_denied_error(self) -> None:
         """Test permission denied error handling."""
         manager = CExtensionManager()
         
@@ -155,7 +155,7 @@ class TestErrorHandling(unittest.TestCase):
             
             self.assertFalse(lib_info.is_loaded)
     
-    def test_corrupted_library_file(self):
+    def test_corrupted_library_file(self) -> None:
         """Test handling of corrupted library files."""
         manager = CExtensionManager()
         
@@ -174,7 +174,7 @@ class TestErrorHandling(unittest.TestCase):
             self.assertFalse(lib_info.is_loaded)
             self.assertIn("Failed to import", lib_info.error_message)
     
-    def test_version_mismatch_error(self):
+    def test_version_mismatch_error(self) -> None:
         """Test handling of version mismatch errors."""
         manager = CExtensionManager()
         
@@ -199,7 +199,7 @@ class TestErrorHandling(unittest.TestCase):
 class TestErrorRecovery(unittest.TestCase):
     """Test error recovery mechanisms."""
     
-    def test_fallback_to_pure_python(self):
+    def test_fallback_to_pure_python(self) -> None:
         """Test fallback to pure Python when C extensions fail."""
         with mock_library_loading_failure():
             manager = CExtensionManager()
@@ -209,7 +209,7 @@ class TestErrorRecovery(unittest.TestCase):
             self.assertIsNone(manager.metrics_engine)
             self.assertIsNone(manager.test_orchestrator)
     
-    def test_reinitialize_after_failure(self):
+    def test_reinitialize_after_failure(self) -> None:
         """Test reinitializing after initial failure."""
         # First attempt fails
         with mock_library_loading_failure():
@@ -224,7 +224,7 @@ class TestErrorRecovery(unittest.TestCase):
             # Libraries are loaded in __init__, but may still be None if mock doesn't configure them
             self.assertIsNotNone(manager2)  # Manager created successfully
     
-    def test_graceful_degradation(self):
+    def test_graceful_degradation(self) -> None:
         """Test graceful degradation when some features unavailable."""
         # Mock only metrics engine available
         mock_metrics = MagicMock()

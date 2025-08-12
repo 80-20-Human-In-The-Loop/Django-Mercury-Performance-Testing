@@ -51,7 +51,7 @@ class CPerformanceMonitor:
     Uses the actual C implementation when available, falls back to Python otherwise.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         try:
             # Try to use the actual C implementation
             import django_mercury._c_performance as c_performance
@@ -78,7 +78,7 @@ class CPerformanceMonitor:
     def get_metrics(self) -> Dict[str, Any]:
         return self._monitor.get_metrics()
 
-    def reset(self):
+    def reset(self) -> None:
         return self._monitor.reset()
     
     @property
@@ -94,7 +94,7 @@ class CMetricsEngine:
     Provides the same interface as PythonMetricsEngine.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Import the actual C extension
         import django_mercury._c_metrics as c_metrics
 
@@ -117,7 +117,7 @@ class CQueryAnalyzer:
     Provides the same interface as PythonQueryAnalyzer.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Import the actual C extension
         import django_mercury._c_analyzer as c_analyzer
 
@@ -134,7 +134,7 @@ class CTestOrchestrator:
     Provides the same interface as PythonTestOrchestrator.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Import the actual C extension
         import django_mercury._c_orchestrator as c_orchestrator
 

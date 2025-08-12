@@ -35,7 +35,7 @@ class TestTimeout(Exception):
 class TimedTextTestResult(unittest.TextTestResult):
     """Custom test result that tracks timing for each test."""
     
-    def __init__(self, stream, descriptions, verbosity, ci_mode=False):
+    def __init__(self, stream, descriptions, verbosity, ci_mode=False) -> None:
         super().__init__(stream, descriptions, verbosity)
         self.verbosity = verbosity  # Store verbosity for later use
         self.ci_mode = ci_mode  # CI-friendly output mode
@@ -161,7 +161,7 @@ class TimedTextTestRunner(unittest.TextTestRunner):
     
     resultclass = TimedTextTestResult
     
-    def __init__(self, timeout_seconds=5.0, ci_mode=False, **kwargs):
+    def __init__(self, timeout_seconds=5.0, ci_mode=False, **kwargs) -> None:
         super().__init__(**kwargs)
         self.timeout_seconds = timeout_seconds
         self.ci_mode = ci_mode
@@ -187,7 +187,7 @@ class TimedTextTestRunner(unittest.TextTestRunner):
             signal.alarm(0)
             signal.signal(signal.SIGALRM, old_handler)
     
-    def run(self, test):
+    def run(self, test) -> None:
         """Run the test suite with timing."""
         if not self.ci_mode:
             self.stream.write("\n[START] Starting Timed Test Run\n")

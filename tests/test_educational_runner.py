@@ -19,12 +19,12 @@ from django_mercury.python_bindings.educational_monitor import EducationalMonito
 class TestEducationalRunner(unittest.TestCase):
     """Test the educational test runner functionality."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         # Clean environment
         os.environ.pop('MERCURY_EDUCATIONAL_MODE', None)
         
-    def test_educational_mode_detection(self):
+    def test_educational_mode_detection(self) -> None:
         """Test that --edu flag is properly detected."""
         # Simulate --edu flag in argv
         original_argv = sys.argv.copy()
@@ -47,7 +47,7 @@ class TestEducationalRunner(unittest.TestCase):
             sys.argv = original_argv
             os.environ.pop('MERCURY_EDUCATIONAL_MODE', None)
     
-    def test_educational_mode_disabled(self):
+    def test_educational_mode_disabled(self) -> None:
         """Test that educational mode is disabled without --edu flag."""
         # Create runner without --edu flag
         runner = EducationalTestRunner(verbosity=1, interactive=False)
@@ -58,7 +58,7 @@ class TestEducationalRunner(unittest.TestCase):
         # Check environment variable was not set
         self.assertIsNone(os.environ.get('MERCURY_EDUCATIONAL_MODE'))
     
-    def test_educational_components_initialization(self):
+    def test_educational_components_initialization(self) -> None:
         """Test that educational components are initialized."""
         original_argv = sys.argv.copy()
         try:
@@ -75,7 +75,7 @@ class TestEducationalRunner(unittest.TestCase):
             sys.argv = original_argv
             os.environ.pop('MERCURY_EDUCATIONAL_MODE', None)
     
-    def test_educational_result_class(self):
+    def test_educational_result_class(self) -> None:
         """Test the EducationalTestResult class."""
         # Create a mock test
         mock_test = Mock()
@@ -98,7 +98,7 @@ class TestEducationalRunner(unittest.TestCase):
         self.assertEqual(len(result.performance_issues), 1)
         self.assertEqual(result.performance_issues[0]['type'], 'n_plus_one')
     
-    def test_issue_type_detection(self):
+    def test_issue_type_detection(self) -> None:
         """Test detection of different issue types."""
         result = EducationalTestResult(
             stream=Mock(),
@@ -120,7 +120,7 @@ class TestEducationalRunner(unittest.TestCase):
             self.assertEqual(detected_type, expected_type)
     
     @patch('django_mercury.test_runner.DiscoverRunner.build_suite')
-    def test_build_suite_with_educational_mode(self, mock_build_suite):
+    def test_build_suite_with_educational_mode(self, mock_build_suite) -> None:
         """Test that build_suite works with educational mode."""
         # Mock the parent's build_suite
         mock_suite = Mock()
@@ -142,7 +142,7 @@ class TestEducationalRunner(unittest.TestCase):
             sys.argv = original_argv
             os.environ.pop('MERCURY_EDUCATIONAL_MODE', None)
     
-    def test_environment_cleanup(self):
+    def test_environment_cleanup(self) -> None:
         """Test that environment is cleaned up after tests."""
         original_argv = sys.argv.copy()
         try:
@@ -164,7 +164,7 @@ class TestEducationalRunner(unittest.TestCase):
             sys.argv = original_argv
             os.environ.pop('MERCURY_EDUCATIONAL_MODE', None)
     
-    def test_run_tests_with_education_function(self):
+    def test_run_tests_with_education_function(self) -> None:
         """Test the convenience function for running tests with education."""
         from django_mercury.test_runner import run_tests_with_education
         
@@ -192,7 +192,7 @@ class TestEducationalRunner(unittest.TestCase):
 class TestEducationalMonitor(unittest.TestCase):
     """Test the EducationalMonitor class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.monitor = EducationalMonitor(
             console=None,
@@ -201,7 +201,7 @@ class TestEducationalMonitor(unittest.TestCase):
             interactive_mode=False
         )
     
-    def test_issue_type_detection(self):
+    def test_issue_type_detection(self) -> None:
         """Test that issue types are correctly detected."""
         test_cases = [
             ("Query count 150 exceeds limit", "n_plus_one_queries"),
@@ -222,7 +222,7 @@ class TestEducationalMonitor(unittest.TestCase):
                 f"Failed for: {error_msg}"
             )
     
-    def test_issue_details_extraction(self):
+    def test_issue_details_extraction(self) -> None:
         """Test extraction of issue details from error messages."""
         # Test response time extraction
         details = self.monitor._extract_issue_details("Response time 250.5ms exceeds limit")
@@ -236,7 +236,7 @@ class TestEducationalMonitor(unittest.TestCase):
         details = self.monitor._extract_issue_details("Memory 128.5MB exceeds threshold")
         self.assertIn("128.5MB", details)
     
-    def test_educational_content_retrieval(self):
+    def test_educational_content_retrieval(self) -> None:
         """Test that educational content is retrieved for issues."""
         # Test all issue types have content
         issue_types = [
@@ -259,7 +259,7 @@ class TestEducationalMonitor(unittest.TestCase):
             self.assertTrue(len(content['explanation']) > 0)
             self.assertTrue(len(content['fix_summary']) > 0)
     
-    def test_fix_steps_retrieval(self):
+    def test_fix_steps_retrieval(self) -> None:
         """Test that fix steps are provided for issues."""
         # Test that fix steps exist for known issues
         known_issues = [
@@ -276,7 +276,7 @@ class TestEducationalMonitor(unittest.TestCase):
             self.assertIsInstance(steps, list)
             self.assertTrue(len(steps) > 0)
     
-    def test_handle_performance_issue_non_interactive(self):
+    def test_handle_performance_issue_non_interactive(self) -> None:
         """Test handling performance issues in non-interactive mode."""
         # Monitor should not do anything in non-interactive mode
         self.monitor.interactive_mode = False
@@ -291,7 +291,7 @@ class TestEducationalMonitor(unittest.TestCase):
         self.assertEqual(len(self.monitor.issues_found), 1)
         self.assertEqual(self.monitor.issues_found[0]['type'], 'n_plus_one_queries')
     
-    def test_session_summary(self):
+    def test_session_summary(self) -> None:
         """Test generation of session summary."""
         # Add some test issues
         self.monitor.issues_found = [

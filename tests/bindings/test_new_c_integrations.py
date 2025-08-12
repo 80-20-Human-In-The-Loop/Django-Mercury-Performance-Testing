@@ -48,7 +48,7 @@ except Exception:
 class TestCLibraryLoading(unittest.TestCase):
     """Test that all C libraries load correctly."""
     
-    def test_all_libraries_load(self):
+    def test_all_libraries_load(self) -> None:
         """Test that all four C libraries load successfully."""
         # Force reload to test loading
         c_bindings.initialize_c_extensions(force_reinit=True)
@@ -58,7 +58,7 @@ class TestCLibraryLoading(unittest.TestCase):
         self.assertIsNotNone(c_bindings.c_extensions.test_orchestrator)
         self.assertIsNotNone(c_bindings.c_extensions.metrics_engine)
     
-    def test_library_functions_exist(self):
+    def test_library_functions_exist(self) -> None:
         """Test that expected functions are available in each library."""
         # Libraries now provide classes instead of raw functions
         # Query Analyzer - check for QueryAnalyzer class
@@ -75,7 +75,7 @@ class TestCLibraryLoading(unittest.TestCase):
 class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
     """Test memory management in performance monitoring."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Ensure C extensions are initialized."""
         if not c_bindings.c_extensions._initialized:
             c_bindings.initialize_c_extensions()
@@ -122,7 +122,7 @@ class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
         self.lib.free_metrics.argtypes = [ctypes.POINTER(MercuryMetrics)]
         self.lib.free_metrics.restype = None
     
-    def test_memory_allocation_and_free(self):
+    def test_memory_allocation_and_free(self) -> None:
         """Test that memory is properly allocated and freed."""
         # Start monitoring
         handle = self.lib.start_performance_monitoring_enhanced(b"test_op", b"test")
@@ -140,7 +140,7 @@ class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
         # Free memory - should not crash
         self.lib.free_metrics(metrics_ptr)
     
-    def test_multiple_concurrent_monitors(self):
+    def test_multiple_concurrent_monitors(self) -> None:
         """Test multiple monitors can run concurrently."""
         handles = []
         
@@ -162,7 +162,7 @@ class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
             
             self.lib.free_metrics(metrics_ptr)
     
-    def test_invalid_handle_handling(self):
+    def test_invalid_handle_handling(self) -> None:
         """Test handling of invalid handles."""
         # Test with invalid handles
         invalid_handles = [0, -1, 99999]
@@ -172,7 +172,7 @@ class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
             # C NULL is converted to a ctypes pointer with value 0, not None
             self.assertFalse(bool(metrics_ptr))
     
-    def test_python_monitor_integration(self):
+    def test_python_monitor_integration(self) -> None:
         """Test the Python EnhancedPerformanceMonitor class with C backend."""
         with EnhancedPerformanceMonitor("test_operation", "test") as monitor:
             # Simulate some work
@@ -187,13 +187,13 @@ class TestEnhancedPerformanceMonitorMemoryManagement(unittest.TestCase):
 class TestQueryAnalyzer(unittest.TestCase):
     """Test the query analyzer C library."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Initialize the query analyzer."""
         if not c_bindings.c_extensions._initialized:
             c_bindings.initialize_c_extensions()
         self.analyzer = c_bindings.c_extensions.query_analyzer
     
-    def test_query_analysis(self):
+    def test_query_analysis(self) -> None:
         """Test basic query analysis."""
         # Note: We need to check what functions are actually exported
         # This is a placeholder that would need to be updated based on
@@ -204,13 +204,13 @@ class TestQueryAnalyzer(unittest.TestCase):
 class TestMetricsEngine(unittest.TestCase):
     """Test the metrics engine C library."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Initialize the metrics engine."""
         if not c_bindings.c_extensions._initialized:
             c_bindings.initialize_c_extensions()
         self.engine = c_bindings.c_extensions.metrics_engine
     
-    def test_performance_monitoring(self):
+    def test_performance_monitoring(self) -> None:
         """Test performance monitoring functions."""
         # Note: These tests would need to be updated based on
         # the actual exported functions
@@ -222,7 +222,7 @@ class TestMetricsEngine(unittest.TestCase):
 class TestThreadSafety(unittest.TestCase):
     """Test thread safety of C libraries."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up for thread safety tests."""
         if not c_bindings.c_extensions._initialized:
             c_bindings.initialize_c_extensions()
@@ -284,7 +284,7 @@ class TestThreadSafety(unittest.TestCase):
         self.lib.free_metrics.argtypes = [ctypes.POINTER(MercuryMetrics)]
         self.lib.free_metrics.restype = None
     
-    def test_concurrent_monitors_thread_safety(self):
+    def test_concurrent_monitors_thread_safety(self) -> None:
         """Test thread safety with concurrent monitors."""
         results = []
         errors = []
@@ -374,12 +374,12 @@ class TestThreadSafety(unittest.TestCase):
 class TestPerformanceBenchmarks(unittest.TestCase):
     """Benchmark C implementation vs Python fallbacks."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up for benchmarks."""
         if not c_bindings.c_extensions._initialized:
             c_bindings.initialize_c_extensions()
     
-    def test_monitoring_overhead(self):
+    def test_monitoring_overhead(self) -> None:
         """Test overhead of C monitoring vs no monitoring."""
         # Use a single longer operation instead of many short ones
         # This better reflects real-world usage where monitoring wraps
@@ -434,7 +434,7 @@ class TestPerformanceBenchmarks(unittest.TestCase):
 class TestErrorHandling(unittest.TestCase):
     """Test error handling in C libraries."""
     
-    def test_null_parameters(self):
+    def test_null_parameters(self) -> None:
         """Test handling of null parameters."""
         lib_path = Path(__file__).parent.parent.parent / "django_mercury" / "c_core" / "libmetrics_engine.so"
         lib = ctypes.CDLL(str(lib_path))

@@ -14,13 +14,13 @@ from django_mercury.python_bindings.django_integration_mercury import (
 class TestEducationalGuidanceMethods(unittest.TestCase):
     """Test educational guidance generation methods (lines 665-738)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
         DjangoMercuryAPITestCase._educational_guidance = True
     
     @patch('builtins.print')
-    def test_provide_educational_guidance_for_response_time(self, mock_print):
+    def test_provide_educational_guidance_for_response_time(self, mock_print) -> None:
         """Test educational guidance for response time issues."""
         self.test_case._provide_educational_guidance(
             "test_slow_api",
@@ -34,7 +34,7 @@ class TestEducationalGuidanceMethods(unittest.TestCase):
         self.assertIn("EDUCATIONAL", printed)
     
     @patch('builtins.print')
-    def test_provide_educational_guidance_for_queries(self, mock_print):
+    def test_provide_educational_guidance_for_queries(self, mock_print) -> None:
         """Test educational guidance for query count issues."""
         self.test_case._provide_educational_guidance(
             "test_query_heavy",
@@ -48,7 +48,7 @@ class TestEducationalGuidanceMethods(unittest.TestCase):
         self.assertIn("EDUCATIONAL", printed)
     
     @patch('builtins.print')
-    def test_provide_educational_guidance_for_memory(self, mock_print):
+    def test_provide_educational_guidance_for_memory(self, mock_print) -> None:
         """Test educational guidance for memory issues."""
         self.test_case._provide_educational_guidance(
             "test_memory_heavy",
@@ -62,7 +62,7 @@ class TestEducationalGuidanceMethods(unittest.TestCase):
         self.assertIn("EDUCATIONAL", printed)
     
     @patch('builtins.print')
-    def test_provide_educational_guidance_with_n_plus_one(self, mock_print):
+    def test_provide_educational_guidance_with_n_plus_one(self, mock_print) -> None:
         """Test educational guidance specifically for N+1 patterns."""
         self.test_case._provide_educational_guidance(
             "test_n_plus_one_issue",
@@ -77,7 +77,7 @@ class TestEducationalGuidanceMethods(unittest.TestCase):
         self.assertIn("EDUCATIONAL", printed)
     
     @patch('builtins.print')
-    def test_educational_guidance_disabled(self, mock_print):
+    def test_educational_guidance_disabled(self, mock_print) -> None:
         """Test that guidance is minimal when disabled."""
         DjangoMercuryAPITestCase._educational_guidance = False
         
@@ -92,7 +92,7 @@ class TestEducationalGuidanceMethods(unittest.TestCase):
         mock_print.assert_called()
     
     @patch('builtins.print')
-    def test_educational_guidance_for_search_operations(self, mock_print):
+    def test_educational_guidance_for_search_operations(self, mock_print) -> None:
         """Test guidance for search-specific operations."""
         self.test_case._provide_educational_guidance(
             "test_search_api",
@@ -110,13 +110,13 @@ class TestEducationalGuidanceMethods(unittest.TestCase):
 class TestTechnicalDiagnostics(unittest.TestCase):
     """Test technical diagnostic methods (lines 709-738)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
     
     @patch('builtins.print')
     @patch('django_mercury.python_bindings.django_hooks.DjangoQueryTracker')
-    def test_provide_technical_diagnostics_basic(self, mock_tracker_class, mock_print):
+    def test_provide_technical_diagnostics_basic(self, mock_tracker_class, mock_print) -> None:
         """Test basic technical diagnostics output."""
         mock_tracker = Mock()
         mock_tracker.queries = [
@@ -139,7 +139,7 @@ class TestTechnicalDiagnostics(unittest.TestCase):
     
     @patch('builtins.print')
     @patch('django_mercury.python_bindings.django_hooks.DjangoQueryTracker')
-    def test_technical_diagnostics_with_slow_queries(self, mock_tracker_class, mock_print):
+    def test_technical_diagnostics_with_slow_queries(self, mock_tracker_class, mock_print) -> None:
         """Test diagnostics highlighting slow queries."""
         mock_tracker = Mock()
         mock_tracker.queries = [
@@ -161,7 +161,7 @@ class TestTechnicalDiagnostics(unittest.TestCase):
     
     @patch('builtins.print')
     @patch('django_mercury.python_bindings.django_hooks.DjangoQueryTracker')
-    def test_technical_diagnostics_with_duplicate_queries(self, mock_tracker_class, mock_print):
+    def test_technical_diagnostics_with_duplicate_queries(self, mock_tracker_class, mock_print) -> None:
         """Test diagnostics detecting duplicate queries."""
         mock_tracker = Mock()
         # Simulate duplicate queries
@@ -184,7 +184,7 @@ class TestTechnicalDiagnostics(unittest.TestCase):
         # Should mention duplicate queries
     
     @patch('builtins.print')
-    def test_technical_diagnostics_with_context_hints(self, mock_print):
+    def test_technical_diagnostics_with_context_hints(self, mock_print) -> None:
         """Test diagnostics with contextual hints."""
         self.test_case._provide_technical_diagnostics(
             "test_paginated_list",
@@ -202,7 +202,7 @@ class TestTechnicalDiagnostics(unittest.TestCase):
     
     @patch('builtins.print')
     @patch('django_mercury.python_bindings.django_hooks.DjangoQueryTracker')
-    def test_technical_diagnostics_no_queries(self, mock_tracker_class, mock_print):
+    def test_technical_diagnostics_no_queries(self, mock_tracker_class, mock_print) -> None:
         """Test diagnostics when no queries are available."""
         mock_tracker = Mock()
         mock_tracker.queries = []
@@ -222,12 +222,12 @@ class TestTechnicalDiagnostics(unittest.TestCase):
 class TestOptimizationGuidance(unittest.TestCase):
     """Test optimization guidance methods (lines 1073-1087)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
     
     @patch('builtins.print')
-    def test_show_optimization_potential_with_improvements(self, mock_print):
+    def test_show_optimization_potential_with_improvements(self, mock_print) -> None:
         """Test showing optimization potential when improvements possible."""
         # Create test executions with varying performance
         mock_exec1 = self._create_mock_execution('test1', 60, 'C', 300, 80, 40)
@@ -242,7 +242,7 @@ class TestOptimizationGuidance(unittest.TestCase):
         self.assertTrue(True)  # Method completed without error
     
     @patch('builtins.print')
-    def test_show_optimization_potential_all_excellent(self, mock_print):
+    def test_show_optimization_potential_all_excellent(self, mock_print) -> None:
         """Test optimization potential when all tests are excellent."""
         # Create test executions with excellent performance
         mock_exec1 = self._create_mock_execution('test1', 95, 'S', 50, 20, 5)
@@ -257,7 +257,7 @@ class TestOptimizationGuidance(unittest.TestCase):
         self.assertTrue(True)
     
     @patch('builtins.print')
-    def test_show_optimization_with_n_plus_one_issues(self, mock_print):
+    def test_show_optimization_with_n_plus_one_issues(self, mock_print) -> None:
         """Test optimization guidance with N+1 issues present."""
         mock_exec = Mock()
         type(mock_exec).test_name = PropertyMock(return_value='test_n_plus_one')
@@ -310,11 +310,11 @@ class TestOptimizationGuidance(unittest.TestCase):
 class TestContextualRecommendations(unittest.TestCase):
     """Test contextual recommendation generation (lines 822-889)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
     
-    def test_contextual_recommendations_for_list_operations(self):
+    def test_contextual_recommendations_for_list_operations(self) -> None:
         """Test recommendations for list view operations."""
         mock_metrics = Mock()
         mock_metrics.query_count = 25
@@ -334,7 +334,7 @@ class TestContextualRecommendations(unittest.TestCase):
         # Should include pagination recommendations
         self.assertTrue(any('pagination' in r.lower() for r in recommendations))
     
-    def test_contextual_recommendations_for_search_operations(self):
+    def test_contextual_recommendations_for_search_operations(self) -> None:
         """Test recommendations for search operations."""
         mock_metrics = Mock()
         mock_metrics.query_count = 50
@@ -355,7 +355,7 @@ class TestContextualRecommendations(unittest.TestCase):
         self.assertTrue(any('search' in r.lower() or 'index' in r.lower() 
                            for r in recommendations))
     
-    def test_contextual_recommendations_for_create_operations(self):
+    def test_contextual_recommendations_for_create_operations(self) -> None:
         """Test recommendations for create operations."""
         mock_metrics = Mock()
         mock_metrics.query_count = 30
@@ -376,7 +376,7 @@ class TestContextualRecommendations(unittest.TestCase):
         self.assertTrue(any('transaction' in r.lower() or 'bulk' in r.lower() 
                            for r in recommendations))
     
-    def test_contextual_recommendations_with_critical_n_plus_one(self):
+    def test_contextual_recommendations_with_critical_n_plus_one(self) -> None:
         """Test recommendations with critical N+1 issues."""
         mock_metrics = Mock()
         mock_metrics.query_count = 200
@@ -401,7 +401,7 @@ class TestContextualRecommendations(unittest.TestCase):
         self.assertIn('EXECUTIVE PRIORITY', recommendations[0])
         self.assertTrue(any('Business Impact' in r for r in recommendations))
     
-    def test_contextual_recommendations_for_authentication(self):
+    def test_contextual_recommendations_for_authentication(self) -> None:
         """Test recommendations for authentication operations."""
         mock_metrics = Mock()
         mock_metrics.query_count = 5
@@ -425,12 +425,12 @@ class TestContextualRecommendations(unittest.TestCase):
 class TestGuidanceEdgeCases(unittest.TestCase):
     """Test edge cases in guidance generation."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
     
     @patch('builtins.print')
-    def test_guidance_with_empty_context(self, mock_print):
+    def test_guidance_with_empty_context(self, mock_print) -> None:
         """Test guidance generation with empty context."""
         self.test_case._provide_educational_guidance(
             "test_operation",
@@ -443,7 +443,7 @@ class TestGuidanceEdgeCases(unittest.TestCase):
         # Should handle empty context gracefully
     
     @patch('builtins.print')
-    def test_guidance_with_unknown_operation_type(self, mock_print):
+    def test_guidance_with_unknown_operation_type(self, mock_print) -> None:
         """Test guidance for unknown operation types."""
         self.test_case._provide_educational_guidance(
             "test_custom",
@@ -456,7 +456,7 @@ class TestGuidanceEdgeCases(unittest.TestCase):
         # Should provide generic guidance
     
     @patch('builtins.print')
-    def test_technical_diagnostics_with_malformed_queries(self, mock_print):
+    def test_technical_diagnostics_with_malformed_queries(self, mock_print) -> None:
         """Test diagnostics with malformed query data."""
         # Mock tracker with malformed queries
         with patch('django_mercury.python_bindings.django_hooks.DjangoQueryTracker') as mock_tracker_class:
@@ -481,7 +481,7 @@ class TestGuidanceEdgeCases(unittest.TestCase):
             
             mock_print.assert_called()
     
-    def test_recommendations_with_perfect_metrics(self):
+    def test_recommendations_with_perfect_metrics(self) -> None:
         """Test recommendations when metrics are perfect."""
         mock_metrics = Mock()
         mock_metrics.query_count = 1
@@ -503,7 +503,7 @@ class TestGuidanceEdgeCases(unittest.TestCase):
         # May be empty or contain maintenance tips
     
     @patch('builtins.print')
-    def test_optimization_potential_with_no_executions(self, mock_print):
+    def test_optimization_potential_with_no_executions(self, mock_print) -> None:
         """Test optimization potential with no test executions."""
         DjangoMercuryAPITestCase._test_executions = []
         

@@ -10,7 +10,7 @@ from typing import Dict, Optional
 class EduLiteColorScheme:
     """Color scheme for educational output following EduLite branding."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the EduLite color scheme."""
         # Define colors for different message types
         self.colors = {
@@ -121,12 +121,12 @@ class EduLiteColorScheme:
         """
         return self.colorize(f"ℹ️  {message}", 'info')
     
-    def format_quiz_prompt(self, question: str, options: list) -> str:
+    def format_quiz_prompt(self, question: str, options: List[Any]) -> str:
         """Format a quiz question with options.
         
         Args:
             question: Quiz question text
-            options: List of answer options
+            options: List[Any] of answer options
             
         Returns:
             Formatted quiz prompt
@@ -141,7 +141,7 @@ class EduLiteColorScheme:
 class EducationalContentProvider:
     """Provides educational content for different performance issues."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the content provider."""
         self.content_db = {
             'n_plus_one': {

@@ -14,12 +14,12 @@ from django_mercury.python_bindings.django_integration_mercury import (
 class TestThresholdViolationDetailedReporting(unittest.TestCase):
     """Test detailed threshold violation reporting (lines 756-783)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_case = DjangoMercuryAPITestCase()
     
     @patch('builtins.print')
-    def test_response_time_violation_details(self, mock_print):
+    def test_response_time_violation_details(self, mock_print) -> None:
         """Test detailed response time violation reporting."""
         error_msg = "Performance thresholds exceeded: Response time 350.7ms > 200ms"
         
@@ -36,7 +36,7 @@ class TestThresholdViolationDetailedReporting(unittest.TestCase):
         # (350.7 / 200 - 1) * 100 = 75.35%
     
     @patch('builtins.print')  
-    def test_query_count_violation_details(self, mock_print):
+    def test_query_count_violation_details(self, mock_print) -> None:
         """Test detailed query count violation reporting."""
         error_msg = "Performance thresholds exceeded: Query count 125 > 50"
         
@@ -53,7 +53,7 @@ class TestThresholdViolationDetailedReporting(unittest.TestCase):
         mock_print.assert_called()
     
     @patch('builtins.print')
-    def test_memory_violation_details(self, mock_print):
+    def test_memory_violation_details(self, mock_print) -> None:
         """Test detailed memory usage violation reporting."""
         error_msg = "Performance thresholds exceeded: Memory usage 156.8MB > 100MB"
         
@@ -70,7 +70,7 @@ class TestThresholdViolationDetailedReporting(unittest.TestCase):
         mock_print.assert_called()
     
     @patch('builtins.print')
-    def test_combined_violations_reporting(self, mock_print):
+    def test_combined_violations_reporting(self, mock_print) -> None:
         """Test reporting multiple violations together."""
         error_msg = ("Performance thresholds exceeded: "
                     "Response time 500ms > 200ms, "
@@ -93,7 +93,7 @@ class TestThresholdViolationDetailedReporting(unittest.TestCase):
 class TestExecutiveSummaryGeneration(unittest.TestCase):
     """Test executive summary generation (lines 933-1049)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         # Reset class state
         DjangoMercuryAPITestCase._test_executions = []
@@ -102,7 +102,7 @@ class TestExecutiveSummaryGeneration(unittest.TestCase):
         DjangoMercuryAPITestCase._summary_generated = False
     
     @patch('builtins.print')
-    def test_executive_summary_with_no_data(self, mock_print):
+    def test_executive_summary_with_no_data(self, mock_print) -> None:
         """Test summary generation with no test data."""
         DjangoMercuryAPITestCase._test_executions = []
         
@@ -113,7 +113,7 @@ class TestExecutiveSummaryGeneration(unittest.TestCase):
         self.assertIn("No performance data", printed)
     
     @patch('builtins.print')
-    def test_executive_summary_with_mixed_grades(self, mock_print):
+    def test_executive_summary_with_mixed_grades(self, mock_print) -> None:
         """Test summary with various performance grades."""
         # Create mock test executions
         mock_exec1 = self._create_mock_execution('test1', 95, 'S', 50, 10, 5)
@@ -133,7 +133,7 @@ class TestExecutiveSummaryGeneration(unittest.TestCase):
         self.assertIn("EXECUTIVE", printed) or self.assertIn("ANALYSIS", printed)
     
     @patch('builtins.print')
-    def test_executive_summary_with_failures(self, mock_print):
+    def test_executive_summary_with_failures(self, mock_print) -> None:
         """Test summary including test failures."""
         mock_exec1 = self._create_mock_execution('test_pass', 90, 'A+', 80, 15, 8)
         mock_exec2 = self._create_mock_execution('test_fail', 40, 'F', 500, 60, 30)
@@ -149,7 +149,7 @@ class TestExecutiveSummaryGeneration(unittest.TestCase):
         # Should show failures in summary
     
     @patch('builtins.print')
-    def test_executive_summary_with_recommendations(self, mock_print):
+    def test_executive_summary_with_recommendations(self, mock_print) -> None:
         """Test summary with optimization recommendations."""
         mock_exec = self._create_mock_execution('test1', 75, 'B', 120, 25, 12)
         
@@ -189,12 +189,12 @@ class TestExecutiveSummaryGeneration(unittest.TestCase):
 class TestDashboardCreation(unittest.TestCase):
     """Test dashboard creation (lines 1092-1144)."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         DjangoMercuryAPITestCase._test_executions = []
     
     @patch('builtins.print')
-    def test_dashboard_with_perfect_scores(self, mock_print):
+    def test_dashboard_with_perfect_scores(self, mock_print) -> None:
         """Test dashboard creation with all perfect scores."""
         mock_exec1 = self._create_mock_execution('test1', 100, 'S', 10, 5, 2)
         mock_exec2 = self._create_mock_execution('test2', 98, 'S', 15, 8, 3)
@@ -208,7 +208,7 @@ class TestDashboardCreation(unittest.TestCase):
         self.assertIn("DASHBOARD", printed)
     
     @patch('builtins.print')
-    def test_dashboard_with_poor_performance(self, mock_print):
+    def test_dashboard_with_poor_performance(self, mock_print) -> None:
         """Test dashboard with poor performance metrics."""
         mock_exec1 = self._create_mock_execution('test_slow', 45, 'F', 800, 120, 75)
         mock_exec2 = self._create_mock_execution('test_bad', 35, 'F', 1200, 200, 150)
@@ -221,7 +221,7 @@ class TestDashboardCreation(unittest.TestCase):
         # Should highlight poor performance
     
     @patch('builtins.print')
-    def test_dashboard_grade_distribution(self, mock_print):
+    def test_dashboard_grade_distribution(self, mock_print) -> None:
         """Test dashboard shows grade distribution correctly."""
         # Create diverse grade distribution
         grades = ['S', 'A+', 'A', 'B', 'B', 'C', 'D', 'F']
@@ -241,7 +241,7 @@ class TestDashboardCreation(unittest.TestCase):
         # Should show grade distribution
     
     @patch('builtins.print')
-    def test_dashboard_with_n_plus_one_issues(self, mock_print):
+    def test_dashboard_with_n_plus_one_issues(self, mock_print) -> None:
         """Test dashboard highlighting N+1 query issues."""
         mock_exec = Mock()
         type(mock_exec).test_name = PropertyMock(return_value='test_n_plus_one')
@@ -293,12 +293,12 @@ class TestDashboardCreation(unittest.TestCase):
 class TestPerformanceTrendAnalysis(unittest.TestCase):
     """Test performance trend analysis in summaries."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         DjangoMercuryAPITestCase._test_executions = []
     
     @patch('builtins.print')
-    def test_improving_performance_trend(self, mock_print):
+    def test_improving_performance_trend(self, mock_print) -> None:
         """Test detection of improving performance trends."""
         # Create executions with improving scores
         mock_execs = []
@@ -318,7 +318,7 @@ class TestPerformanceTrendAnalysis(unittest.TestCase):
         # Should detect improving trend
     
     @patch('builtins.print')
-    def test_degrading_performance_trend(self, mock_print):
+    def test_degrading_performance_trend(self, mock_print) -> None:
         """Test detection of degrading performance trends."""
         # Create executions with degrading scores
         mock_execs = []
@@ -361,7 +361,7 @@ class TestSummaryEdgeCases(unittest.TestCase):
     """Test edge cases in summary generation."""
     
     @patch('builtins.print')
-    def test_summary_with_single_test(self, mock_print):
+    def test_summary_with_single_test(self, mock_print) -> None:
         """Test summary with only one test execution."""
         mock_exec = Mock()
         type(mock_exec).test_name = PropertyMock(return_value='single_test')
@@ -385,7 +385,7 @@ class TestSummaryEdgeCases(unittest.TestCase):
         mock_print.assert_called()
     
     @patch('builtins.print')
-    def test_summary_all_failing_tests(self, mock_print):
+    def test_summary_all_failing_tests(self, mock_print) -> None:
         """Test summary when all tests fail."""
         mock_execs = []
         for i in range(3):

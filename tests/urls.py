@@ -2,4 +2,4 @@
 Minimal URL configuration for testing.
 """
 
-urlpatterns = []
+urlpatterns : List[str] = []

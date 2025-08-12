@@ -28,7 +28,7 @@ class TestLinuxCBindings(unittest.TestCase):
     """Test Linux-specific behavior in c_bindings.py."""
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_library_config(self):
+    def test_linux_library_config(self) -> None:
         """Test Linux library configuration (lines 100-119)."""
         from django_mercury.python_bindings import c_bindings
         
@@ -39,7 +39,7 @@ class TestLinuxCBindings(unittest.TestCase):
         self.assertEqual(config["metrics_engine"]["name"], "_c_metrics")
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_so_loading(self):
+    def test_linux_so_loading(self) -> None:
         """Test Linux .so library loading with ctypes (lines 450-485)."""
         manager = CExtensionManager()
         
@@ -62,7 +62,7 @@ class TestLinuxCBindings(unittest.TestCase):
                 self.assertIsNotNone(lib_info.handle)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_system_paths(self):
+    def test_linux_system_paths(self) -> None:
         """Test Linux system library paths (lines 204-205)."""
         from django_mercury.python_bindings.c_bindings import get_library_paths
         
@@ -76,7 +76,7 @@ class TestLinuxCBindings(unittest.TestCase):
     
     @unittest.skipIf(not IS_CI, "Test requires CI environment (GitHub Actions)")
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_ci_paths(self):
+    def test_linux_ci_paths(self) -> None:
         """Test Linux CI paths on GitHub Actions (lines 193-196)."""
         with patch.dict('os.environ', {'CI': 'true', 'GITHUB_ACTIONS': 'true'}):
             from django_mercury.python_bindings.c_bindings import get_library_paths
@@ -88,7 +88,7 @@ class TestLinuxCBindings(unittest.TestCase):
             self.assertTrue(any('/home/runner/work' in p for p in paths_str))
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_ld_library_path(self):
+    def test_linux_ld_library_path(self) -> None:
         """Test Linux LD_LIBRARY_PATH handling."""
         # Test that LD_LIBRARY_PATH is considered
         test_path = "/custom/lib/path"
@@ -97,7 +97,7 @@ class TestLinuxCBindings(unittest.TestCase):
             self.assertEqual(os.environ.get('LD_LIBRARY_PATH'), test_path)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_ctypes_error_handling(self):
+    def test_linux_ctypes_error_handling(self) -> None:
         """Test Linux import error handling."""
         manager = CExtensionManager()
         
@@ -112,7 +112,7 @@ class TestLinuxCBindings(unittest.TestCase):
             self.assertIn("Failed to import", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_function_configuration(self):
+    def test_linux_function_configuration(self) -> None:
         """Test Linux function signature configuration (lines 650-750)."""
         manager = CExtensionManager()
         
@@ -131,7 +131,7 @@ class TestLinuxCBindings(unittest.TestCase):
             self.assertGreater(count, 0)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_platform_detection(self):
+    def test_linux_platform_detection(self) -> None:
         """Test Linux platform detection."""
         import platform
         
@@ -140,7 +140,7 @@ class TestLinuxCBindings(unittest.TestCase):
         self.assertEqual(os.name, "posix")
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_library_search_order(self):
+    def test_linux_library_search_order(self) -> None:
         """Test Linux library search order."""
         manager = CExtensionManager()
         
@@ -158,7 +158,7 @@ class TestLinuxCBindings(unittest.TestCase):
             self.assertTrue(path.name.startswith("libtest"))
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_soname_handling(self):
+    def test_linux_soname_handling(self) -> None:
         """Test Linux shared library soname handling."""
         manager = CExtensionManager()
         
@@ -182,7 +182,7 @@ class TestLinuxEdgeCases(unittest.TestCase):
     """Test Linux edge cases and error scenarios."""
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_permission_denied(self):
+    def test_linux_permission_denied(self) -> None:
         """Test handling of permission denied errors."""
         manager = CExtensionManager()
         
@@ -196,7 +196,7 @@ class TestLinuxEdgeCases(unittest.TestCase):
             self.assertIn("Failed to import", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_missing_dependencies(self):
+    def test_linux_missing_dependencies(self) -> None:
         """Test handling of missing library dependencies."""
         manager = CExtensionManager()
         
@@ -211,7 +211,7 @@ class TestLinuxEdgeCases(unittest.TestCase):
             self.assertIn("Failed to import", lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_symlink_resolution(self):
+    def test_linux_symlink_resolution(self) -> None:
         """Test Linux symlink resolution for libraries."""
         # Test that symlinks are followed
         from pathlib import PurePosixPath
@@ -227,7 +227,7 @@ class TestLinuxEdgeCases(unittest.TestCase):
         self.assertTrue(str(actual_path).endswith(".1.0.0"))
     
     @unittest.skipUnless(platform.system() == "Linux", "Linux-specific test")
-    def test_linux_32bit_compatibility(self):
+    def test_linux_32bit_compatibility(self) -> None:
         """Test 32-bit library compatibility checks."""
         import platform
         

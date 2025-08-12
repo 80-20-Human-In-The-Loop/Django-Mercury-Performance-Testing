@@ -25,7 +25,7 @@ class TestMacOSCBindings(unittest.TestCase):
     """Test macOS-specific behavior in c_bindings.py."""
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_library_config(self):
+    def test_macos_library_config(self) -> None:
         """Test macOS library configuration."""
         from django_mercury.python_bindings import c_bindings
         
@@ -35,7 +35,7 @@ class TestMacOSCBindings(unittest.TestCase):
         self.assertEqual(config["metrics_engine"]["name"], "_c_metrics")
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_system_paths(self):
+    def test_macos_system_paths(self) -> None:
         """Test macOS system library paths (lines 206-207)."""
         from django_mercury.python_bindings.c_bindings import get_library_paths
         
@@ -48,7 +48,7 @@ class TestMacOSCBindings(unittest.TestCase):
         self.assertTrue(any('/usr/lib' in p for p in paths_str))
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_apple_silicon_detection(self):
+    def test_macos_apple_silicon_detection(self) -> None:
         """Test Apple Silicon (M1/M2) detection."""
         import platform
         
@@ -60,7 +60,7 @@ class TestMacOSCBindings(unittest.TestCase):
             self.assertEqual(platform.machine(), "x86_64")
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_homebrew_paths(self):
+    def test_macos_homebrew_paths(self) -> None:
         """Test Homebrew library paths on macOS."""
         from django_mercury.python_bindings.c_bindings import get_library_paths
         
@@ -76,7 +76,7 @@ class TestMacOSCBindings(unittest.TestCase):
             self.assertTrue(any('/usr/local' in p for p in paths_str))
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_dylib_loading(self):
+    def test_macos_dylib_loading(self) -> None:
         """Test macOS .dylib library loading."""
         manager = CExtensionManager()
         
@@ -91,7 +91,7 @@ class TestMacOSCBindings(unittest.TestCase):
                 self.assertIsNotNone(mock_lib)
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_framework_paths(self):
+    def test_macos_framework_paths(self) -> None:
         """Test macOS Framework paths."""
         # macOS has special Framework directories
         framework_paths = [
@@ -106,7 +106,7 @@ class TestMacOSCBindings(unittest.TestCase):
             self.assertTrue("Frameworks" in expanded)
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_rpath_handling(self):
+    def test_macos_rpath_handling(self) -> None:
         """Test macOS @rpath handling."""
         manager = CExtensionManager()
         
@@ -125,7 +125,7 @@ class TestMacOSCBindings(unittest.TestCase):
                 self.assertIsNotNone(lib_info.handle)
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_platform_detection(self):
+    def test_macos_platform_detection(self) -> None:
         """Test macOS platform detection."""
         import platform
         
@@ -134,7 +134,7 @@ class TestMacOSCBindings(unittest.TestCase):
         self.assertEqual(os.name, "posix")
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_codesign_issues(self):
+    def test_macos_codesign_issues(self) -> None:
         """Test handling of macOS code signing issues with Python extensions."""
         manager = CExtensionManager()
         
@@ -156,7 +156,7 @@ class TestMacOSEdgeCases(unittest.TestCase):
     """Test macOS edge cases and error scenarios."""
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_gatekeeper_blocking(self):
+    def test_macos_gatekeeper_blocking(self) -> None:
         """Test handling of macOS Gatekeeper blocking with Python extensions."""
         manager = CExtensionManager()
         
@@ -174,7 +174,7 @@ class TestMacOSEdgeCases(unittest.TestCase):
             self.assertIsNotNone(lib_info.error_message)
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_universal_binary(self):
+    def test_macos_universal_binary(self) -> None:
         """Test macOS universal binary support."""
         import platform
         
@@ -186,7 +186,7 @@ class TestMacOSEdgeCases(unittest.TestCase):
                 self.assertEqual(platform.machine(), arch)
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_sip_restrictions(self):
+    def test_macos_sip_restrictions(self) -> None:
         """Test System Integrity Protection (SIP) restrictions."""
         # SIP restricts access to certain paths
         restricted_paths = [
@@ -201,7 +201,7 @@ class TestMacOSEdgeCases(unittest.TestCase):
             self.assertTrue(path.startswith('/'))
     
     @unittest.skipUnless(platform.system() == "Darwin", "macOS-specific test")
-    def test_macos_xcode_paths(self):
+    def test_macos_xcode_paths(self) -> None:
         """Test Xcode developer paths."""
         xcode_paths = [
             "/Applications/Xcode.app/Contents/Developer",

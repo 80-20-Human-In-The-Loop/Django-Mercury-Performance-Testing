@@ -18,7 +18,7 @@ from django_mercury.python_bindings.educational_monitor import EducationalMonito
 class TestEducationalMonitorInit(unittest.TestCase):
     """Test EducationalMonitor initialization."""
     
-    def test_init_defaults(self):
+    def test_init_defaults(self) -> None:
         """Test initialization with default parameters."""
         monitor = EducationalMonitor()
         self.assertIsNone(monitor.console)
@@ -28,7 +28,7 @@ class TestEducationalMonitorInit(unittest.TestCase):
         self.assertEqual(monitor.issues_found, [])
         self.assertIsNone(monitor.current_test)
         
-    def test_init_with_params(self):
+    def test_init_with_params(self) -> None:
         """Test initialization with custom parameters."""
         mock_console = Mock()
         mock_quiz = Mock()
@@ -50,11 +50,11 @@ class TestEducationalMonitorInit(unittest.TestCase):
 class TestEducationalMonitorIssueHandling(unittest.TestCase):
     """Test issue handling and detection."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.monitor = EducationalMonitor(interactive_mode=False)
         
-    def test_detect_issue_type_n_plus_one(self):
+    def test_detect_issue_type_n_plus_one(self) -> None:
         """Test detection of N+1 query issues."""
         test_cases = [
             "Query count 150 exceeds limit",
@@ -66,7 +66,7 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
             issue_type = self.monitor._detect_issue_type(error_msg)
             self.assertEqual(issue_type, "n_plus_one_queries")
             
-    def test_detect_issue_type_slow_response(self):
+    def test_detect_issue_type_slow_response(self) -> None:
         """Test detection of slow response issues."""
         test_cases = [
             "Response time 500ms exceeds threshold",
@@ -78,7 +78,7 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
             issue_type = self.monitor._detect_issue_type(error_msg)
             self.assertEqual(issue_type, "slow_response_time")
             
-    def test_detect_issue_type_memory(self):
+    def test_detect_issue_type_memory(self) -> None:
         """Test detection of memory issues."""
         test_cases = [
             "Memory usage 100MB exceeds limit",
@@ -90,7 +90,7 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
             issue_type = self.monitor._detect_issue_type(error_msg)
             self.assertEqual(issue_type, "memory_optimization")
             
-    def test_detect_issue_type_cache(self):
+    def test_detect_issue_type_cache(self) -> None:
         """Test detection of cache issues."""
         test_cases = [
             "Cache hit ratio 0.2 below threshold",
@@ -102,13 +102,13 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
             issue_type = self.monitor._detect_issue_type(error_msg)
             self.assertEqual(issue_type, "cache_optimization")
             
-    def test_detect_issue_type_general(self):
+    def test_detect_issue_type_general(self) -> None:
         """Test detection of general performance issues."""
         error_msg = "Some other performance problem"
         issue_type = self.monitor._detect_issue_type(error_msg)
         self.assertEqual(issue_type, "general_performance")
         
-    def test_handle_performance_issue_non_interactive(self):
+    def test_handle_performance_issue_non_interactive(self) -> None:
         """Test handling performance issues in non-interactive mode."""
         self.monitor.interactive_mode = False
         
@@ -126,7 +126,7 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
         self.assertEqual(self.monitor.issues_found[0]['test'], 'test_example')
         
     @patch('django_mercury.python_bindings.educational_monitor.RICH_AVAILABLE', True)
-    def test_handle_performance_issue_interactive_with_rich(self):
+    def test_handle_performance_issue_interactive_with_rich(self) -> None:
         """Test handling performance issues in interactive mode with Rich."""
         mock_console = Mock()
         self.monitor = EducationalMonitor(
@@ -147,7 +147,7 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
             )
             
     @patch('django_mercury.python_bindings.educational_monitor.RICH_AVAILABLE', False)
-    def test_handle_performance_issue_interactive_without_rich(self):
+    def test_handle_performance_issue_interactive_without_rich(self) -> None:
         """Test handling performance issues in interactive mode without Rich."""
         self.monitor = EducationalMonitor(interactive_mode=True)
         
@@ -163,7 +163,7 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
                 "Memory usage too high"
             )
             
-    def test_handle_performance_issue_with_progress_tracker(self):
+    def test_handle_performance_issue_with_progress_tracker(self) -> None:
         """Test handling issues with progress tracker."""
         mock_tracker = Mock()
         self.monitor = EducationalMonitor(
@@ -182,32 +182,32 @@ class TestEducationalMonitorIssueHandling(unittest.TestCase):
 class TestEducationalContent(unittest.TestCase):
     """Test educational content generation."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.monitor = EducationalMonitor()
         
-    def test_extract_issue_details_response_time(self):
+    def test_extract_issue_details_response_time(self) -> None:
         """Test extracting response time from error message."""
         details = self.monitor._extract_issue_details(
             "Response time 250.5ms exceeds limit"
         )
         self.assertIn("250.5ms", details)
         
-    def test_extract_issue_details_query_count(self):
+    def test_extract_issue_details_query_count(self) -> None:
         """Test extracting query count from error message."""
         details = self.monitor._extract_issue_details(
             "Query count 42 exceeds maximum"
         )
         self.assertIn("42", details)
         
-    def test_extract_issue_details_memory(self):
+    def test_extract_issue_details_memory(self) -> None:
         """Test extracting memory usage from error message."""
         details = self.monitor._extract_issue_details(
             "Memory 128.5MB exceeds threshold"
         )
         self.assertIn("128.5MB", details)
         
-    def test_extract_issue_details_combined(self):
+    def test_extract_issue_details_combined(self) -> None:
         """Test extracting multiple metrics from error message."""
         details = self.monitor._extract_issue_details(
             "Response time 100ms, Query count 50, Memory 20MB"
@@ -216,13 +216,13 @@ class TestEducationalContent(unittest.TestCase):
         self.assertIn("50", details)
         self.assertIn("20MB", details)
         
-    def test_extract_issue_details_no_metrics(self):
+    def test_extract_issue_details_no_metrics(self) -> None:
         """Test extracting details when no specific metrics found."""
         error_msg = "General performance issue detected"
         details = self.monitor._extract_issue_details(error_msg)
         self.assertEqual(details, error_msg[:100])
         
-    def test_get_educational_content_all_types(self):
+    def test_get_educational_content_all_types(self) -> None:
         """Test getting educational content for all issue types."""
         issue_types = [
             "n_plus_one_queries",
@@ -244,7 +244,7 @@ class TestEducationalContent(unittest.TestCase):
             self.assertTrue(len(content['explanation']) > 0)
             self.assertTrue(len(content['fix_summary']) > 0)
             
-    def test_get_fix_steps_all_types(self):
+    def test_get_fix_steps_all_types(self) -> None:
         """Test getting fix steps for all issue types."""
         test_cases = [
             ("n_plus_one_queries", 5),  # Expected 5 steps
@@ -258,7 +258,7 @@ class TestEducationalContent(unittest.TestCase):
             self.assertIsInstance(steps, list)
             self.assertEqual(len(steps), expected_count)
             
-    def test_get_fix_steps_unknown_type(self):
+    def test_get_fix_steps_unknown_type(self) -> None:
         """Test getting fix steps for unknown issue type."""
         steps = self.monitor._get_fix_steps("unknown_issue")
         self.assertEqual(steps, [])
@@ -268,7 +268,7 @@ class TestEducationalDisplay(unittest.TestCase):
     """Test display methods for educational content."""
     
     @patch('django_mercury.python_bindings.educational_monitor.RICH_AVAILABLE', True)
-    def test_show_rich_educational_content(self):
+    def test_show_rich_educational_content(self) -> None:
         """Test showing educational content with Rich."""
         mock_console = Mock()
         mock_quiz_system = Mock()
@@ -304,7 +304,7 @@ class TestEducationalDisplay(unittest.TestCase):
                 
     @patch('builtins.input', return_value='')
     @patch('builtins.print')
-    def test_show_text_educational_content(self, mock_print, mock_input):
+    def test_show_text_educational_content(self, mock_print, mock_input) -> None:
         """Test showing educational content without Rich."""
         monitor = EducationalMonitor(interactive_mode=True)
         
@@ -323,7 +323,7 @@ class TestEducationalDisplay(unittest.TestCase):
         self.assertIn("cache optimization", all_prints.lower())
         
     @patch('django_mercury.python_bindings.educational_monitor.RICH_AVAILABLE', True)
-    def test_show_fix_guide(self):
+    def test_show_fix_guide(self) -> None:
         """Test showing fix guide with Rich."""
         mock_console = Mock()
         monitor = EducationalMonitor(console=mock_console)
@@ -338,7 +338,7 @@ class TestEducationalDisplay(unittest.TestCase):
         mock_console.print.assert_called()
         
     @patch('django_mercury.python_bindings.educational_monitor.RICH_AVAILABLE', True)
-    def test_show_additional_resources(self):
+    def test_show_additional_resources(self) -> None:
         """Test showing additional resources."""
         mock_console = Mock()
         monitor = EducationalMonitor(console=mock_console)
@@ -353,7 +353,7 @@ class TestEducationalDisplay(unittest.TestCase):
 class TestEducationalSessionSummary(unittest.TestCase):
     """Test session summary functionality."""
     
-    def test_get_session_summary_empty(self):
+    def test_get_session_summary_empty(self) -> None:
         """Test getting summary with no issues."""
         monitor = EducationalMonitor()
         summary = monitor.get_session_summary()
@@ -362,7 +362,7 @@ class TestEducationalSessionSummary(unittest.TestCase):
         self.assertEqual(summary['issue_types'], {})
         self.assertEqual(summary['tests_affected'], [])
         
-    def test_get_session_summary_with_issues(self):
+    def test_get_session_summary_with_issues(self) -> None:
         """Test getting summary with multiple issues."""
         monitor = EducationalMonitor()
         
@@ -390,7 +390,7 @@ class TestEducationalIntegration(unittest.TestCase):
     """Test integration with other components."""
     
     @patch('django_mercury.python_bindings.educational_monitor.RICH_AVAILABLE', True)
-    def test_full_flow_with_quiz_and_learning(self):
+    def test_full_flow_with_quiz_and_learning(self) -> None:
         """Test complete flow with quiz interaction and learning."""
         mock_console = Mock()
         mock_quiz_system = Mock()
@@ -424,7 +424,7 @@ class TestEducationalIntegration(unittest.TestCase):
         mock_quiz_system.ask_quiz_for_concept.assert_called_once()
         mock_progress_tracker.add_concept.assert_called_once_with("n_plus_one_queries")
         
-    def test_non_interactive_performance(self):
+    def test_non_interactive_performance(self) -> None:
         """Test that non-interactive mode is fast."""
         monitor = EducationalMonitor(interactive_mode=False)
         

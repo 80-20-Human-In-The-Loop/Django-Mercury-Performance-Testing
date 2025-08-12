@@ -122,7 +122,7 @@ def validate_thresholds(
     Validate performance thresholds.
 
     Args:
-        thresholds: Dictionary of threshold values.
+        thresholds: Dict[str, Any]ionary of threshold values.
 
     Returns:
         Tuple[bool, Optional[List[str]]]: (is_valid, error_messages)

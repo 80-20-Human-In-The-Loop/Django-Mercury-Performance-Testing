@@ -8,7 +8,7 @@
 
 #include "../../common.h"
 #include "../../test_orchestrator.h"
-#include "../test_framework.h"
+#include "../test_security.h"
 #include <string.h>
 
 static void test_grade_field_overflow(void) {

@@ -22,13 +22,13 @@ try:
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
-    Console = None
+    Console = None  # type: ignore[assignment]
 
 
 class InteractiveUI:
     """Provides interactive UI components for educational mode."""
     
-    def __init__(self, console: Optional[Any] = None):
+    def __init__(self, console: Optional[Any] = None) -> None:
         """Initialize interactive UI."""
         self.console = console or (Console() if RICH_AVAILABLE else None)
     
@@ -194,7 +194,7 @@ class InteractiveUI:
         
         Args:
             question: The quiz question
-            options: List of answer options
+            options: List[Any] of answer options
             correct_answer: Index of correct answer (0-based)
             explanation: Explanation of the answer
             
@@ -289,33 +289,35 @@ class InteractiveUI:
         """Display quiz result with visual feedback."""
         if is_correct:
             # Success animation
-            with self.console.status("[bold green]Checking answer...[/bold green]"):
-                time.sleep(0.5)
-            
-            success_panel = Panel(
-                Text.from_markup(
-                    "[bold green]✅ Excellent! That's correct![/bold green]\n\n"
-                    f"[dim]{explanation}[/dim]"
-                ),
-                border_style="green",
-                padding=(1, 2)
-            )
-            self.console.print(success_panel)
+            if self.console is not None:
+                with self.console.status("[bold green]Checking answer...[/bold green]"):
+                    time.sleep(0.5)
+                
+                success_panel = Panel(
+                    Text.from_markup(
+                        "[bold green]✅ Excellent! That's correct![/bold green]\n\n"
+                        f"[dim]{explanation}[/dim]"
+                    ),
+                    border_style="green",
+                    padding=(1, 2)
+                )
+                self.console.print(success_panel)
         else:
             # Incorrect animation
-            with self.console.status("[bold yellow]Checking answer...[/bold yellow]"):
-                time.sleep(0.5)
-            
-            feedback_panel = Panel(
-                Text.from_markup(
-                    "[bold yellow]Not quite right, but that's okay![/bold yellow]\n\n"
-                    f"[bold]Correct answer:[/bold] {correct_answer}\n\n"
-                    f"[cyan]Explanation:[/cyan] {explanation}"
-                ),
-                border_style="yellow",
-                padding=(1, 2)
-            )
-            self.console.print(feedback_panel)
+            if self.console is not None:
+                with self.console.status("[bold yellow]Checking answer...[/bold yellow]"):
+                    time.sleep(0.5)
+                
+                feedback_panel = Panel(
+                    Text.from_markup(
+                        "[bold yellow]Not quite right, but that's okay![/bold yellow]\n\n"
+                        f"[bold]Correct answer:[/bold] {correct_answer}\n\n"
+                        f"[cyan]Explanation:[/cyan] {explanation}"
+                    ),
+                    border_style="yellow",
+                    padding=(1, 2)
+                )
+                self.console.print(feedback_panel)
     
     def show_progress_bar(self, total: int, description: str = "Processing"):
         """
@@ -344,7 +346,7 @@ class InteractiveUI:
         Display optimization steps in an interactive way.
         
         Args:
-            steps: List of step dictionaries with 'title' and 'description'
+            steps: List[Any] of step dictionaries with 'title' and 'description'
         """
         if not self.console or not RICH_AVAILABLE:
             self._show_text_steps(steps)
@@ -403,7 +405,7 @@ class InteractiveUI:
         
         Args:
             tutorial_name: Name of the tutorial
-            tutorial_stages: List of tutorial stage dictionaries
+            tutorial_stages: List[Any] of tutorial stage dictionaries
             
         Returns:
             Dictionary with tutorial completion results
@@ -635,7 +637,7 @@ class InteractiveUI:
             challenge_name: Name of the coding challenge
             problem_description: Description of the performance issue
             problematic_code: The code that needs optimization
-            expected_solution_patterns: List of patterns the solution should contain
+            expected_solution_patterns: List[Any] of patterns the solution should contain
             performance_context: Context about the performance issue (query count, etc.)
             hints: Optional hints to help users
             difficulty: Challenge difficulty level
@@ -1239,7 +1241,8 @@ Can reduce database load by 90%+ for frequently accessed data."""
                     border_style="green",
                     padding=(1, 2)
                 )
-                self.console.print(impact_panel)
+                if self.console is not None:
+                    self.console.print(impact_panel)
 
     def _show_performance_bars(
         self, 
@@ -1317,7 +1320,8 @@ Can reduce database load by 90%+ for frequently accessed data."""
                 title="Next Steps",
                 padding=(1, 2)
             )
-            self.console.print(suggestions_panel)
+            if self.console is not None:
+                self.console.print(suggestions_panel)
 
     def _score_to_grade(self, score: float) -> str:
         """Convert numeric score to letter grade."""
@@ -1354,7 +1358,7 @@ Can reduce database load by 90%+ for frequently accessed data."""
         performance improvement and see their learning journey.
         
         Args:
-            optimization_history: List of optimization steps with metrics
+            optimization_history: List[Any] of optimization steps with metrics
             title: Title for the timeline display
         """
         if not self.console or not RICH_AVAILABLE:
@@ -1487,7 +1491,8 @@ Can reduce database load by 90%+ for frequently accessed data."""
                 title="Journey Complete",
                 padding=(1, 2)
             )
-            self.console.print(journey_summary)
+            if self.console is not None:
+                self.console.print(journey_summary)
     
     def _show_text_steps(self, steps: List[Dict[str, str]]):
         """Display steps in plain text."""
@@ -1537,16 +1542,16 @@ Can reduce database load by 90%+ for frequently accessed data."""
 class DummyProgress:
     """Dummy progress context manager for when Rich is not available."""
     
-    def __enter__(self):
+    def __enter__(self) -> "Self":
         return self
     
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> None:
         pass
     
     def add_task(self, *args, **kwargs):
         return 0
     
-    def update(self, *args, **kwargs):
+    def update(self, *args, **kwargs) -> None:
         pass
 
 

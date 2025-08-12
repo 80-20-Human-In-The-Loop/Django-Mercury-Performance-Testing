@@ -19,10 +19,10 @@ from typing import Dict, Any
 # Example models for educational demonstrations
 class Author(models.Model):
     """Example author model for N+1 query demonstrations."""
-    name = models.CharField(max_length=100)
-    email = models.EmailField()
-    bio = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    name: models.CharField = models.CharField(max_length=100)
+    email: models.EmailField = models.EmailField()
+    bio: models.TextField = models.TextField(blank=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         indexes = [
@@ -32,21 +32,21 @@ class Author(models.Model):
 
 class Category(models.Model):
     """Example category model for relationship optimization."""
-    name = models.CharField(max_length=50)
-    description = models.TextField(blank=True)
+    name: models.CharField = models.CharField(max_length=50)
+    description: models.TextField = models.TextField(blank=True)
     
 
 class Post(models.Model):
     """Example post model demonstrating various optimization scenarios."""
-    title = models.CharField(max_length=200)
-    content = models.TextField()
-    author = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='posts')
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='posts')
-    tags = models.ManyToManyField('Tag', related_name='posts', blank=True)
-    view_count = models.IntegerField(default=0)
-    is_published = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    title: models.CharField = models.CharField(max_length=200)
+    content: models.TextField = models.TextField()
+    author: models.ForeignKey = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='posts')
+    category: models.ForeignKey = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='posts')
+    tags: models.ManyToManyField = models.ManyToManyField('Tag', related_name='posts', blank=True)
+    view_count: models.IntegerField = models.IntegerField(default=0)
+    is_published: models.BooleanField = models.BooleanField(default=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
     
     class Meta:
         indexes = [

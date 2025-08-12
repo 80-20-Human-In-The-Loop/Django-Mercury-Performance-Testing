@@ -26,14 +26,14 @@ from django_mercury.python_bindings.monitor import EnhancedPerformanceMetrics_Py
 class TestMercuryAutoWrapping(unittest.TestCase):
     """Test the automatic test method wrapping functionality."""
     
-    def test_new_method_wrapping(self):
+    def test_new_method_wrapping(self) -> None:
         """Test that __new__ properly wraps test methods."""
         
         class TestClass(DjangoMercuryAPITestCase):
-            def test_sample_method(self):
+            def test_sample_method(self) -> None:
                 return "test_result"
             
-            def test_another_method(self):
+            def test_another_method(self) -> None:
                 return "another_result"
             
             def helper_method(self):
@@ -51,7 +51,7 @@ class TestMercuryAutoWrapping(unittest.TestCase):
             # Non-test methods should not be wrapped
             self.assertFalse(hasattr(instance.helper_method, '__wrapped__'))
     
-    def test_auto_wrap_test_method(self):
+    def test_auto_wrap_test_method(self) -> None:
         """Test the _auto_wrap_test_method functionality."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -73,12 +73,12 @@ class TestMercuryAutoWrapping(unittest.TestCase):
 class TestThresholdExtraction(unittest.TestCase):
     """Test threshold extraction from test methods."""
     
-    def test_try_extract_threshold_setting(self):
+    def test_try_extract_threshold_setting(self) -> None:
         """Test extracting threshold settings from test source."""
         test_case = DjangoMercuryAPITestCase()
         
         # Create a test function with threshold setting
-        def test_function(self):
+        def test_function(self) -> None:
             self.set_test_performance_thresholds({
                 'response_time_ms': 500,
                 'query_count_max': 10
@@ -93,12 +93,12 @@ class TestThresholdExtraction(unittest.TestCase):
         self.assertEqual(test_case._per_test_thresholds.get('response_time_ms'), 500)
         self.assertEqual(test_case._per_test_thresholds.get('query_count_max'), 10)
     
-    def test_try_extract_threshold_no_settings(self):
+    def test_try_extract_threshold_no_settings(self) -> None:
         """Test extraction when no threshold settings present."""
         test_case = DjangoMercuryAPITestCase()
         test_case._per_test_thresholds = None
         
-        def test_function(self):
+        def test_function(self) -> None:
             return "test"
         
         test_case._try_extract_threshold_setting(test_function)
@@ -106,11 +106,11 @@ class TestThresholdExtraction(unittest.TestCase):
         # Should remain None
         self.assertIsNone(test_case._per_test_thresholds)
     
-    def test_try_extract_threshold_with_exception(self):
+    def test_try_extract_threshold_with_exception(self) -> None:
         """Test extraction when inspect.getsource fails."""
         test_case = DjangoMercuryAPITestCase()
         
-        def test_function(self):
+        def test_function(self) -> None:
             return "test"
         
         with patch('inspect.getsource', side_effect=OSError("No source")):
@@ -123,7 +123,7 @@ class TestGuidanceMethods(unittest.TestCase):
     """Test the guidance and diagnostic methods."""
     
     @patch('builtins.print')
-    def test_provide_threshold_guidance(self, mock_print):
+    def test_provide_threshold_guidance(self, mock_print) -> None:
         """Test threshold guidance output."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -141,7 +141,7 @@ class TestGuidanceMethods(unittest.TestCase):
         # Guidance methods were simplified
     
     @patch('builtins.print')
-    def test_provide_technical_diagnostics(self, mock_print):
+    def test_provide_technical_diagnostics(self, mock_print) -> None:
         """Test technical diagnostics output."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -166,7 +166,7 @@ class TestGuidanceMethods(unittest.TestCase):
         mock_print.assert_called()
     
     @patch('builtins.print')
-    def test_provide_educational_guidance(self, mock_print):
+    def test_provide_educational_guidance(self, mock_print) -> None:
         """Test educational guidance output."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -186,7 +186,7 @@ class TestGuidanceMethods(unittest.TestCase):
 class TestClassMethods(unittest.TestCase):
     """Test class-level methods."""
     
-    def test_set_performance_thresholds(self):
+    def test_set_performance_thresholds(self) -> None:
         """Test setting class-level performance thresholds."""
         DjangoMercuryAPITestCase.set_performance_thresholds({
             'response_time_ms': 300,
@@ -198,7 +198,7 @@ class TestClassMethods(unittest.TestCase):
         self.assertEqual(DjangoMercuryAPITestCase._custom_thresholds['memory_overhead_mb'], 50)
         self.assertEqual(DjangoMercuryAPITestCase._custom_thresholds['query_count_max'], 15)
     
-    def test_teardown_class_with_summaries(self):
+    def test_teardown_class_with_summaries(self) -> None:
         """Test tearDownClass with summary generation enabled."""
         # Enable summaries
         DjangoMercuryAPITestCase._generate_summaries = True
@@ -229,7 +229,7 @@ class TestClassMethods(unittest.TestCase):
         # The method is covered by integration tests
         self.assertTrue(True)  # Test passes
     
-    def test_calculate_overall_grade(self):
+    def test_calculate_overall_grade(self) -> None:
         """Test grade calculation from score."""
         test_case = DjangoMercuryAPITestCase
         
@@ -242,7 +242,7 @@ class TestClassMethods(unittest.TestCase):
         self.assertEqual(test_case._calculate_overall_grade(50), 'D')  # 50-59 is D
         self.assertEqual(test_case._calculate_overall_grade(40), 'F')  # <50 is F
     
-    def test_generate_mercury_executive_summary(self):
+    def test_generate_mercury_executive_summary(self) -> None:
         """Test executive summary generation."""
         # Set up test data with PropertyMock
         mock_exec1 = Mock()
@@ -270,7 +270,7 @@ class TestClassMethods(unittest.TestCase):
         self.assertTrue(True)  # Test passes
     
     @patch('builtins.print')
-    def test_show_optimization_potential(self, mock_print):
+    def test_show_optimization_potential(self, mock_print) -> None:
         """Test showing optimization potential."""
         mock_exec = Mock()
         mock_exec.response_time = 500
@@ -288,7 +288,7 @@ class TestClassMethods(unittest.TestCase):
         # It may or may not print depending on the data
         self.assertTrue(True)  # Method completed
     
-    def test_create_mercury_dashboard(self):
+    def test_create_mercury_dashboard(self) -> None:
         """Test dashboard creation."""
         # Use PropertyMock to make score a property that returns an int
         mock_exec1 = Mock()
@@ -317,7 +317,7 @@ class TestClassMethods(unittest.TestCase):
 class TestContextualRecommendations(unittest.TestCase):
     """Test contextual recommendation generation."""
     
-    def test_generate_contextual_recommendations_list_view(self):
+    def test_generate_contextual_recommendations_list_view(self) -> None:
         """Test recommendations for list view operations."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -337,7 +337,7 @@ class TestContextualRecommendations(unittest.TestCase):
         # Should have list view specific recommendations
         self.assertTrue(any('pagination' in r.lower() for r in recommendations))
     
-    def test_generate_contextual_recommendations_with_n_plus_one(self):
+    def test_generate_contextual_recommendations_with_n_plus_one(self) -> None:
         """Test recommendations with N+1 issues."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -362,7 +362,7 @@ class TestContextualRecommendations(unittest.TestCase):
         self.assertIn('EXECUTIVE PRIORITY', recommendations[0])
         self.assertIn('Business Impact', recommendations[1])
     
-    def test_generate_contextual_recommendations_search_view(self):
+    def test_generate_contextual_recommendations_search_view(self) -> None:
         """Test recommendations for search operations."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -385,7 +385,7 @@ class TestContextualRecommendations(unittest.TestCase):
 class TestMetricsAssertions(unittest.TestCase):
     """Test the assertion methods."""
     
-    def test_assert_mercury_performance_excellent_passing(self):
+    def test_assert_mercury_performance_excellent_passing(self) -> None:
         """Test excellent performance assertion when passing."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -402,7 +402,7 @@ class TestMetricsAssertions(unittest.TestCase):
         # Should not raise
         test_case.assert_mercury_performance_excellent(mock_metrics)
     
-    def test_assert_mercury_performance_excellent_failing(self):
+    def test_assert_mercury_performance_excellent_failing(self) -> None:
         """Test excellent performance assertion when failing."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -419,7 +419,7 @@ class TestMetricsAssertions(unittest.TestCase):
         with self.assertRaises(AssertionError):
             test_case.assert_mercury_performance_excellent(mock_metrics)
     
-    def test_assert_mercury_performance_production_ready_passing(self):
+    def test_assert_mercury_performance_production_ready_passing(self) -> None:
         """Test production ready assertion when passing."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -436,7 +436,7 @@ class TestMetricsAssertions(unittest.TestCase):
         # Should not raise
         test_case.assert_mercury_performance_production_ready(mock_metrics)
     
-    def test_assert_mercury_performance_production_ready_with_acceptable_n_plus_one(self):
+    def test_assert_mercury_performance_production_ready_with_acceptable_n_plus_one(self) -> None:
         """Test production ready with acceptable N+1."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -460,7 +460,7 @@ class TestMetricsAssertions(unittest.TestCase):
 class TestInitializationAndSetup(unittest.TestCase):
     """Test initialization and setup methods."""
     
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test DjangoMercuryAPITestCase initialization."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -469,7 +469,7 @@ class TestInitializationAndSetup(unittest.TestCase):
         self.assertIn('list_view', test_case._operation_profiles)
         self.assertIn('detail_view', test_case._operation_profiles)
     
-    def test_initialize_operation_profiles(self):
+    def test_initialize_operation_profiles(self) -> None:
         """Test operation profile initialization."""
         test_case = DjangoMercuryAPITestCase()
         profiles = test_case._initialize_operation_profiles()
@@ -487,7 +487,7 @@ class TestInitializationAndSetup(unittest.TestCase):
         self.assertEqual(list_profile.operation_name, 'list_view')
         self.assertEqual(list_profile.response_time_baseline, 200.0)
     
-    def test_setup_method(self):
+    def test_setup_method(self) -> None:
         """Test the setUp method."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -501,7 +501,7 @@ class TestInitializationAndSetup(unittest.TestCase):
 class TestMercuryConfiguration(unittest.TestCase):
     """Test Mercury configuration."""
     
-    def test_configure_mercury_all_options(self):
+    def test_configure_mercury_all_options(self) -> None:
         """Test configuring Mercury with all options."""
         DjangoMercuryAPITestCase.configure_mercury(
             enabled=False,
@@ -519,7 +519,7 @@ class TestMercuryConfiguration(unittest.TestCase):
         self.assertTrue(DjangoMercuryAPITestCase._verbose_reporting)
         self.assertFalse(DjangoMercuryAPITestCase._educational_guidance)
     
-    def test_configure_mercury_resets_state(self):
+    def test_configure_mercury_resets_state(self) -> None:
         """Test that configure_mercury resets tracking state."""
         # Add some test data
         DjangoMercuryAPITestCase._test_executions = [{'test': 'data'}]
@@ -537,7 +537,7 @@ class TestMercuryConfiguration(unittest.TestCase):
 class TestEdgeCasesAndErrorHandling(unittest.TestCase):
     """Test edge cases and error scenarios."""
     
-    def test_detect_operation_type_with_no_source(self):
+    def test_detect_operation_type_with_no_source(self) -> None:
         """Test operation type detection when source unavailable."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -546,7 +546,7 @@ class TestEdgeCasesAndErrorHandling(unittest.TestCase):
             result = test_case._detect_operation_type('test_something', lambda: None)
             self.assertEqual(result, 'detail_view')
     
-    def test_extract_test_context_with_complex_queries(self):
+    def test_extract_test_context_with_complex_queries(self) -> None:
         """Test context extraction with complex query patterns."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -562,7 +562,7 @@ class TestEdgeCasesAndErrorHandling(unittest.TestCase):
         self.assertTrue(context.get('include_relations'))
         self.assertEqual(context.get('search_complexity'), 'high')
     
-    def test_calculate_intelligent_thresholds_fallback(self):
+    def test_calculate_intelligent_thresholds_fallback(self) -> None:
         """Test threshold calculation with all fallbacks."""
         test_case = DjangoMercuryAPITestCase()
         test_case._per_test_thresholds = None
@@ -576,7 +576,7 @@ class TestEdgeCasesAndErrorHandling(unittest.TestCase):
         self.assertIn('memory_usage', thresholds)
         self.assertIn('query_count', thresholds)
     
-    def test_mercury_override_thresholds_context_manager(self):
+    def test_mercury_override_thresholds_context_manager(self) -> None:
         """Test the mercury_override_thresholds context manager."""
         test_case = DjangoMercuryAPITestCase()
         
@@ -599,7 +599,7 @@ class TestIntegrationScenarios(unittest.TestCase):
     """Test full integration scenarios."""
     
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Set up class-level thresholds."""
         # Increase memory threshold to accommodate test memory usage
         DjangoMercuryAPITestCase.set_performance_thresholds({
@@ -607,7 +607,7 @@ class TestIntegrationScenarios(unittest.TestCase):
         })
     
     @patch('django_mercury.python_bindings.django_integration_mercury.EnhancedPerformanceMonitor')
-    def test_complete_test_execution_flow(self, mock_monitor_class):
+    def test_complete_test_execution_flow(self, mock_monitor_class) -> None:
         """Test complete flow of test execution with Mercury."""
         # Set up mock monitor
         mock_monitor = Mock()
@@ -633,7 +633,7 @@ class TestIntegrationScenarios(unittest.TestCase):
         DjangoMercuryAPITestCase._auto_scoring = True
         
         # Create wrapped test method
-        def test_method(self):
+        def test_method(self) -> None:
             return "success"
         test_method.__name__ = "test_example"
         
@@ -646,7 +646,7 @@ class TestIntegrationScenarios(unittest.TestCase):
         # Check that execution was tracked
         self.assertTrue(len(DjangoMercuryAPITestCase._test_executions) > 0)
     
-    def test_performance_baseline_update_flow(self):
+    def test_performance_baseline_update_flow(self) -> None:
         """Test the complete flow of baseline updates."""
         baseline = PerformanceBaseline(
             operation_type="test_op",

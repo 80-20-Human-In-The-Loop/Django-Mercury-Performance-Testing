@@ -18,11 +18,11 @@ from django_mercury.python_bindings.pure_python import PythonTestOrchestrator
 class TestPythonTestOrchestrator(unittest.TestCase):
     """Test the PythonTestOrchestrator class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.orchestrator = PythonTestOrchestrator()
     
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test orchestrator initializes correctly."""
         self.assertEqual(self.orchestrator.test_results, [])
         self.assertIsNone(self.orchestrator.current_test)
@@ -30,7 +30,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_start_test(self, mock_monitor_class, mock_time):
+    def test_start_test(self, mock_monitor_class, mock_time) -> None:
         """Test starting a test."""
         mock_time.return_value = 1234567890.0
         mock_monitor = Mock()
@@ -51,7 +51,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_end_test_passed(self, mock_monitor_class, mock_time):
+    def test_end_test_passed(self, mock_monitor_class, mock_time) -> None:
         """Test ending a test with passed status."""
         mock_time.side_effect = [1000.0, 1010.0]  # Start and end times
         
@@ -86,7 +86,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_end_test_failed(self, mock_monitor_class, mock_time):
+    def test_end_test_failed(self, mock_monitor_class, mock_time) -> None:
         """Test ending a test with failed status."""
         mock_time.side_effect = [1000.0, 1005.0]
         
@@ -102,7 +102,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_end_test_skipped(self, mock_monitor_class, mock_time):
+    def test_end_test_skipped(self, mock_monitor_class, mock_time) -> None:
         """Test ending a test with skipped status."""
         mock_time.side_effect = [1000.0, 1001.0]
         
@@ -115,7 +115,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
         
         self.assertEqual(result['status'], 'skipped')
     
-    def test_end_test_without_starting(self):
+    def test_end_test_without_starting(self) -> None:
         """Test ending a test that was never started."""
         result = self.orchestrator.end_test('non_existent_test', 'passed')
         
@@ -124,7 +124,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_end_test_wrong_name(self, mock_monitor_class, mock_time):
+    def test_end_test_wrong_name(self, mock_monitor_class, mock_time) -> None:
         """Test ending a test with wrong name."""
         mock_time.return_value = 1000.0
         mock_monitor = Mock()
@@ -142,7 +142,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_multiple_tests_sequential(self, mock_monitor_class, mock_time):
+    def test_multiple_tests_sequential(self, mock_monitor_class, mock_time) -> None:
         """Test running multiple tests sequentially."""
         mock_time.side_effect = [1000.0, 1010.0, 1020.0, 1025.0, 1030.0, 1040.0]
         
@@ -166,7 +166,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
         self.assertEqual(self.orchestrator.test_results[1]['status'], 'failed')
         self.assertEqual(self.orchestrator.test_results[2]['status'], 'passed')
     
-    def test_get_summary_empty(self):
+    def test_get_summary_empty(self) -> None:
         """Test getting summary with no tests."""
         summary = self.orchestrator.get_summary()
         
@@ -177,7 +177,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_get_summary_with_tests(self, mock_monitor_class, mock_time):
+    def test_get_summary_with_tests(self, mock_monitor_class, mock_time) -> None:
         """Test getting summary with multiple tests."""
         # Set up times for 4 tests
         mock_time.side_effect = [
@@ -220,7 +220,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
         self.assertEqual(summary['avg_response_time_ms'], 100.0)  # (100 + 50 + 150 + 100) / 4
         self.assertEqual(summary['implementation'], 'pure_python')
     
-    def test_get_summary_with_missing_metrics(self):
+    def test_get_summary_with_missing_metrics(self) -> None:
         """Test summary calculation when some tests have missing metrics."""
         # Manually add test results with varying metrics
         self.orchestrator.test_results = [
@@ -252,7 +252,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
         self.assertEqual(summary['total_duration'], 12.0)
         self.assertEqual(summary['avg_response_time_ms'], 100.0)  # (100 + 0 + 200) / 3
     
-    def test_get_summary_with_missing_duration(self):
+    def test_get_summary_with_missing_duration(self) -> None:
         """Test summary when some tests have missing duration."""
         self.orchestrator.test_results = [
             {'name': 'test_1', 'status': 'passed', 'duration': 5.0, 'metrics': {}},
@@ -266,7 +266,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_monitor_lifecycle(self, mock_monitor_class, mock_time):
+    def test_monitor_lifecycle(self, mock_monitor_class, mock_time) -> None:
         """Test that monitors are properly created and cleaned up."""
         # Need times for: start_test1, start_test2, end_test2
         mock_time.side_effect = [1000.0, 1010.0, 1020.0]
@@ -299,7 +299,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
         self.assertNotEqual(result, {})  # Has results since test_2 is current
         self.assertEqual(len(self.orchestrator.monitors), 0)
     
-    def test_get_summary_various_statuses(self):
+    def test_get_summary_various_statuses(self) -> None:
         """Test summary with various test statuses."""
         self.orchestrator.test_results = [
             {'name': 'test_1', 'status': 'passed', 'duration': 1.0, 'metrics': {}},
@@ -318,7 +318,7 @@ class TestPythonTestOrchestrator(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.time')
     @patch('django_mercury.python_bindings.pure_python.PythonPerformanceMonitor')
-    def test_concurrent_test_attempts(self, mock_monitor_class, mock_time):
+    def test_concurrent_test_attempts(self, mock_monitor_class, mock_time) -> None:
         """Test behavior when trying to start a test while another is running."""
         mock_time.return_value = 1000.0
         mock_monitor = Mock()

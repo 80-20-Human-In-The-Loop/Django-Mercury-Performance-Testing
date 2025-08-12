@@ -1,12 +1,12 @@
 # Makefile for consolidation tests
-# Tests for migrating from libperformance.so to libmetrics_engine.so
+# Tests for verifying library functionality and compatibility
 
 CC = gcc
 CFLAGS = -Wall -Wextra -g -I../.. -I..
 LDFLAGS = -ldl -lpthread -lm
 
 # Test executables
-TESTS = test_feature_parity test_api_compatibility test_migration_safety
+TESTS = test_feature_parity test_api_compatibility
 
 # Main target
 all: $(TESTS)
@@ -18,8 +18,7 @@ test_feature_parity: test_feature_parity.c
 test_api_compatibility: test_api_compatibility.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
-test_migration_safety: test_migration_safety.c
-	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+# Migration safety test removed - migration complete
 
 # Run all tests
 test: $(TESTS)
@@ -30,9 +29,6 @@ test: $(TESTS)
 	@echo ""
 	@echo "2. Testing API Compatibility..."
 	@./test_api_compatibility || (echo "❌ API compatibility test failed"; exit 1)
-	@echo ""
-	@echo "3. Testing Migration Safety..."
-	@./test_migration_safety || (echo "❌ Migration safety test failed"; exit 1)
 	@echo ""
 	@echo "=== All Consolidation Tests Passed ✅ ==="
 

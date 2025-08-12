@@ -41,11 +41,11 @@ class MockLibForTesting:
 class TestMockLib(unittest.TestCase):
     """Test cases for MockLib fallback."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.mock_lib = MockLibForTesting()
 
-    def test_mock_lib_get_functions(self):
+    def test_mock_lib_get_functions(self) -> None:
         """Test mock lib returns sensible defaults for get_ functions."""
         # get_ functions should return numeric values
         self.assertEqual(self.mock_lib.get_elapsed_time_ms(), 0.0)
@@ -53,18 +53,18 @@ class TestMockLib(unittest.TestCase):
         self.assertEqual(self.mock_lib.get_query_count(), 0)
         self.assertEqual(self.mock_lib.get_cache_hit_ratio(), 0.0)
 
-    def test_mock_lib_has_functions(self):
+    def test_mock_lib_has_functions(self) -> None:
         """Test mock lib returns 0 for has_ and detect_ functions."""
         self.assertEqual(self.mock_lib.has_n_plus_one_pattern(), 0)
         self.assertEqual(self.mock_lib.has_poor_cache_performance(), 0)
         self.assertEqual(self.mock_lib.detect_n_plus_one_severe(), 0)
 
-    def test_mock_lib_start_function(self):
+    def test_mock_lib_start_function(self) -> None:
         """Test mock lib returns -1 for start function."""
         result = self.mock_lib.start_performance_monitoring_enhanced()
         self.assertEqual(result, -1)
 
-    def test_mock_lib_other_functions(self):
+    def test_mock_lib_other_functions(self) -> None:
         """Test mock lib returns None for other functions."""
         self.assertIsNone(self.mock_lib.increment_query_count())
         self.assertIsNone(self.mock_lib.increment_cache_hits())
@@ -74,7 +74,7 @@ class TestMockLib(unittest.TestCase):
 class TestEnhancedPerformanceMetrics(unittest.TestCase):
     """Test cases for EnhancedPerformanceMetrics C structure."""
 
-    def test_structure_fields(self):
+    def test_structure_fields(self) -> None:
         """Test C structure has correct fields."""
         fields = [field[0] for field in EnhancedPerformanceMetrics._fields_]
         
@@ -88,7 +88,7 @@ class TestEnhancedPerformanceMetrics(unittest.TestCase):
         for field in expected_fields:
             self.assertIn(field, fields)
 
-    def test_structure_field_types(self):
+    def test_structure_field_types(self) -> None:
         """Test C structure field types are correct."""
         field_types = {field[0]: field[1] for field in EnhancedPerformanceMetrics._fields_}
         
@@ -98,7 +98,7 @@ class TestEnhancedPerformanceMetrics(unittest.TestCase):
         self.assertEqual(field_types['query_count_start'], ctypes.c_uint32)
         self.assertEqual(field_types['cache_hits'], ctypes.c_uint32)
 
-    def test_structure_string_fields(self):
+    def test_structure_string_fields(self) -> None:
         """Test string fields have correct sizes."""
         field_info = {field[0]: field[1] for field in EnhancedPerformanceMetrics._fields_}
         
@@ -114,7 +114,7 @@ class TestEnhancedPerformanceMetrics(unittest.TestCase):
 class TestNPlusOneAnalysis(unittest.TestCase):
     """Test cases for NPlusOneAnalysis dataclass."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.analysis = NPlusOneAnalysis(
             has_severe=True,
@@ -126,7 +126,7 @@ class TestNPlusOneAnalysis(unittest.TestCase):
             query_count=15
         )
 
-    def test_analysis_creation(self):
+    def test_analysis_creation(self) -> None:
         """Test NPlusOneAnalysis creation."""
         self.assertTrue(self.analysis.has_severe)
         self.assertTrue(self.analysis.has_moderate)
@@ -135,7 +135,7 @@ class TestNPlusOneAnalysis(unittest.TestCase):
         self.assertEqual(self.analysis.estimated_cause, 2)
         self.assertEqual(self.analysis.query_count, 15)
 
-    def test_severity_text_property(self):
+    def test_severity_text_property(self) -> None:
         """Test severity text property mapping."""
         test_cases = [
             (0, "NONE"),
@@ -155,7 +155,7 @@ class TestNPlusOneAnalysis(unittest.TestCase):
             )
             self.assertEqual(analysis.severity_text, expected_text)
 
-    def test_cause_text_property(self):
+    def test_cause_text_property(self) -> None:
         """Test cause text property mapping."""
         test_cases = [
             (0, "No N+1 detected"),
@@ -179,7 +179,7 @@ class TestNPlusOneAnalysis(unittest.TestCase):
 class TestDjangoPerformanceIssues(unittest.TestCase):
     """Test cases for DjangoPerformanceIssues dataclass."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.n_plus_one_analysis = NPlusOneAnalysis(
             has_severe=True, has_moderate=False, has_pattern=True,
@@ -199,18 +199,18 @@ class TestDjangoPerformanceIssues(unittest.TestCase):
             n_plus_one_analysis=self.n_plus_one_analysis
         )
 
-    def test_issues_creation(self):
+    def test_issues_creation(self) -> None:
         """Test DjangoPerformanceIssues creation."""
         self.assertTrue(self.issues.has_n_plus_one)
         self.assertTrue(self.issues.excessive_queries)
         self.assertFalse(self.issues.memory_intensive)
         self.assertTrue(self.issues.poor_cache_performance)
 
-    def test_has_issues_property_true(self):
+    def test_has_issues_property_true(self) -> None:
         """Test has_issues property returns True when issues exist."""
         self.assertTrue(self.issues.has_issues)
 
-    def test_has_issues_property_false(self):
+    def test_has_issues_property_false(self) -> None:
         """Test has_issues property returns False when no issues exist."""
         no_issues = DjangoPerformanceIssues(
             has_n_plus_one=False,
@@ -227,7 +227,7 @@ class TestDjangoPerformanceIssues(unittest.TestCase):
         )
         self.assertFalse(no_issues.has_issues)
 
-    def test_get_issue_summary(self):
+    def test_get_issue_summary(self) -> None:
         """Test get_issue_summary returns correct list of issues."""
         summary = self.issues.get_issue_summary()
         
@@ -245,7 +245,7 @@ class TestDjangoPerformanceIssues(unittest.TestCase):
         self.assertNotIn("Slow serialization", summary_text)
         self.assertNotIn("Inefficient pagination", summary_text)
 
-    def test_get_issue_summary_empty(self):
+    def test_get_issue_summary_empty(self) -> None:
         """Test get_issue_summary returns empty list when no issues."""
         no_issues = DjangoPerformanceIssues(
             has_n_plus_one=False,
@@ -268,7 +268,7 @@ class TestDjangoPerformanceIssues(unittest.TestCase):
 class TestPerformanceScore(unittest.TestCase):
     """Test cases for PerformanceScore dataclass."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.score = PerformanceScore(
             total_score=85.5,
@@ -283,7 +283,7 @@ class TestPerformanceScore(unittest.TestCase):
             optimization_impact={"n_plus_one_fix": 5.0}
         )
 
-    def test_score_creation(self):
+    def test_score_creation(self) -> None:
         """Test PerformanceScore creation."""
         self.assertEqual(self.score.total_score, 85.5)
         self.assertEqual(self.score.grade, "A")
@@ -293,7 +293,7 @@ class TestPerformanceScore(unittest.TestCase):
         self.assertEqual(self.score.n_plus_one_penalty, 5.0)
         self.assertEqual(self.score.cache_performance_score, 8.0)
 
-    def test_score_lists_and_dicts(self):
+    def test_score_lists_and_dicts(self) -> None:
         """Test score lists and dictionaries."""
         self.assertIsInstance(self.score.points_lost, list)
         self.assertIsInstance(self.score.points_gained, list)
@@ -307,7 +307,7 @@ class TestPerformanceScore(unittest.TestCase):
 class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
     """Test cases for EnhancedPerformanceMetrics_Python class."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures with mocked C library."""
         # Create a mock C metrics structure
         self.mock_c_metrics = MagicMock()
@@ -341,12 +341,12 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.mock_lib.is_memory_intensive.return_value = 0
         self.mock_lib.has_poor_cache_performance.return_value = 0
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up test fixtures."""
         self.lib_patcher.stop()
         self.c_ext_patcher.stop()
 
-    def test_metrics_creation(self):
+    def test_metrics_creation(self) -> None:
         """Test EnhancedPerformanceMetrics_Python creation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         
@@ -359,7 +359,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.assertEqual(metrics.cache_misses, 2)
         self.assertEqual(metrics.cache_hit_ratio, 0.83)
 
-    def test_memory_baseline_calculation(self):
+    def test_memory_baseline_calculation(self) -> None:
         """Test memory baseline and overhead calculation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         
@@ -367,12 +367,12 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.assertEqual(metrics.baseline_memory_mb, 80.0)
         self.assertEqual(metrics.memory_overhead, 15.0)  # 95 - 80
 
-    def test_operation_type_decoding(self):
+    def test_operation_type_decoding(self) -> None:
         """Test operation type decoding from C structure."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertEqual(metrics.operation_type, "view")
 
-    def test_operation_type_decode_error_handling(self):
+    def test_operation_type_decode_error_handling(self) -> None:
         """Test operation type decode error handling."""
         # Mock decode error by making decode raise an exception
         mock_operation_type = MagicMock()
@@ -384,7 +384,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertEqual(metrics.operation_type, "unknown")
 
-    def test_performance_status_assessment(self):
+    def test_performance_status_assessment(self) -> None:
         """Test performance status assessment."""
         # Test different response times
         test_cases = [
@@ -400,7 +400,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
             metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
             self.assertEqual(metrics.performance_status.value, expected_status)
 
-    def test_is_fast_property(self):
+    def test_is_fast_property(self) -> None:
         """Test is_fast property."""
         self.mock_lib.get_elapsed_time_ms.return_value = 50.0
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
@@ -410,7 +410,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertFalse(metrics.is_fast)
 
-    def test_is_slow_property(self):
+    def test_is_slow_property(self) -> None:
         """Test is_slow property."""
         self.mock_lib.get_elapsed_time_ms.return_value = 300.0
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
@@ -420,7 +420,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertTrue(metrics.is_slow)
 
-    def test_is_memory_intensive_property(self):
+    def test_is_memory_intensive_property(self) -> None:
         """Test is_memory_intensive property."""
         # Low memory usage
         self.mock_lib.get_memory_usage_mb.return_value = 85.0
@@ -439,7 +439,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertTrue(metrics.is_memory_intensive)
 
-    def test_detect_slow_serialization(self):
+    def test_detect_slow_serialization(self) -> None:
         """Test slow serialization detection."""
         # Case 1: Few queries, high response time
         self.mock_lib.get_query_count.return_value = 1
@@ -459,7 +459,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertFalse(metrics._detect_slow_serialization())
 
-    def test_detect_inefficient_pagination(self):
+    def test_detect_inefficient_pagination(self) -> None:
         """Test inefficient pagination detection."""
         # Case 1: Moderate queries, high response time
         self.mock_lib.get_query_count.return_value = 5
@@ -482,7 +482,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertFalse(metrics._detect_inefficient_pagination())
 
-    def test_detect_missing_indexes(self):
+    def test_detect_missing_indexes(self) -> None:
         """Test missing indexes detection."""
         # Case 1: Few queries, very high response time
         self.mock_lib.get_query_count.return_value = 3
@@ -496,7 +496,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         self.assertFalse(metrics._detect_missing_indexes())
 
-    def test_n_plus_one_analysis_creation(self):
+    def test_n_plus_one_analysis_creation(self) -> None:
         """Test N+1 analysis creation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         
@@ -508,7 +508,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.assertEqual(analysis.estimated_cause, 2)
         self.assertEqual(analysis.fix_suggestion, "Add select_related()")
 
-    def test_django_issues_analysis(self):
+    def test_django_issues_analysis(self) -> None:
         """Test Django issues analysis."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         issues = metrics.django_issues
@@ -523,7 +523,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.assertFalse(issues.inefficient_pagination)  # Not matching criteria
         self.assertFalse(issues.missing_db_indexes)  # Not matching criteria
 
-    def test_memory_breakdown_estimation(self):
+    def test_memory_breakdown_estimation(self) -> None:
         """Test memory breakdown estimation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         breakdown = metrics.memory_breakdown
@@ -541,7 +541,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         # Temporary objects should be overhead above baseline
         self.assertEqual(breakdown['temporary_objects'], 15.0)  # 95 - 80
 
-    def test_memory_payload_efficiency_calculation(self):
+    def test_memory_payload_efficiency_calculation(self) -> None:
         """Test memory payload efficiency calculation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         
@@ -555,7 +555,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         estimated_payload_mb = (10.0 * 4) / 1024
         self.assertAlmostEqual(metrics.memory_breakdown['payload_data'], estimated_payload_mb, places=3)
 
-    def test_get_memory_analysis_report(self):
+    def test_get_memory_analysis_report(self) -> None:
         """Test memory analysis report generation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         metrics.calculate_memory_payload_efficiency(5.0)
@@ -571,7 +571,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.assertIn("Payload Efficiency", report)
         self.assertIn("5.0KB", report)  # Response size
 
-    def test_performance_score_calculation(self):
+    def test_performance_score_calculation(self) -> None:
         """Test performance score calculation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         score = metrics.performance_score
@@ -582,7 +582,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.assertGreaterEqual(score.total_score, 0.0)
         self.assertLessEqual(score.total_score, 100.0)
 
-    def test_detailed_report_generation(self):
+    def test_detailed_report_generation(self) -> None:
         """Test detailed report generation."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         report = metrics.detailed_report()
@@ -595,7 +595,7 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
         self.assertIn("8", report)        # Query count
         self.assertIn("83.0%", report)    # Cache hit ratio
 
-    def test_get_performance_report_with_scoring(self):
+    def test_get_performance_report_with_scoring(self) -> None:
         """Test performance report with scoring."""
         metrics = EnhancedPerformanceMetrics_Python(self.mock_c_metrics, "test_operation")
         report = metrics.get_performance_report_with_scoring()
@@ -612,11 +612,11 @@ class TestEnhancedPerformanceMetricsPython(unittest.TestCase):
 class TestEnhancedPerformanceMonitor(unittest.TestCase):
     """Test cases for EnhancedPerformanceMonitor class."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.monitor = EnhancedPerformanceMonitor("test_operation", "view")
 
-    def test_monitor_creation(self):
+    def test_monitor_creation(self) -> None:
         """Test monitor creation."""
         self.assertEqual(self.monitor.operation_name, "test_operation")
         self.assertEqual(self.monitor.operation_type, "view")
@@ -625,7 +625,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor._thresholds, {})
         self.assertFalse(self.monitor._auto_assert)
 
-    def test_expect_response_under(self):
+    def test_expect_response_under(self) -> None:
         """Test expect_response_under method."""
         result = self.monitor.expect_response_under(100.0)
         
@@ -633,7 +633,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor._thresholds['response_time'], 100.0)
         self.assertTrue(self.monitor._auto_assert)
 
-    def test_expect_memory_under(self):
+    def test_expect_memory_under(self) -> None:
         """Test expect_memory_under method."""
         result = self.monitor.expect_memory_under(120.0)
         
@@ -641,7 +641,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor._thresholds['memory_usage'], 120.0)
         self.assertTrue(self.monitor._auto_assert)
 
-    def test_expect_queries_under(self):
+    def test_expect_queries_under(self) -> None:
         """Test expect_queries_under method."""
         result = self.monitor.expect_queries_under(5)
         
@@ -649,7 +649,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor._thresholds['query_count'], 5)
         self.assertTrue(self.monitor._auto_assert)
 
-    def test_expect_cache_hit_ratio_above(self):
+    def test_expect_cache_hit_ratio_above(self) -> None:
         """Test expect_cache_hit_ratio_above method."""
         result = self.monitor.expect_cache_hit_ratio_above(0.8)
         
@@ -657,7 +657,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor._thresholds['cache_hit_ratio'], 0.8)
         self.assertTrue(self.monitor._auto_assert)
 
-    def test_disable_auto_assert(self):
+    def test_disable_auto_assert(self) -> None:
         """Test disable_auto_assert method."""
         self.monitor._auto_assert = True
         result = self.monitor.disable_auto_assert()
@@ -665,7 +665,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertIs(result, self.monitor)
         self.assertFalse(self.monitor._auto_assert)
 
-    def test_enable_django_hooks(self):
+    def test_enable_django_hooks(self) -> None:
         """Test enable_django_hooks method."""
         with patch('django_mercury.python_bindings.monitor.DjangoQueryTracker'), \
              patch('django_mercury.python_bindings.monitor.DjangoCacheTracker'):
@@ -674,7 +674,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
             self.assertIs(result, self.monitor)
             self.assertTrue(self.monitor._django_hooks_active)
 
-    def test_enable_django_hooks_not_available(self):
+    def test_enable_django_hooks_not_available(self) -> None:
         """Test enable_django_hooks when Django components not available."""
         with patch('django_mercury.python_bindings.monitor.DjangoQueryTracker', None), \
              patch('django_mercury.python_bindings.monitor.DjangoCacheTracker', None):
@@ -683,7 +683,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
             self.assertIs(result, self.monitor)
             self.assertFalse(self.monitor._django_hooks_active)
 
-    def test_method_chaining(self):
+    def test_method_chaining(self) -> None:
         """Test method chaining works correctly."""
         result = (self.monitor
                  .expect_response_under(100.0)
@@ -701,7 +701,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
 
     @patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_context_manager_enter_success(self, mock_lib):
+    def test_context_manager_enter_success(self, mock_lib) -> None:
         """Test context manager __enter__ method success."""
         mock_lib.start_performance_monitoring_enhanced.return_value = 12345
         
@@ -715,7 +715,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
 
     @patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_context_manager_enter_failure(self, mock_lib):
+    def test_context_manager_enter_failure(self, mock_lib) -> None:
         """Test context manager __enter__ method graceful degradation."""
         mock_lib.start_performance_monitoring_enhanced.return_value = -1
         
@@ -730,7 +730,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
 
     @patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_context_manager_exit_success(self, mock_lib):
+    def test_context_manager_exit_success(self, mock_lib) -> None:
         """Test context manager __exit__ method success."""
         # Set up the monitor as if it was started
         self.monitor.handle = 12345
@@ -771,13 +771,13 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertIsNotNone(self.monitor._metrics)
         self.assertIsNone(self.monitor.handle)
 
-    def test_context_manager_exit_no_handle(self):
+    def test_context_manager_exit_no_handle(self) -> None:
         """Test context manager __exit__ when no handle set."""
         # Should not raise exception
         self.monitor.__exit__(None, None, None)
         self.assertIsNone(self.monitor.handle)
 
-    def test_metrics_property_before_completion(self):
+    def test_metrics_property_before_completion(self) -> None:
         """Test metrics property raises error before monitoring completion."""
         with self.assertRaises(RuntimeError) as context:
             _ = self.monitor.metrics
@@ -786,7 +786,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
 
     @patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_assert_performance_success(self, mock_lib):
+    def test_assert_performance_success(self, mock_lib) -> None:
         """Test assert_performance method success."""
         # Set up mock metrics
         self.monitor._metrics = MagicMock()
@@ -803,7 +803,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
             min_cache_hit_ratio=0.8
         )
 
-    def test_assert_performance_failures(self):
+    def test_assert_performance_failures(self) -> None:
         """Test assert_performance method with failures."""
         # Set up mock metrics that exceed thresholds
         self.monitor._metrics = MagicMock()
@@ -826,7 +826,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
         self.assertIn("query count 8 > 5", error_message)
         self.assertIn("cache hit ratio 60.0% < 80.0%", error_message)
 
-    def test_assert_performance_no_metrics(self):
+    def test_assert_performance_no_metrics(self) -> None:
         """Test assert_performance raises error when no metrics available."""
         with self.assertRaises(RuntimeError) as context:
             self.monitor.assert_performance(max_response_time=100.0)
@@ -837,7 +837,7 @@ class TestEnhancedPerformanceMonitor(unittest.TestCase):
 class TestFactoryFunctions(unittest.TestCase):
     """Test cases for factory functions."""
 
-    def test_monitor_django_view(self):
+    def test_monitor_django_view(self) -> None:
         """Test monitor_django_view factory function."""
         monitor = monitor_django_view("test_view", "list_view")
         
@@ -845,13 +845,13 @@ class TestFactoryFunctions(unittest.TestCase):
         self.assertEqual(monitor.operation_name, "test_view")
         self.assertEqual(monitor.operation_type, "list_view")
 
-    def test_monitor_django_view_default_type(self):
+    def test_monitor_django_view_default_type(self) -> None:
         """Test monitor_django_view with default operation type."""
         monitor = monitor_django_view("test_view")
         
         self.assertEqual(monitor.operation_type, "view")
 
-    def test_monitor_django_model(self):
+    def test_monitor_django_model(self) -> None:
         """Test monitor_django_model factory function."""
         monitor = monitor_django_model("test_model")
         
@@ -859,7 +859,7 @@ class TestFactoryFunctions(unittest.TestCase):
         self.assertEqual(monitor.operation_name, "test_model")
         self.assertEqual(monitor.operation_type, "model")
 
-    def test_monitor_serializer(self):
+    def test_monitor_serializer(self) -> None:
         """Test monitor_serializer factory function."""
         monitor = monitor_serializer("test_serializer")
         
@@ -867,7 +867,7 @@ class TestFactoryFunctions(unittest.TestCase):
         self.assertEqual(monitor.operation_name, "test_serializer")
         self.assertEqual(monitor.operation_type, "serializer")
 
-    def test_monitor_database_query(self):
+    def test_monitor_database_query(self) -> None:
         """Test monitor_database_query factory function."""
         monitor = monitor_database_query("test_query")
         
@@ -881,7 +881,7 @@ class TestMonitorIntegration(unittest.TestCase):
 
     @patch('django_mercury.python_bindings.monitor.C_EXTENSIONS_AVAILABLE', False)
     @patch('django_mercury.python_bindings.monitor.lib')
-    def test_full_monitoring_cycle(self, mock_lib):
+    def test_full_monitoring_cycle(self, mock_lib) -> None:
         """Test complete monitoring cycle."""
         # Set up mocks
         mock_lib.start_performance_monitoring_enhanced.return_value = 12345
@@ -931,7 +931,7 @@ class TestMonitorIntegration(unittest.TestCase):
         self.assertIn("integration_test", detailed_report)
         self.assertIn("Performance Grade", scoring_report)
 
-    def test_chained_configuration(self):
+    def test_chained_configuration(self) -> None:
         """Test chained method configuration."""
         monitor = (EnhancedPerformanceMonitor("chained_test")
                   .expect_response_under(100.0)

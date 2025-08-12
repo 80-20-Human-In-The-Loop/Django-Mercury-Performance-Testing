@@ -53,7 +53,7 @@ class PythonPerformanceMonitor:
     but functionality is identical.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.metrics = PythonPerformanceMetrics()
         self._start_time = None
         self._start_memory = None
@@ -195,7 +195,7 @@ class PythonMetricsEngine:
     Pure Python implementation of metrics aggregation and analysis.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.metrics_history = []
         self.aggregated_metrics = {}
 
@@ -258,7 +258,7 @@ class PythonMetricsEngine:
         Detect N+1 query patterns.
 
         Args:
-            queries: List of query dictionaries
+            queries: List[Any] of query dictionaries
 
         Returns:
             Dictionary with N+1 detection results
@@ -267,7 +267,7 @@ class PythonMetricsEngine:
             return {"detected": False, "count": 0}
 
         # Group queries by pattern (simplified)
-        query_patterns = {}
+        query_patterns: Dict[str, List[Dict[str, Any]]] = {}
         for query in queries:
             sql = query.get("sql", "")
             # Simple pattern extraction (remove values)
@@ -316,7 +316,7 @@ class PythonQueryAnalyzer:
     Pure Python implementation of SQL query analysis.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.queries = []
         self.analysis_cache = {}
 
@@ -334,7 +334,7 @@ class PythonQueryAnalyzer:
         if sql in self.analysis_cache:
             return self.analysis_cache[sql]
 
-        analysis = {
+        analysis: Dict[str, Any] = {
             "query": sql[:200],  # Truncate for storage
             "type": self._get_query_type(sql),
             "tables": self._extract_tables(sql),
@@ -348,14 +348,15 @@ class PythonQueryAnalyzer:
         }
 
         # Add recommendations
+        recommendations = analysis["recommendations"]
         if analysis["has_subquery"]:
-            analysis["recommendations"].append("Consider using JOINs instead of subqueries")
+            recommendations.append("Consider using JOINs instead of subqueries")
 
         if not "LIMIT" in sql.upper() and analysis["type"] == "SELECT":
-            analysis["recommendations"].append("Consider adding LIMIT for large result sets")
+            recommendations.append("Consider adding LIMIT for large result sets")
 
         if analysis["estimated_complexity"] >= 5:
-            analysis["recommendations"].append("Query appears complex, consider optimization")
+            recommendations.append("Query appears complex, consider optimization")
 
         # Cache the result
         self.analysis_cache[sql] = analysis
@@ -423,7 +424,7 @@ class PythonTestOrchestrator:
     Pure Python implementation of test orchestration and coordination.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.test_results = []
         self.current_test = None
         self.monitors = {}

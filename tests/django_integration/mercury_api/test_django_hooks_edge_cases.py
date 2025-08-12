@@ -18,7 +18,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
     """Test edge cases in Django hooks."""
     
     @patch('django_mercury.python_bindings.django_hooks.DJANGO_AVAILABLE', False)
-    def test_query_tracker_without_django(self):
+    def test_query_tracker_without_django(self) -> None:
         """Test QueryTracker when Django is not available."""
         tracker = DjangoQueryTracker()
         
@@ -36,7 +36,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_hooks.DJANGO_AVAILABLE', True)
     @patch('django_mercury.python_bindings.django_hooks.django')
-    def test_query_tracker_monkey_patching(self, mock_django):
+    def test_query_tracker_monkey_patching(self, mock_django) -> None:
         """Test that Django's CursorWrapper is properly monkey-patched."""
         tracker = DjangoQueryTracker()
         
@@ -63,7 +63,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_hooks.C_EXTENSIONS_AVAILABLE', True)
     @patch('django_mercury.python_bindings.django_hooks.c_extensions')
-    def test_query_tracker_with_new_c_extensions(self, mock_c_ext):
+    def test_query_tracker_with_new_c_extensions(self, mock_c_ext) -> None:
         """Test query tracking with new C extensions available."""
         tracker = DjangoQueryTracker()
         tracker.is_active = True
@@ -85,7 +85,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_hooks.C_EXTENSIONS_AVAILABLE', True)
     @patch('django_mercury.python_bindings.django_hooks.c_extensions')
-    def test_query_tracker_c_extension_failure(self, mock_c_ext):
+    def test_query_tracker_c_extension_failure(self, mock_c_ext) -> None:
         """Test query tracking when C extension calls fail."""
         tracker = DjangoQueryTracker()
         tracker.is_active = True
@@ -101,7 +101,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
         self.assertEqual(len(tracker.queries), 1)
         self.assertEqual(tracker.query_count, 1)
     
-    def test_query_tracker_thread_safety(self):
+    def test_query_tracker_thread_safety(self) -> None:
         """Test that query tracker is thread-safe."""
         tracker = DjangoQueryTracker()
         tracker.is_active = True
@@ -136,7 +136,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
         self.assertEqual(len(results), 5)
     
     @patch('django_mercury.python_bindings.django_hooks.DJANGO_AVAILABLE', False)
-    def test_cache_tracker_without_django(self):
+    def test_cache_tracker_without_django(self) -> None:
         """Test CacheTracker when Django is not available."""
         tracker = DjangoCacheTracker()
         
@@ -154,7 +154,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.django_hooks.ctypes.CDLL')
     @patch('django_mercury.python_bindings.django_hooks.Path.exists')
-    def test_cache_tracker_with_legacy_c_library(self, mock_exists, mock_cdll):
+    def test_cache_tracker_with_legacy_c_library(self, mock_exists, mock_cdll) -> None:
         """Test cache tracking with legacy C library."""
         mock_exists.return_value = True
         mock_lib = Mock()
@@ -179,7 +179,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
         mock_lib.increment_cache_hits.assert_called_once()
         mock_lib.increment_cache_misses.assert_called_once()
     
-    def test_cache_tracker_thread_safety(self):
+    def test_cache_tracker_thread_safety(self) -> None:
         """Test that cache tracker is thread-safe."""
         tracker = DjangoCacheTracker()
         tracker.is_active = True
@@ -210,7 +210,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
         self.assertEqual(total_ops, 50)
         self.assertEqual(len(tracker.operations), 50)
     
-    def test_query_info_dataclass(self):
+    def test_query_info_dataclass(self) -> None:
         """Test QueryInfo dataclass functionality."""
         query_info = QueryInfo(
             sql="SELECT * FROM users",
@@ -224,7 +224,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
         self.assertEqual(query_info.time, 0.05)
         self.assertEqual(query_info.alias, "default")
     
-    def test_query_tracker_get_summary(self):
+    def test_query_tracker_get_summary(self) -> None:
         """Test query tracker summary generation."""
         tracker = DjangoQueryTracker()
         tracker.is_active = True
@@ -241,7 +241,7 @@ class TestDjangoHooksEdgeCases(unittest.TestCase):
         total_time = sum(q.time for q in tracker.queries)
         self.assertAlmostEqual(total_time, 0.10, places=2)
     
-    def test_cache_tracker_get_hit_ratio(self):
+    def test_cache_tracker_get_hit_ratio(self) -> None:
         """Test cache hit ratio calculation."""
         tracker = DjangoCacheTracker()
         tracker.is_active = True

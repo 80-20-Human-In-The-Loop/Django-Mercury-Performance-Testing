@@ -22,7 +22,7 @@ from django_mercury.python_bindings.pure_python import (
 class TestPythonPerformanceMetrics(unittest.TestCase):
     """Test the PythonPerformanceMetrics dataclass."""
     
-    def test_metrics_initialization(self):
+    def test_metrics_initialization(self) -> None:
         """Test that metrics initialize with correct defaults."""
         metrics = PythonPerformanceMetrics()
         
@@ -36,7 +36,7 @@ class TestPythonPerformanceMetrics(unittest.TestCase):
         self.assertEqual(metrics.cpu_percent, 0.0)
         self.assertEqual(metrics.errors, [])
     
-    def test_metrics_fields_mutable(self):
+    def test_metrics_fields_mutable(self) -> None:
         """Test that metrics fields can be modified."""
         metrics = PythonPerformanceMetrics()
         
@@ -54,11 +54,11 @@ class TestPythonPerformanceMetrics(unittest.TestCase):
 class TestPythonPerformanceMonitor(unittest.TestCase):
     """Test the PythonPerformanceMonitor class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.monitor = PythonPerformanceMonitor()
     
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test monitor initializes correctly."""
         self.assertIsNotNone(self.monitor.metrics)
         self.assertIsNone(self.monitor._start_time)
@@ -68,7 +68,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
     @patch('django_mercury.python_bindings.pure_python.gc.collect')
-    def test_start_monitoring(self, mock_gc, mock_time):
+    def test_start_monitoring(self, mock_gc, mock_time) -> None:
         """Test starting monitoring."""
         mock_time.return_value = 1000.0
         
@@ -78,7 +78,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor._start_time, 1000.0)
         mock_gc.assert_called_once()
     
-    def test_start_monitoring_when_already_started(self):
+    def test_start_monitoring_when_already_started(self) -> None:
         """Test that starting monitoring twice doesn't reset."""
         self.monitor._monitoring = True
         self.monitor._start_time = 500.0
@@ -89,7 +89,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor._start_time, 500.0)
     
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_stop_monitoring(self, mock_time):
+    def test_stop_monitoring(self, mock_time) -> None:
         """Test stopping monitoring calculates metrics."""
         mock_time.side_effect = [1000.0, 1001.5]  # Start and stop times
         
@@ -99,14 +99,14 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertFalse(self.monitor._monitoring)
         self.assertEqual(self.monitor.metrics.response_time_ms, 1500.0)  # 1.5 seconds
     
-    def test_stop_monitoring_when_not_started(self):
+    def test_stop_monitoring_when_not_started(self) -> None:
         """Test stopping when not monitoring does nothing."""
         self.monitor.stop_monitoring()
         
         self.assertFalse(self.monitor._monitoring)
         self.assertEqual(self.monitor.metrics.response_time_ms, 0.0)
     
-    def test_track_query(self):
+    def test_track_query(self) -> None:
         """Test tracking database queries."""
         self.monitor.track_query("SELECT * FROM users", 0.025)
         
@@ -118,7 +118,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(query['duration_ms'], 25.0)
         self.assertIn('timestamp', query)
     
-    def test_track_multiple_queries(self):
+    def test_track_multiple_queries(self) -> None:
         """Test tracking multiple queries."""
         self.monitor.track_query("SELECT * FROM users", 0.025)
         self.monitor.track_query("SELECT * FROM posts", 0.015)
@@ -127,7 +127,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor.metrics.query_count, 3)
         self.assertEqual(len(self.monitor.metrics.queries), 3)
     
-    def test_track_cache_hits(self):
+    def test_track_cache_hits(self) -> None:
         """Test tracking cache hits."""
         self.monitor.track_cache(True)
         self.monitor.track_cache(True)
@@ -135,7 +135,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor.metrics.cache_hits, 2)
         self.assertEqual(self.monitor.metrics.cache_misses, 0)
     
-    def test_track_cache_misses(self):
+    def test_track_cache_misses(self) -> None:
         """Test tracking cache misses."""
         self.monitor.track_cache(False)
         self.monitor.track_cache(False)
@@ -144,7 +144,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor.metrics.cache_hits, 0)
         self.assertEqual(self.monitor.metrics.cache_misses, 3)
     
-    def test_track_cache_mixed(self):
+    def test_track_cache_mixed(self) -> None:
         """Test tracking mixed cache hits and misses."""
         self.monitor.track_cache(True)
         self.monitor.track_cache(False)
@@ -154,7 +154,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(self.monitor.metrics.cache_hits, 2)
         self.assertEqual(self.monitor.metrics.cache_misses, 2)
     
-    def test_get_metrics(self):
+    def test_get_metrics(self) -> None:
         """Test getting metrics as dictionary."""
         self.monitor.metrics.response_time_ms = 100.0
         self.monitor.metrics.memory_usage_mb = 50.0
@@ -168,7 +168,7 @@ class TestPythonPerformanceMonitor(unittest.TestCase):
         self.assertEqual(metrics['query_count'], 5)
         self.assertEqual(metrics['implementation'], 'pure_python')
     
-    def test_reset(self):
+    def test_reset(self) -> None:
         """Test resetting monitor state."""
         # Set some state
         self.monitor.metrics.query_count = 10
@@ -189,7 +189,7 @@ class TestPythonPerformanceMonitorWithPsutil(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.PSUTIL_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.psutil')
-    def test_initialization_with_psutil(self, mock_psutil):
+    def test_initialization_with_psutil(self, mock_psutil) -> None:
         """Test initialization when psutil is available."""
         mock_process = Mock()
         mock_psutil.Process.return_value = mock_process
@@ -201,7 +201,7 @@ class TestPythonPerformanceMonitorWithPsutil(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.PSUTIL_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.psutil')
-    def test_initialization_with_psutil_error(self, mock_psutil):
+    def test_initialization_with_psutil_error(self, mock_psutil) -> None:
         """Test initialization when psutil raises error."""
         mock_psutil.Process.side_effect = Exception("Process error")
         
@@ -212,7 +212,7 @@ class TestPythonPerformanceMonitorWithPsutil(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.PSUTIL_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.psutil')
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_memory_tracking_with_psutil(self, mock_time, mock_psutil):
+    def test_memory_tracking_with_psutil(self, mock_time, mock_psutil) -> None:
         """Test memory tracking when psutil is available."""
         mock_time.return_value = 1000.0
         
@@ -231,7 +231,7 @@ class TestPythonPerformanceMonitorWithPsutil(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.PSUTIL_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.psutil')
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_stop_monitoring_with_psutil(self, mock_time, mock_psutil):
+    def test_stop_monitoring_with_psutil(self, mock_time, mock_psutil) -> None:
         """Test stopping monitoring calculates memory and CPU metrics."""
         mock_time.side_effect = [1000.0, 1001.0]
         
@@ -252,7 +252,7 @@ class TestPythonPerformanceMonitorWithPsutil(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.PSUTIL_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.psutil')
-    def test_memory_tracking_error_handling(self, mock_psutil):
+    def test_memory_tracking_error_handling(self, mock_psutil) -> None:
         """Test error handling in memory tracking."""
         # Mock process that throws error
         mock_process = Mock()
@@ -272,7 +272,7 @@ class TestPythonPerformanceMonitorWithTracemalloc(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.TRACEMALLOC_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.tracemalloc')
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_memory_tracking_with_tracemalloc(self, mock_time, mock_tracemalloc):
+    def test_memory_tracking_with_tracemalloc(self, mock_time, mock_tracemalloc) -> None:
         """Test memory tracking with tracemalloc."""
         mock_time.return_value = 1000.0
         mock_tracemalloc.is_tracing.return_value = False
@@ -289,7 +289,7 @@ class TestPythonPerformanceMonitorWithTracemalloc(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.TRACEMALLOC_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.tracemalloc')
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_memory_tracking_already_tracing(self, mock_time, mock_tracemalloc):
+    def test_memory_tracking_already_tracing(self, mock_time, mock_tracemalloc) -> None:
         """Test when tracemalloc is already tracing."""
         mock_time.return_value = 1000.0
         mock_tracemalloc.is_tracing.return_value = True
@@ -305,7 +305,7 @@ class TestPythonPerformanceMonitorWithTracemalloc(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.TRACEMALLOC_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.tracemalloc')
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_stop_monitoring_with_tracemalloc(self, mock_time, mock_tracemalloc):
+    def test_stop_monitoring_with_tracemalloc(self, mock_time, mock_tracemalloc) -> None:
         """Test calculating memory usage with tracemalloc."""
         mock_time.side_effect = [1000.0, 1001.0]
         
@@ -329,7 +329,7 @@ class TestPythonPerformanceMonitorWithTracemalloc(unittest.TestCase):
     @patch('django_mercury.python_bindings.pure_python.TRACEMALLOC_AVAILABLE', True)
     @patch('django_mercury.python_bindings.pure_python.tracemalloc')
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_tracemalloc_error_handling(self, mock_time, mock_tracemalloc):
+    def test_tracemalloc_error_handling(self, mock_time, mock_tracemalloc) -> None:
         """Test error handling in tracemalloc operations."""
         mock_time.side_effect = [1000.0, 1001.0]
         
@@ -350,7 +350,7 @@ class TestPythonPerformanceMonitorWithoutDependencies(unittest.TestCase):
     
     @patch('django_mercury.python_bindings.pure_python.PSUTIL_AVAILABLE', False)
     @patch('django_mercury.python_bindings.pure_python.TRACEMALLOC_AVAILABLE', False)
-    def test_monitoring_without_dependencies(self):
+    def test_monitoring_without_dependencies(self) -> None:
         """Test monitoring works without optional dependencies."""
         monitor = PythonPerformanceMonitor()
         
@@ -372,7 +372,7 @@ class TestPythonPerformanceContextManager(unittest.TestCase):
     """Test the python_performance_monitor context manager."""
     
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_context_manager_basic_usage(self, mock_time):
+    def test_context_manager_basic_usage(self, mock_time) -> None:
         """Test basic context manager usage."""
         mock_time.side_effect = [1000.0, 1001.0]
         
@@ -385,7 +385,7 @@ class TestPythonPerformanceContextManager(unittest.TestCase):
         self.assertEqual(monitor.metrics.response_time_ms, 1000.0)
     
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_context_manager_with_exception(self, mock_time):
+    def test_context_manager_with_exception(self, mock_time) -> None:
         """Test context manager handles exceptions properly."""
         mock_time.side_effect = [1000.0, 1001.0]
         
@@ -401,7 +401,7 @@ class TestPythonPerformanceContextManager(unittest.TestCase):
         self.assertEqual(monitor.metrics.response_time_ms, 1000.0)
     
     @patch('django_mercury.python_bindings.pure_python.time.perf_counter')
-    def test_context_manager_with_operations(self, mock_time):
+    def test_context_manager_with_operations(self, mock_time) -> None:
         """Test context manager with tracking operations."""
         mock_time.side_effect = [1000.0, 1001.5]
         

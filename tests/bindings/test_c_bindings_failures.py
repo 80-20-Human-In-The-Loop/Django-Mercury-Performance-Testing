@@ -24,7 +24,7 @@ IS_WINDOWS = platform.system() == "Windows"
 class TestCBindingsFailures(unittest.TestCase):
     """Test error handling and failure scenarios in c_bindings.py"""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         # Import c_bindings to check platform
         from django_mercury.python_bindings import c_bindings
@@ -49,7 +49,7 @@ class TestCBindingsFailures(unittest.TestCase):
             self.mock_cdll = None
             self.mock_import = None
     
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up test fixtures."""
         # Stop all patchers
         for patcher in self.patchers:
@@ -65,7 +65,7 @@ class TestCBindingsFailures(unittest.TestCase):
     
     @unittest.skipIf(IS_WINDOWS, "Unix-specific shared library loading test")
     @patch('importlib.import_module')
-    def test_library_load_failure(self, mock_import):
+    def test_library_load_failure(self, mock_import) -> None:
         """Test handling when a library fails to load."""
         from django_mercury.python_bindings import c_bindings
         
@@ -96,7 +96,7 @@ class TestCBindingsFailures(unittest.TestCase):
     
     @unittest.skipIf(IS_WINDOWS, "Unix-specific shared library loading test")
     @patch('importlib.import_module')
-    def test_partial_library_load_failure(self, mock_import):
+    def test_partial_library_load_failure(self, mock_import) -> None:
         """Test when only some libraries fail to load."""
         # Runtime check for pure Python mode
         if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
@@ -147,7 +147,7 @@ class TestCBindingsFailures(unittest.TestCase):
         # Third should still load
         self.assertIsNotNone(c_bindings.c_extensions.test_orchestrator)
     
-    def test_cleanup_with_uninitialized_extensions(self):
+    def test_cleanup_with_uninitialized_extensions(self) -> None:
         """Test cleanup when extensions were never initialized."""
         from django_mercury.python_bindings import c_bindings
         
@@ -161,7 +161,7 @@ class TestCBindingsFailures(unittest.TestCase):
         # Should still be marked as not initialized
         self.assertFalse(c_bindings.c_extensions._initialized)
     
-    def test_cleanup_with_partially_loaded_libraries(self):
+    def test_cleanup_with_partially_loaded_libraries(self) -> None:
         """Test cleanup when only some libraries were loaded."""
         from django_mercury.python_bindings import c_bindings
         
@@ -182,7 +182,7 @@ class TestCBindingsFailures(unittest.TestCase):
         self.assertIsNone(c_bindings.c_extensions.query_analyzer)
     
     @patch('django_mercury.python_bindings.c_bindings.Path.exists')
-    def test_library_file_not_found(self, mock_exists):
+    def test_library_file_not_found(self, mock_exists) -> None:
         """Test when library files don't exist on disk."""
         from django_mercury.python_bindings import c_bindings
         
@@ -198,7 +198,7 @@ class TestCBindingsFailures(unittest.TestCase):
         # Should still be marked as initialized
         self.assertTrue(c_bindings.c_extensions._initialized)
     
-    def test_configure_library_functions_with_null_library(self):
+    def test_configure_library_functions_with_null_library(self) -> None:
         """Test configuring functions when library is None."""
         from django_mercury.python_bindings import c_bindings
         
@@ -222,7 +222,7 @@ class TestCBindingsFailures(unittest.TestCase):
             result = 0
             self.assertEqual(result, 0)
     
-    def test_double_initialization(self):
+    def test_double_initialization(self) -> None:
         """Test that double initialization is handled correctly."""
         from django_mercury.python_bindings import c_bindings
         
@@ -280,7 +280,7 @@ class TestCBindingsFailures(unittest.TestCase):
             if hasattr(self, 'mock_cdll'):
                 self.assertLess(self.mock_cdll.call_count, 4)
     
-    def test_cleanup_exception_handling(self):
+    def test_cleanup_exception_handling(self) -> None:
         """Test that cleanup handles exceptions gracefully."""
         from django_mercury.python_bindings import c_bindings
         
@@ -305,7 +305,7 @@ class TestCBindingsFailures(unittest.TestCase):
         # Should still mark as not initialized
         self.assertFalse(c_bindings.c_extensions._initialized)
     
-    def test_c_extensions_disabled_by_environment(self):
+    def test_c_extensions_disabled_by_environment(self) -> None:
         """Test that C extensions can be disabled via environment variable."""
         from django_mercury.python_bindings import c_bindings
         
@@ -327,7 +327,7 @@ class TestCBindingsFailures(unittest.TestCase):
 class TestCBindingsFunctionCalls(unittest.TestCase):
     """Test C function calls and error handling."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.lib_patcher = patch('django_mercury.python_bindings.c_bindings.ctypes.CDLL')
         self.mock_cdll = self.lib_patcher.start()
@@ -345,13 +345,13 @@ class TestCBindingsFunctionCalls(unittest.TestCase):
             self.mock_perf_lib
         ]
     
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up test fixtures."""
         self.lib_patcher.stop()
         import django_mercury.python_bindings.c_bindings as c_bindings
         c_bindings.c_extensions._initialized = False
     
-    def test_query_analyzer_function_configuration(self):
+    def test_query_analyzer_function_configuration(self) -> None:
         """Test that query analyzer functions are properly configured."""
         # Runtime check for pure Python mode
         if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
@@ -370,7 +370,7 @@ class TestCBindingsFunctionCalls(unittest.TestCase):
         # This tests the _configure_query_analyzer_functions function
         self.assertTrue(hasattr(self.mock_query_lib, 'analyze_query'))
     
-    def test_metrics_engine_function_configuration(self):
+    def test_metrics_engine_function_configuration(self) -> None:
         """Test that metrics engine functions are properly configured."""
         # Runtime check for pure Python mode
         if os.environ.get('DJANGO_MERCURY_PURE_PYTHON', '').lower() in ('1', 'true', 'yes'):
@@ -388,7 +388,7 @@ class TestCBindingsFunctionCalls(unittest.TestCase):
         # Verify function attributes were set
         self.assertTrue(hasattr(self.mock_metrics_lib, 'calculate_percentiles'))
     
-    def test_function_call_with_null_library(self):
+    def test_function_call_with_null_library(self) -> None:
         """Test calling functions when library is None."""
         from django_mercury.python_bindings import c_bindings
         

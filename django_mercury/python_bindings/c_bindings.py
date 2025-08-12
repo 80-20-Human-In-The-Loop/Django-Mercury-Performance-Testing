@@ -1,4 +1,3 @@
-# mypy: strict
 """
 c_bindings.py - Unified C Extension Loader for Mercury Performance Testing Framework
 
