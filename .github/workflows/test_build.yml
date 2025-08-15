@@ -10,12 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Configure Git for Windows paths
-        if: runner.os == 'Windows'
-        run: |
-          git config --global core.protectNTFS false
-          git config --global core.longpaths true
-          
       - uses: actions/checkout@v4
       
       - uses: actions/setup-python@v4
@@ -27,23 +21,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install build wheel setuptools
       
-      - name: Try building with setup.py
+      - name: Build pure Python package
         run: |
-          echo "=== Testing setup.py build ==="
-          python setup.py bdist_wheel 2>&1 || echo "setup.py failed"
-          
-      - name: Try building with pure Python
-        run: |
-          echo "=== Testing pure Python build ==="
-          DJANGO_MERCURY_PURE_PYTHON=1 python setup.py bdist_wheel 2>&1 || echo "Pure Python failed"
+          echo "=== Building pure Python package ==="
+          python setup.py bdist_wheel
           
       - name: List built wheels
         run: |
           echo "=== Built wheels ==="
-          ls -la dist/ || echo "No dist directory"
+          ls -la dist/
           
       - name: Test import
         run: |
           echo "=== Testing import ==="
-          pip install dist/*.whl || pip install -e .
+          pip install dist/*.whl
           python -c "import django_mercury; print('Import successful!')"
+          python -c "from django_mercury.python_bindings.c_bindings import HAS_C_EXTENSIONS; print(f'C extensions available: {HAS_C_EXTENSIONS}')"

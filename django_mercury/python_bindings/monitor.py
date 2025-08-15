@@ -1494,6 +1494,18 @@ class EnhancedPerformanceMonitor:
         import time
         self._start_time = time.perf_counter()
         
+        # CRITICAL: Reset Django's query list to isolate monitoring to this context
+        # This ensures we only count queries that happen inside the with block
+        try:
+            from django.db import reset_queries
+            reset_queries()  # Clear ALL previous queries from test setup
+            logger.debug(f"Reset Django queries for isolated monitoring of {self.operation_name}")
+        except ImportError:
+            # Django not available or reset_queries not available
+            pass
+        except Exception as e:
+            logger.debug(f"Could not reset Django queries: {e}")
+        
         # Reset C library global counters to prevent stale values
         if lib and hasattr(lib, "reset_global_counters"):
             lib.reset_global_counters()

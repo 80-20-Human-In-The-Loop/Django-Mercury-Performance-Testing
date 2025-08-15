@@ -1,4 +1,3 @@
-[warning] I am in the process of getting the CI/CD to build a proper Windows version, for now Windows uses python fallbacks which are 900x slower.
 
 # Django Mercury
 
@@ -19,7 +18,10 @@
 pip install django-mercury-performance
 ```
 
-Then in your test files:
+**Then in your test files:**
+
+For quick investigation/learning about the performance of your current tests:
+
 ```python
 from django_mercury import DjangoMercuryAPITestCase
 
@@ -28,6 +30,25 @@ class MyPerformanceTest(DjangoMercuryAPITestCase):
         response = self.client.get('/api/endpoint/')
         # Performance is automatically monitored and reported!
 ```
+
+`DjangoMercuryAPITestCase` is meant to be used as a temporary investigation tool.
+Once you find a suspicious looking response, switch to `DjangoPerformanceAPITestCase` and utilize  
+
+
+**How to use:**
+```python
+from django_mercury import DjangoPerformanceAPITestCase
+from django_mercury import monitor_django_view
+
+with monitor_django_view("admin_search") as monitor:
+    response = self.admin_client.get('/api/users/search/?q=perf_user')
+    
+# Performance assertions
+self.assertResponseTimeLess(monitor.metrics, 50, "Admin search should be fast")
+self.assertQueriesLess(monitor.metrics, 5, "Admin search should be optimized")
+self.assertMemoryLess(monitor.metrics, 150, "Should use reasonable memory")
+```
+
 
 ## 🌟 Origin Story
 
@@ -54,15 +75,34 @@ cd Django-Mercury-Performance-Testing
 
 # Install in development mode
 pip install -e .
-
-# If you want to modify the C extensions
-cd django_mercury/c_core
-make clean && make
 ```
 
 ## Choose Your Mode
 
 According to [The 80-20 Three Audiences Pattern](https://github.com/80-20-Human-In-The-Loop/Community/wiki/Tutorial-How-To-Write-80-20-Tools#three-audiences-pattern) Django Mercury adapts to your needs.
+
+This library features a plugin system, use `mercury-test --list-plugins` to view what comes pre-installed:
+
+```sh
+❯ mercury-test --list-plugins
+Available Mercury-Test Plugins:
+
+
+✅ discovery (priority: 10)
+   Intelligent manage.py discovery with caching
+
+✅ wizard (priority: 20)
+   Interactive test selection wizard
+
+✅ visual_progress (priority: 50)
+   Rich visual feedback during test execution
+
+✅ learn (priority: 60)
+   Interactive learning with explanations and quizzes
+
+✅ hints (priority: 90)
+   Show performance tips for slow tests
+```
 
 ### 💼 Professional Mode (Default) - For Experts
 Fast, efficient, no hand-holding. You know what you're doing.
@@ -74,16 +114,8 @@ Fast, efficient, no hand-holding. You know what you're doing.
 - 🎯 Precise performance metrics
 - 🔍 N+1 query detection
 
-**How to use:**
-```python
-with monitor_django_view("admin_search") as monitor:
-    response = self.admin_client.get('/api/users/search/?q=perf_user')
-    
-    # Performance assertions
-    self.assertResponseTimeLess(monitor.metrics, 50, "Admin search should be fast")
-    self.assertQueriesLess(monitor.metrics, 5, "Admin search should be optimized")
-    self.assertMemoryLess(monitor.metrics, 150, "Should use reasonable memory")
-```
+#### Plugins for Professionals 
+
 
 ### 🎓 Educational Mode - For Learning & Understanding
 Learn while you test! Mercury becomes your performance tutor.
@@ -95,47 +127,7 @@ Learn while you test! Mercury becomes your performance tutor.
 - 📈 Tracks your learning progress
 - 🔧 Shows step-by-step fixes
 
-#### `mercury-test` Command
-```bash
-# Just use mercury-test instead of python manage.py test
-mercury-test
-
-# Run specific tests
-mercury-test users.tests
-
-# Set difficulty level
-mercury-test --level advanced
-
-# Run without pauses (for CI)
-mercury-test --no-pause
-```
-
-**Example experience:**
-```
-╭──────────── 🚨 Learning Opportunity ────────────╮
-│                                                  │
-│  ⚠️  Performance Issue Detected!                 │
-│                                                  │
-│  Test: test_user_list_api                       │
-│  Issue: N+1 Queries                             │
-│  Queries executed: 230 | Response time: 450ms   │
-│                                                  │
-╰──────────────────────────────────────────────────╯
-
-📚 What's happening?
-When you fetch users without their related data, 
-Django makes a new query for each relationship.
-
-🤔 Quick Check: Which method would fix this?
-  [1] filter()
-  [2] select_related()
-  [3] annotate()
-  [4] values()
-
-Your answer: _
-```
-
-[📖 Full Educational Mode Documentation](docs/EDUCATIONAL_MODE.md)
+--wizard plugin, --tip
 
 ### 🤖 Agent Mode (`--agent`) - Coming Soon!
 Let AI help optimize your code while you keep control.
@@ -364,7 +356,6 @@ class MyTest(DjangoMercuryAPITestCase):
 
 - **Test failures?** Check the error message first
 - **Slow tests?** Look for `time.sleep()` or database queries
-- **C compilation errors?** Run `./c_test_runner.sh clean` then `build`
 - **Still stuck?** Open an issue with your test output
 
 ## 🚧 Future Plans

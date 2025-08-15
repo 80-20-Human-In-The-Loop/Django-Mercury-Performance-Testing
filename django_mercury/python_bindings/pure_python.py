@@ -419,97 +419,195 @@ class PythonQueryAnalyzer:
         return min(complexity, 10)  # Cap at 10
 
 
+@dataclass
+class TestContext:
+    """Test context matching C TestContext structure."""
+    context_id: int = -1
+    test_class: str = ""
+    test_method: str = ""
+    start_time: float = 0.0
+    end_time: float = 0.0
+    
+    # Basic metrics (no heavy monitoring)
+    response_time_ms: float = 0.0
+    memory_usage_mb: float = 0.0
+    query_count: int = 0
+    cache_hit_ratio: float = 0.0
+    performance_score: float = 0.0
+    grade: str = "N/A"
+    
+    # Status flags
+    is_active: bool = False
+    has_violations: bool = False
+    has_n_plus_one: bool = False
+    severity_level: int = 0
+    optimization_suggestion: str = ""
+
+
 class PythonTestOrchestrator:
     """
-    Pure Python implementation of test orchestration and coordination.
+    Pure Python test orchestration matching C extension functionality.
+    
+    This implementation provides the same interface and functionality as the C test_orchestrator.
     """
-
+    
     def __init__(self) -> None:
+        self.contexts: Dict[int, TestContext] = {}
         self.test_results = []
-        self.current_test = None
-        self.monitors = {}
-
+        self.next_context_id = 0
+        self.total_tests_executed = 0
+        self.total_violations = 0
+        self.total_n_plus_one_detected = 0
+        
+    def create_test_context(self, test_class: str, test_method: str) -> TestContext:
+        """Create a test context (matches C function)."""
+        context = TestContext(
+            context_id=self.next_context_id,
+            test_class=test_class,
+            test_method=test_method,
+            start_time=time.perf_counter(),  # Use perf_counter for better precision
+            is_active=True
+        )
+        self.contexts[self.next_context_id] = context
+        self.next_context_id += 1
+        return context
+    
+    def update_test_metrics(self, context: TestContext, 
+                           response_time_ms: float, memory_usage_mb: float,
+                           query_count: int, cache_hit_ratio: float,
+                           performance_score: float, grade: str) -> int:
+        """Update test metrics (matches C function)."""
+        if not context or not context.is_active:
+            return -1
+            
+        context.response_time_ms = response_time_ms
+        context.memory_usage_mb = memory_usage_mb
+        context.query_count = query_count
+        context.cache_hit_ratio = cache_hit_ratio
+        context.performance_score = performance_score
+        context.grade = grade
+        
+        # Simple threshold checks (matching C implementation)
+        if response_time_ms > 1000.0:  # 1 second threshold
+            context.has_violations = True
+            self.total_violations += 1
+        
+        if query_count > 50:  # Default max queries
+            context.has_violations = True
+            
+        return 0
+    
+    def update_n_plus_one_analysis(self, context: TestContext,
+                                  has_n_plus_one: bool, severity_level: int,
+                                  optimization_suggestion: str) -> int:
+        """Update N+1 analysis (matches C function)."""
+        if not context or not context.is_active:
+            return -1
+            
+        context.has_n_plus_one = has_n_plus_one
+        context.severity_level = severity_level
+        context.optimization_suggestion = optimization_suggestion
+        
+        if has_n_plus_one:
+            self.total_n_plus_one_detected += 1
+            
+        return 0
+    
+    def finalize_test_context(self, context: TestContext) -> int:
+        """Finalize test context (matches C function)."""
+        if not context or not context.is_active:
+            return -1
+            
+        context.end_time = time.perf_counter()
+        context.is_active = False
+        self.total_tests_executed += 1
+        
+        # Store simplified result
+        self.test_results.append({
+            "name": f"{context.test_class}.{context.test_method}",
+            "duration": context.end_time - context.start_time,
+            "response_time_ms": context.response_time_ms,
+            "memory_usage_mb": context.memory_usage_mb,
+            "query_count": context.query_count,
+            "grade": context.grade,
+            "has_violations": context.has_violations,
+            "has_n_plus_one": context.has_n_plus_one
+        })
+        
+        return 0
+    
+    def get_orchestrator_statistics(self) -> tuple:
+        """Get orchestrator statistics (matches C function)."""
+        active_contexts = sum(1 for ctx in self.contexts.values() if ctx.is_active)
+        return (
+            self.total_tests_executed,
+            self.total_violations,
+            self.total_n_plus_one_detected,
+            active_contexts,
+            len(self.test_results)  # history entries
+        )
+    
+    # Compatibility methods for existing interface
     def start_test(self, test_name: str) -> None:
-        """Start monitoring a test."""
-        self.current_test = {
-            "name": test_name,
-            "start_time": time.time(),
-            "metrics": {},
-            "status": "running",
-        }
-
-        # Create monitor for this test
-        monitor = PythonPerformanceMonitor()
-        monitor.start_monitoring()
-        self.monitors[test_name] = monitor
-
+        """Start a test (compatibility method)."""
+        # Parse test name to get class and method
+        parts = test_name.rsplit(".", 1)
+        test_class = parts[0] if len(parts) > 1 else "TestClass"
+        test_method = parts[1] if len(parts) > 1 else test_name
+        
+        self.create_test_context(test_class, test_method)
+    
     def end_test(self, test_name: str, status: str = "passed") -> Dict[str, Any]:
-        """
-        End monitoring a test and collect results.
-
-        Args:
-            test_name: Name of the test
-            status: Test status ('passed', 'failed', 'skipped')
-
-        Returns:
-            Dictionary with test results
-        """
-        if test_name not in self.monitors:
-            return {}
-
-        # Stop monitoring
-        monitor = self.monitors[test_name]
-        monitor.stop_monitoring()
-
-        # Always clean up the monitor
-        del self.monitors[test_name]
-
-        # Collect results if this is the current test
-        if self.current_test and self.current_test["name"] == test_name:
-            self.current_test["end_time"] = time.time()
-            self.current_test["duration"] = (
-                self.current_test["end_time"] - self.current_test["start_time"]
-            )
-            self.current_test["status"] = status
-            self.current_test["metrics"] = monitor.get_metrics()
-
-            # Add to results
-            self.test_results.append(self.current_test)
-
-            # Clean up current test
-            result = self.current_test.copy()
-            self.current_test = None
-
-            return result
-
+        """End a test (compatibility method)."""
+        # Find the context by name
+        for ctx in self.contexts.values():
+            if ctx.is_active and f"{ctx.test_class}.{ctx.test_method}" == test_name:
+                # Simple metrics based on timing only
+                duration = time.perf_counter() - ctx.start_time
+                self.update_test_metrics(
+                    ctx,
+                    response_time_ms=duration * 1000,
+                    memory_usage_mb=0.0,  # No heavy monitoring
+                    query_count=0,
+                    cache_hit_ratio=1.0,
+                    performance_score=100.0 if duration < 0.1 else 50.0,
+                    grade="A" if duration < 0.1 else "B"
+                )
+                self.finalize_test_context(ctx)
+                
+                return {
+                    "name": test_name,
+                    "status": status,
+                    "duration": duration,
+                    "metrics": {
+                        "response_time_ms": duration * 1000,
+                        "implementation": "lightweight_python"
+                    }
+                }
+        
         return {}
-
+    
     def get_summary(self) -> Dict[str, Any]:
-        """Get summary of all test results."""
+        """Get test summary (compatibility method)."""
         if not self.test_results:
             return {
                 "total_tests": 0,
                 "passed": 0,
                 "failed": 0,
-                "implementation": "pure_python",
+                "implementation": "lightweight_python",
             }
-
-        passed = sum(1 for t in self.test_results if t["status"] == "passed")
-        failed = sum(1 for t in self.test_results if t["status"] == "failed")
-
-        total_time = sum(t.get("duration", 0) for t in self.test_results)
+        
+        total_duration = sum(r["duration"] for r in self.test_results)
         avg_response_time = (
-            sum(t.get("metrics", {}).get("response_time_ms", 0) for t in self.test_results)
-            / len(self.test_results)
-            if self.test_results
-            else 0
+            sum(r["response_time_ms"] for r in self.test_results) / len(self.test_results)
+            if self.test_results else 0
         )
-
+        
         return {
-            "total_tests": len(self.test_results),
-            "passed": passed,
-            "failed": failed,
-            "total_duration": total_time,
+            "total_tests": self.total_tests_executed,
+            "total_violations": self.total_violations,
+            "total_n_plus_one": self.total_n_plus_one_detected,
+            "total_duration": total_duration,
             "avg_response_time_ms": avg_response_time,
             "implementation": "pure_python",
         }
