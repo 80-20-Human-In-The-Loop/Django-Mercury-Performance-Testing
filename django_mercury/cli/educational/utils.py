@@ -8,40 +8,43 @@ import sys
 
 def is_interactive_environment() -> bool:
     """Check if we're in an interactive environment where we can get user input.
-    
+
     Returns False if:
     - stdin is not a tty (piped input, CI environment)
     - MERCURY_NON_INTERACTIVE is set
     - CI environment variables are detected
     - Running under pytest without capturing disabled
-    
+
     Returns:
         True if we can safely prompt for user input, False otherwise
     """
     # Check for explicit non-interactive flag
-    if os.environ.get('MERCURY_NON_INTERACTIVE', '').lower() in ('1', 'true', 'yes'):
+    if os.environ.get("MERCURY_NON_INTERACTIVE", "").lower() in ("1", "true", "yes"):
         return False
-    
+
     # Check if we're explicitly in educational mode (override other checks)
     # This allows mercury-test to force interactive mode
-    if os.environ.get('MERCURY_EDU') == '1' and os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true':
+    if (
+        os.environ.get("MERCURY_EDU") == "1"
+        and os.environ.get("MERCURY_EDUCATIONAL_MODE") == "true"
+    ):
         # Still check for CI environments though
-        ci_env_vars = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS']
+        ci_env_vars = ["CI", "CONTINUOUS_INTEGRATION", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS"]
         if any(os.environ.get(var) for var in ci_env_vars):
             return False
         # If not in CI and educational mode is on, assume interactive
         # Even if stdin.isatty() returns False due to subprocess
         return True
-    
+
     # Check for CI environments
-    ci_env_vars = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS']
+    ci_env_vars = ["CI", "CONTINUOUS_INTEGRATION", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS"]
     if any(os.environ.get(var) for var in ci_env_vars):
         return False
-    
+
     # Check if stdin is available and is a terminal
-    if not hasattr(sys.stdin, 'isatty'):
+    if not hasattr(sys.stdin, "isatty"):
         return False
-    
+
     try:
         # Check if stdin is a tty (terminal)
         if not sys.stdin.isatty():
@@ -49,39 +52,40 @@ def is_interactive_environment() -> bool:
     except (AttributeError, ValueError):
         # Some environments don't have proper isatty
         return False
-    
+
     # Check if we're in pytest with capture enabled
     # pytest captures stdin by default unless --capture=no is used
-    if 'pytest' in sys.modules:
+    if "pytest" in sys.modules:
         try:
             import pytest
-            config = pytest.config if hasattr(pytest, 'config') else None
-            if config and config.getoption('capture') != 'no':
+
+            config = pytest.config if hasattr(pytest, "config") else None
+            if config and config.getoption("capture") != "no":
                 return False
         except:
             # If we can't check pytest config, assume non-interactive
             pass
-    
+
     # Check if stdin is closed or not readable
-    if hasattr(sys.stdin, 'closed') and sys.stdin.closed:
+    if hasattr(sys.stdin, "closed") and sys.stdin.closed:
         return False
-    
+
     return True
 
 
 def safe_input(prompt: str, default: str = "") -> str:
     """Safely get input from user, returning default if not interactive.
-    
+
     Args:
         prompt: The prompt to show the user
         default: Default value if input is not available
-        
+
     Returns:
         User input or default value
     """
     if not is_interactive_environment():
         return default
-    
+
     try:
         return input(prompt)
     except (EOFError, KeyboardInterrupt):
@@ -93,22 +97,22 @@ def safe_input(prompt: str, default: str = "") -> str:
 
 def safe_confirm(prompt: str, default: bool = True) -> bool:
     """Safely get yes/no confirmation from user.
-    
+
     Args:
         prompt: The prompt to show the user
         default: Default value if input is not available
-        
+
     Returns:
         True for yes, False for no, or default if not interactive
     """
     if not is_interactive_environment():
         return default
-    
+
     try:
         response = input(f"{prompt} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
         if not response:
             return default
-        return response in ('y', 'yes', 'true', '1')
+        return response in ("y", "yes", "true", "1")
     except (EOFError, KeyboardInterrupt):
         return default
     except Exception:

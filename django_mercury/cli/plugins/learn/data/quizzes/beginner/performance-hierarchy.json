@@ -1,0 +1,188 @@
+{
+  "quiz": {
+    "id": "performance_hierarchy_beginner",
+    "title": "Django Performance Optimization Hierarchy", 
+    "description": "Learn the 80-20 rule and where to focus optimization efforts for maximum impact",
+    "difficulty": "beginner",
+    "concept": "performance_fundamentals",
+    "tags": ["performance", "optimization", "strategy", "80-20-rule"],
+    "passing_score": 0.7,
+    "questions": [
+      {
+        "id": "performance_80_20_impact",
+        "question_type": "multiple_choice",
+        "text": "According to the performance optimization hierarchy, which area typically provides the biggest performance gains?",
+        "answers": [
+          {
+            "text": "Frontend optimization (JavaScript, CSS)",
+            "is_correct": false,
+            "explanation": "Frontend optimization helps but isn't typically the biggest bottleneck in Django apps."
+          },
+          {
+            "text": "Database optimization (queries, indexing)",
+            "is_correct": true,
+            "explanation": "Correct! Database optimization typically provides 80% of performance gains because most Django applications are database-bound. Fixing N+1 queries and adding proper indexing can dramatically improve response times."
+          },
+          {
+            "text": "Infrastructure tuning (servers, load balancing)",
+            "is_correct": false,
+            "explanation": "Infrastructure helps at scale but won't fix fundamental code inefficiencies."
+          },
+          {
+            "text": "Caching strategies (Redis, Memcached)",
+            "is_correct": false,
+            "explanation": "Caching is powerful but comes after fixing the underlying query problems."
+          }
+        ],
+        "explanation": "The 80-20 rule: 80% of performance issues come from 20% of your code, and in Django apps, that's usually database queries. Fix the database bottlenecks first for maximum impact!",
+        "hints": [
+          "What do most Django apps spend most of their time doing?",
+          "Think about where Django applications typically bottleneck..."
+        ],
+        "difficulty": "beginner",
+        "concept": "performance_fundamentals",
+        "tags": ["80-20-rule", "database", "hierarchy"]
+      },
+      {
+        "id": "measure_before_optimize",
+        "question_type": "multiple_choice", 
+        "text": "What should you do BEFORE starting any performance optimization?",
+        "answers": [
+          {
+            "text": "Rewrite everything in a faster language",
+            "is_correct": false,
+            "explanation": "Rewriting is drastic and usually unnecessary. Measure first!"
+          },
+          {
+            "text": "Add caching to all views",
+            "is_correct": false,
+            "explanation": "Adding caching blindly can mask problems without fixing root causes."
+          },
+          {
+            "text": "Measure and establish a baseline",
+            "is_correct": true,
+            "explanation": "Absolutely! You must measure first! Without baseline metrics, you can't know if your optimizations are working. Use tools like Django Debug Toolbar, Mercury, or APM solutions to establish current performance."
+          },
+          {
+            "text": "Upgrade to faster servers",
+            "is_correct": false,
+            "explanation": "Faster servers won't fix inefficient code - you'll just have faster inefficiency."
+          }
+        ],
+        "explanation": "\"Premature optimization is the root of all evil\" - Donald Knuth. Always measure first to identify real bottlenecks, not assumed ones. Use profiling tools to find the actual problems.",
+        "hints": [
+          "What famous quote warns about premature optimization?",
+          "How do you know what needs optimizing?"
+        ],
+        "difficulty": "beginner",
+        "concept": "performance_fundamentals",
+        "tags": ["measurement", "profiling", "baseline"]
+      },
+      {
+        "id": "ecommerce_n1_scenario",
+        "question_type": "scenario",
+        "text": "Your e-commerce site loads products but response times are 2.3 seconds. Debug Toolbar shows 301 queries for 100 products. What's the most likely cause?",
+        "answers": [
+          {
+            "text": "Large image files",
+            "is_correct": false,
+            "explanation": "Images affect page loading but not database query count or server response time."
+          },
+          {
+            "text": "N+1 database queries",
+            "is_correct": true,
+            "explanation": "Exactly! 301 queries for 100 products = classic N+1 problem. Each product is triggering additional queries for related data (categories, reviews, etc.)."
+          },
+          {
+            "text": "Slow network connection",
+            "is_correct": false,
+            "explanation": "Network issues affect client-side loading, not server-side query counts."
+          },
+          {
+            "text": "Unminified JavaScript",
+            "is_correct": false,
+            "explanation": "JavaScript minification affects frontend loading, not database queries."
+          }
+        ],
+        "explanation": "301 queries for 100 products is a telltale sign of N+1 queries. The code is likely accessing related objects (product.category.name, product.reviews.count()) inside loops, causing separate database queries for each product.",
+        "hints": [
+          "What would cause 301 queries for 100 items?",
+          "Think about the N+1 query pattern..."
+        ],
+        "difficulty": "beginner",
+        "concept": "n_plus_one_queries",
+        "tags": ["scenario", "n+1", "ecommerce"]
+      },
+      {
+        "id": "django_select_related",
+        "question_type": "multiple_choice",
+        "text": "Which Django ORM technique would you use to efficiently load products with their categories in a single query?",
+        "answers": [
+          {
+            "text": "prefetch_related('category')",
+            "is_correct": false,
+            "explanation": "prefetch_related() uses separate queries, not JOINs. It's for ManyToMany and reverse ForeignKeys."
+          },
+          {
+            "text": "select_related('category')",
+            "is_correct": true,
+            "explanation": "Perfect! select_related() performs SQL JOINs to fetch related ForeignKey objects in the same query, ideal for product→category relationships."
+          },
+          {
+            "text": "filter(category__isnull=False)",
+            "is_correct": false,
+            "explanation": "This filters results but doesn't optimize how related data is fetched."
+          },
+          {
+            "text": "annotate(category_name=F('category__name'))",
+            "is_correct": false,
+            "explanation": "Annotations add computed fields but don't solve the N+1 query problem."
+          }
+        ],
+        "explanation": "select_related() follows ForeignKey relationships using SQL JOINs, bringing related data in one database roundtrip. Use it for ForeignKey and OneToOne relationships.",
+        "hints": [
+          "Which ORM method performs SQL JOINs?",
+          "Think about bringing related data in one query..."
+        ],
+        "difficulty": "beginner",
+        "concept": "n_plus_one_queries",
+        "tags": ["django", "orm", "joins"]
+      },
+      {
+        "id": "performance_80_20_focus",
+        "question_type": "multiple_choice",
+        "text": "According to the 80-20 rule in Django performance, what should you focus on first?",
+        "answers": [
+          {
+            "text": "Optimizing every single line of code",
+            "is_correct": false,
+            "explanation": "Optimizing everything is inefficient. Focus on the vital few, not the trivial many."
+          },
+          {
+            "text": "The 20% of code causing 80% of slowness",
+            "is_correct": true,
+            "explanation": "Exactly! The 80-20 rule (Pareto Principle) suggests that 80% of performance problems come from 20% of your code. Identify and fix these critical bottlenecks first for maximum impact."
+          },
+          {
+            "text": "Frontend JavaScript performance",
+            "is_correct": false,
+            "explanation": "Frontend performance matters but is usually not the primary bottleneck in Django apps."
+          },
+          {
+            "text": "Server hardware upgrades",
+            "is_correct": false,
+            "explanation": "Hardware upgrades don't fix inefficient code - just make it run faster temporarily."
+          }
+        ],
+        "explanation": "The Pareto Principle: 80% of effects come from 20% of causes. In performance optimization, this means most slowness comes from a small portion of your code. Find and fix those critical bottlenecks first!",
+        "hints": [
+          "What does the Pareto Principle teach us?",
+          "Where should you focus your limited optimization time?"
+        ],
+        "difficulty": "beginner",
+        "concept": "performance_fundamentals",
+        "tags": ["80-20-rule", "pareto", "focus", "strategy"]
+      }
+    ]
+  }
+}

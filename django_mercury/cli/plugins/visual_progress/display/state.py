@@ -66,9 +66,7 @@ class TestExecutionTracker:
         self.start_time = time.time()
         self.last_test_update = time.time()
 
-    def update_test_start(
-        self, test_name: str, is_mercury: bool, display_name: str
-    ) -> None:
+    def update_test_start(self, test_name: str, is_mercury: bool, display_name: str) -> None:
         """
         Update state when a test starts.
 
@@ -123,9 +121,7 @@ class TestExecutionTracker:
         """Record a test success."""
         self.stats["passed"] += 1
 
-    def record_failure(
-        self, test_name: str, isolation_issue: str | None = None
-    ) -> None:
+    def record_failure(self, test_name: str, isolation_issue: str | None = None) -> None:
         """
         Record a test failure.
 

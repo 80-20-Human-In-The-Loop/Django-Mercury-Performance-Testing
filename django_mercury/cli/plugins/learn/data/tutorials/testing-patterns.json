@@ -1,0 +1,251 @@
+{
+  "tutorial": {
+    "id": "testing-patterns",
+    "title": "Django Testing Patterns & Best Practices",
+    "description": "Master Django testing patterns for maintainable, fast, and reliable test suites with performance awareness",
+    "concept": "testing-patterns",
+    "difficulty": "intermediate",
+    "tags": ["testing", "unittest", "pytest", "performance", "django", "best-practices"],
+    "estimated_time": "50 minutes",
+    "learning_objectives": [
+      "Design effective Django test patterns for different scenarios",
+      "Use Mercury performance testing to catch regressions early",
+      "Optimize test suite performance with proper database usage",
+      "Implement proper test isolation and factory patterns",
+      "Write performance-aware tests that prevent production issues"
+    ],
+    "prerequisites": [
+      "Basic Django testing knowledge",
+      "Understanding of Django models and views",
+      "Familiarity with pytest or unittest"
+    ],
+    "sections": [
+      {
+        "title": "Performance-Aware Testing Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Why Performance Testing Matters",
+            "content": "Traditional Django tests verify functionality, but performance regressions often slip through. Mercury testing patterns help you catch performance issues before they reach production.",
+            "key_points": [
+              "Functional tests ≠ Performance tests",
+              "Performance regressions are the #1 cause of production incidents",
+              "Mercury testing integrates performance awareness into your test suite",
+              "Test performance patterns, not just happy paths"
+            ],
+            "examples": [
+              "A view that passes all functional tests but has 20 N+1 queries",
+              "An API endpoint that works correctly but times out under load",
+              "A database migration that's correct but takes 10 minutes on production data"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your Django e-commerce API has 95% test coverage and all tests pass. You deploy to production and immediately get alerts: the product search endpoint is timing out.",
+            "problem": "Your tests verified the search returns correct results, but didn't catch that it was making 1000+ database queries for a simple search."
+          },
+          {
+            "type": "code_example",
+            "title": "Mercury Performance Test Pattern",
+            "before_code": "# Traditional Django test - functional but no performance awareness\nclass ProductSearchTest(TestCase):\n    def test_search_returns_results(self):\n        # Create test data\n        Product.objects.create(name=\"Widget\", price=10.00)\n        \n        # Test the endpoint\n        response = self.client.get('/api/search/?q=widget')\n        \n        # Verify functionality only\n        self.assertEqual(response.status_code, 200)\n        self.assertContains(response, \"Widget\")",
+            "after_code": "# Mercury performance-aware test pattern\nfrom django_mercury import DjangoMercuryAPITestCase\n\nclass ProductSearchTest(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        self.configure_mercury(\n            max_queries=5,           # Catch N+1 queries\n            max_response_time=200,   # Ensure fast responses\n            memory_threshold=50      # Monitor memory usage\n        )\n    \n    def test_search_performance_and_function(self):\n        # Create realistic test data\n        for i in range(50):\n            Product.objects.create(name=f\"Widget {i}\", price=10.00 + i)\n        \n        # Test with Mercury monitoring\n        with self.mercury_monitor():\n            response = self.client.get('/api/search/?q=widget')\n        \n        # Verify both functionality AND performance\n        self.assertEqual(response.status_code, 200)\n        self.assertContains(response, \"Widget\")\n        \n        # Mercury automatically validates:\n        # - Query count ≤ 5\n        # - Response time ≤ 200ms  \n        # - Memory usage reasonable",
+            "explanation": "Mercury tests catch both functional and performance issues. If this search endpoint had N+1 queries, you'd know immediately instead of discovering it in production.",
+            "performance_impact": "Prevents performance regressions: Catches issues like 1000ms response times in development instead of production outages."
+          }
+        ],
+        "quiz": {
+          "question": "What's the main advantage of Mercury performance testing over traditional Django tests?",
+          "options": [
+            "Mercury tests run faster than regular Django tests",
+            "Mercury tests catch performance regressions that functional tests miss",
+            "Mercury tests require less code to write",
+            "Mercury tests automatically fix performance issues"
+          ],
+          "correct_answer": 1,
+          "explanation": "Mercury testing's key advantage is catching performance regressions (like N+1 queries, slow response times) that functional tests miss. Traditional tests verify correct behavior, but Mercury tests verify efficient behavior."
+        }
+      },
+      {
+        "title": "Test Data Factory Patterns",
+        "content_slides": [
+          {
+            "type": "concept", 
+            "title": "Efficient Test Data Creation",
+            "content": "How you create test data dramatically impacts test suite performance. Use factories and bulk operations to create realistic datasets efficiently.",
+            "key_points": [
+              "Use factory_boy or bulk_create() for performance",
+              "Create minimal data that still tests edge cases",
+              "Use realistic data volumes to catch performance issues",
+              "Avoid creating unnecessary related objects"
+            ],
+            "examples": [
+              "Testing pagination with 1000+ records",
+              "Creating complex object hierarchies efficiently",
+              "Simulating production data patterns in tests"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Factory Pattern for Performance",
+            "before_code": "# Slow: Creates objects one by one with full ORM overhead\nclass OrderTestCase(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        \n        # This creates 100 separate database inserts\n        self.customers = []\n        for i in range(100):\n            customer = Customer.objects.create(\n                email=f\"user{i}@example.com\",\n                name=f\"User {i}\"\n            )\n            self.customers.append(customer)\n        \n        # Another 100 separate inserts for orders\n        self.orders = []\n        for customer in self.customers:\n            order = Order.objects.create(\n                customer=customer,\n                total=Decimal('100.00')\n            )\n            self.orders.append(order)",
+            "after_code": "# Fast: Uses bulk operations and factories\nimport factory\nfrom django.db import transaction\n\nclass CustomerFactory(factory.django.DjangoModelFactory):\n    class Meta:\n        model = Customer\n    \n    email = factory.Sequence(lambda n: f\"user{n}@example.com\")\n    name = factory.Sequence(lambda n: f\"User {n}\")\n\nclass OrderTestCase(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        self.configure_mercury(max_queries=10)\n        \n        # Create test data efficiently\n        with transaction.atomic():\n            # Bulk create customers\n            self.customers = CustomerFactory.create_batch(100)\n            \n            # Bulk create orders\n            orders_data = [\n                Order(customer=customer, total=Decimal('100.00'))\n                for customer in self.customers\n            ]\n            self.orders = Order.objects.bulk_create(orders_data)",
+            "explanation": "Factory pattern with bulk operations creates test data 10x faster and with predictable query counts. This lets you test with realistic data volumes.",
+            "performance_impact": "Test setup time: 2000ms → 200ms. Enables testing with production-scale datasets to catch real performance issues."
+          }
+        ],
+        "quiz": {
+          "question": "Why should you use bulk_create() instead of individual create() calls in test setup?",
+          "options": [
+            "bulk_create() is easier to read and understand",
+            "bulk_create() reduces database queries and speeds up test setup significantly",
+            "bulk_create() automatically creates better test data",
+            "bulk_create() is required by Mercury testing"
+          ],
+          "correct_answer": 1,
+          "explanation": "bulk_create() reduces database queries from N separate inserts to 1 batch insert, dramatically speeding up test setup. This allows testing with realistic data volumes that would be too slow with individual creates."
+        }
+      },
+      {
+        "title": "Database-Intensive Test Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Testing Database-Heavy Operations",
+            "content": "Some operations require testing with significant database activity. Use Mercury to ensure these operations remain performant as your application grows.",
+            "key_points": [
+              "Test database migrations with realistic data volumes",
+              "Verify bulk operations maintain performance",
+              "Test complex queries under load",
+              "Monitor memory usage for data-intensive operations"
+            ],
+            "examples": [
+              "Data export operations with thousands of records", 
+              "Complex reporting queries with multiple JOINs",
+              "Batch processing operations"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Testing Bulk Operations",
+            "before_code": "# Untested bulk operation - could have hidden performance issues\nclass ReportGenerator:\n    def generate_sales_report(self, start_date, end_date):\n        orders = Order.objects.filter(\n            created_at__range=[start_date, end_date]\n        )\n        \n        # This could be N+1 queries in disguise\n        report_data = []\n        for order in orders:\n            report_data.append({\n                'order_id': order.id,\n                'customer_name': order.customer.name,  # Potential N+1\n                'product_count': order.items.count(),   # More queries\n                'total': order.total\n            })\n        \n        return report_data",
+            "after_code": "# Mercury-tested bulk operation with performance guarantees\nclass ReportGenerator:\n    def generate_sales_report(self, start_date, end_date):\n        # Optimized query with select_related and annotations\n        orders = Order.objects.filter(\n            created_at__range=[start_date, end_date]\n        ).select_related('customer').annotate(\n            item_count=Count('items')\n        )\n        \n        # Single query, no loops\n        return [\n            {\n                'order_id': order.id,\n                'customer_name': order.customer.name,\n                'product_count': order.item_count,\n                'total': order.total\n            }\n            for order in orders\n        ]\n\nclass ReportGeneratorTest(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        self.configure_mercury(\n            max_queries=5,           # Should be just a few queries\n            max_response_time=500,   # Even with 1000 orders\n            memory_threshold=100     # Monitor memory usage\n        )\n    \n    def test_sales_report_performance(self):\n        # Create realistic test dataset\n        customers = CustomerFactory.create_batch(50)\n        orders = []\n        for customer in customers:\n            # Each customer has 1-5 orders\n            order_count = random.randint(1, 5)\n            for _ in range(order_count):\n                orders.append(Order(customer=customer, total=Decimal('100.00')))\n        \n        Order.objects.bulk_create(orders)\n        \n        # Test with Mercury monitoring\n        generator = ReportGenerator()\n        with self.mercury_monitor():\n            report = generator.generate_sales_report(\n                start_date=date.today() - timedelta(days=30),\n                end_date=date.today()\n            )\n        \n        # Verify both functionality and performance\n        self.assertGreater(len(report), 0)\n        self.assertIn('customer_name', report[0])\n        \n        # Mercury validates:\n        # - ≤ 5 database queries (no N+1)\n        # - ≤ 500ms response time\n        # - Reasonable memory usage",
+            "explanation": "Mercury testing ensures bulk operations stay performant. Without this, a report that works fine with 10 orders might timeout with 1000 orders.",
+            "performance_impact": "Prevents production issues: Report generation time stays under 500ms even as data grows from 100 to 10,000 orders."
+          }
+        ],
+        "quiz": {
+          "question": "What's the biggest risk when testing bulk operations without performance monitoring?",
+          "options": [
+            "The operations might not return correct data",
+            "The tests might take too long to run",
+            "Operations that work with small test datasets might timeout with production data volumes",
+            "The database might run out of storage space"
+          ],
+          "correct_answer": 2,
+          "explanation": "The biggest risk is that operations working fine with small test datasets (10-100 records) might have hidden performance issues that only surface with production data volumes (10,000+ records). Mercury testing catches this by monitoring performance even with test data."
+        }
+      },
+      {
+        "title": "Test Isolation and Cleanup Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Maintaining Test Performance and Isolation",
+            "content": "Proper test isolation prevents tests from affecting each other's performance. Use database transactions and careful cleanup to maintain fast, reliable tests.",
+            "key_points": [
+              "Use TransactionTestCase only when necessary",
+              "Leverage pytest-django's database fixtures",
+              "Clean up Mercury monitoring between tests",
+              "Use TestCase with database rollback for speed"
+            ],
+            "examples": [
+              "Testing Celery tasks with database state",
+              "API tests that modify shared configuration",
+              "Testing with custom database settings"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Proper Test Isolation Pattern",
+            "before_code": "# Poor isolation - tests affect each other\nclass ProductAPITest(DjangoMercuryAPITestCase):\n    # No proper cleanup - state leaks between tests\n    \n    def test_create_product(self):\n        # Creates global cache entries\n        CacheHelper.cache_product_categories()\n        \n        response = self.client.post('/api/products/', {\n            'name': 'Test Product',\n            'category': 'electronics'\n        })\n        self.assertEqual(response.status_code, 201)\n    \n    def test_list_products(self):\n        # This test might behave differently depending on\n        # whether test_create_product ran first\n        response = self.client.get('/api/products/')\n        self.assertEqual(response.status_code, 200)",
+            "after_code": "# Proper isolation with cleanup\nclass ProductAPITest(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        self.configure_mercury(\n            max_queries=8,\n            max_response_time=300\n        )\n        # Clean slate for each test\n        cache.clear()\n    \n    def tearDown(self):\n        # Clean up after each test\n        cache.clear()\n        # Mercury cleanup is automatic\n        super().tearDown()\n    \n    def test_create_product(self):\n        with self.mercury_monitor():\n            response = self.client.post('/api/products/', {\n                'name': 'Test Product', \n                'category': 'electronics'\n            })\n        \n        self.assertEqual(response.status_code, 201)\n        \n        # Verify performance impact of creation\n        self.assertMercuryWithinLimits()\n    \n    def test_list_products(self):\n        # Create known test data\n        ProductFactory.create_batch(10)\n        \n        with self.mercury_monitor():\n            response = self.client.get('/api/products/')\n        \n        self.assertEqual(response.status_code, 200)\n        self.assertEqual(len(response.json()['results']), 10)\n        \n        # Each test has predictable performance characteristics\n        self.assertMercuryWithinLimits()",
+            "explanation": "Proper test isolation ensures each test starts with a clean state and predictable performance characteristics. This prevents flaky tests and makes performance regression detection reliable.",
+            "performance_impact": "Consistent test performance: Each test runs in 150-300ms regardless of test order, making performance regression detection accurate."
+          }
+        ],
+        "quiz": {
+          "question": "Why is proper test isolation especially important for performance testing?",
+          "options": [
+            "To prevent one test's cache or database state from affecting another test's performance measurements",
+            "To make tests run faster overall",
+            "To reduce the amount of code needed for each test",
+            "To ensure tests can run in parallel"
+          ],
+          "correct_answer": 0,
+          "explanation": "Performance measurements must be consistent and predictable. If one test leaves cache entries or database state that affects the next test's query count or response time, you'll get false positives/negatives for performance regressions."
+        }
+      },
+      {
+        "title": "Continuous Integration Testing Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Mercury Testing in CI/CD Pipelines",
+            "content": "Integrate Mercury performance testing into your CI/CD pipeline to catch performance regressions before they reach production.",
+            "key_points": [
+              "Configure Mercury thresholds for CI environments",
+              "Use Mercury reports in pull request reviews",
+              "Set up performance regression alerts",
+              "Balance test speed with performance coverage"
+            ],
+            "examples": [
+              "Failed CI builds due to query count increases",
+              "PR comments showing performance impact",
+              "Automated performance regression detection"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "CI-Optimized Mercury Configuration",
+            "before_code": "# Generic test configuration - not optimized for CI\nclass APITestCase(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        # Same config everywhere - may be too strict for CI\n        self.configure_mercury(\n            max_queries=3,\n            max_response_time=100,  # Too strict for slower CI environments\n            memory_threshold=30\n        )",
+            "after_code": "# CI-aware Mercury configuration\nimport os\n\nclass APITestCase(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        \n        # Adjust thresholds based on environment\n        if os.getenv('CI'):\n            # CI environments are typically slower\n            self.configure_mercury(\n                max_queries=5,           # Slightly more lenient\n                max_response_time=500,   # Account for CI overhead\n                memory_threshold=100,    # CI has different memory patterns\n                fail_on_exceed=True      # Still fail CI on regressions\n            )\n        else:\n            # Local development - strict for immediate feedback\n            self.configure_mercury(\n                max_queries=3,\n                max_response_time=200,\n                memory_threshold=50,\n                fail_on_exceed=False     # Warning only in development\n            )\n    \n    def test_api_endpoint_performance(self):\n        with self.mercury_monitor():\n            response = self.client.get('/api/data/')\n        \n        self.assertEqual(response.status_code, 200)\n        \n        # Generate CI-friendly performance report\n        if os.getenv('CI'):\n            self.generate_mercury_report('api_performance_report.json')",
+            "explanation": "CI environments need different performance thresholds than local development. This pattern adapts to the environment while still catching regressions.",
+            "performance_impact": "Reliable CI performance testing: Catches real regressions without false positives from CI environment differences."
+          }
+        ],
+        "quiz": {
+          "question": "Why should Mercury performance thresholds be different in CI vs local development?",
+          "options": [
+            "CI environments don't need performance testing",
+            "CI environments are typically slower and have different resource constraints than local development",
+            "Local development should have stricter limits than production",
+            "CI environments run tests in parallel which affects performance"
+          ],
+          "correct_answer": 1,
+          "explanation": "CI environments typically have shared resources, different hardware, and additional overhead that affects performance measurements. Adjusting thresholds prevents false positives while still catching real performance regressions."
+        }
+      }
+    ],
+    "summary": {
+      "key_takeaways": [
+        "Mercury performance testing catches regressions that functional tests miss",
+        "Use factory patterns and bulk operations for efficient test data creation",
+        "Test database-intensive operations with realistic data volumes",
+        "Maintain proper test isolation for consistent performance measurements",
+        "Adapt Mercury configuration for different environments (local vs CI)"
+      ],
+      "next_steps": [
+        "Integrate Mercury testing into your existing test suite",
+        "Set up CI/CD pipeline with performance regression detection",
+        "Create performance budgets for different types of operations",
+        "Explore advanced Mercury features like custom metrics and profiling"
+      ],
+      "related_tutorials": [
+        "n-plus-one-queries",
+        "response-time", 
+        "test-organization",
+        "django-orm"
+      ]
+    }
+  }
+}

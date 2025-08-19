@@ -38,7 +38,7 @@ class MercuryVisualTestResult(unittest.TestResult):
         """Called when a test starts."""
         super().startTest(test)
         self.test_start_time = time.perf_counter()
-        
+
         # Track failure count at test start to detect new failures
         self._failure_count = len(self.failures) + len(self.errors)
 
@@ -48,11 +48,7 @@ class MercuryVisualTestResult(unittest.TestResult):
         # Check if this is an _ErrorHolder object (created for test import/setup errors)
         if test_class == "_ErrorHolder":
             # _ErrorHolder objects don't have _testMethodName, use id() instead
-            test_name = (
-                str(test.id())
-                if hasattr(test, "id")
-                else f"ErrorHolder.{test_class}"
-            )
+            test_name = str(test.id()) if hasattr(test, "id") else f"ErrorHolder.{test_class}"
             print(f"🚨 Encountered test import/setup error: {test_name}")
             is_mercury = False  # Error holders are never Mercury tests
         else:
@@ -61,9 +57,7 @@ class MercuryVisualTestResult(unittest.TestResult):
             test_name = f"{test_class}.{test_method}"
 
             if test_method == "unknown_method":
-                print(
-                    f"⚠️  Warning: Test object missing _testMethodName: {test_class}"
-                )
+                print(f"⚠️  Warning: Test object missing _testMethodName: {test_class}")
 
             # Detect if it's a Mercury test
             is_mercury = self._is_mercury_test(test)
@@ -84,9 +78,7 @@ class MercuryVisualTestResult(unittest.TestResult):
         if self.visual_display:
             self.visual_display.on_test_start(test_name, is_mercury)
         else:
-            print(
-                f"⚠️  No visual_display available in startTest for: {test_name}"
-            )
+            print(f"⚠️  No visual_display available in startTest for: {test_name}")
 
     def stopTest(self, test):
         """Called when a test completes."""
@@ -100,14 +92,8 @@ class MercuryVisualTestResult(unittest.TestResult):
         # Stop query tracking and get the actual query count
         from .monitor_hook import get_mercury_hook
 
-        test_name = (
-            self.current_test["name"]
-            if self.current_test
-            else self._get_test_name(test)
-        )
-        actual_query_count = get_mercury_hook().stop_test_query_tracking(
-            test_name
-        )
+        test_name = self.current_test["name"] if self.current_test else self._get_test_name(test)
+        actual_query_count = get_mercury_hook().stop_test_query_tracking(test_name)
 
         # Extract Mercury metrics if available
         mercury_metrics = self._extract_mercury_metrics(test)
@@ -124,13 +110,13 @@ class MercuryVisualTestResult(unittest.TestResult):
         if self.visual_display and self.current_test:
             # Determine if test passed (no failures or errors added during this test)
             passed = not self._test_had_failure_or_error()
-            
+
             self.visual_display.on_test_complete(
                 self.current_test["name"],
                 duration,
                 passed,
                 self.current_test["is_mercury"],
-                mercury_metrics
+                mercury_metrics,
             )
 
         self.current_test = None
@@ -144,9 +130,7 @@ class MercuryVisualTestResult(unittest.TestResult):
         if self.visual_display:
             self.visual_display.on_test_success(test_name)
         else:
-            print(
-                f"⚠️  No visual_display available for test success: {test_name}"
-            )
+            print(f"⚠️  No visual_display available for test success: {test_name}")
 
     def addError(self, test, err):
         """Called when a test has an error."""
@@ -156,9 +140,7 @@ class MercuryVisualTestResult(unittest.TestResult):
         # Enhanced debugging for _ErrorHolder objects (but less verbose)
         if test.__class__.__name__ == "_ErrorHolder":
             # Only show the first error of each type to reduce spam
-            error_key = (
-                f"{err[0].__name__ if err and len(err) > 0 else 'Unknown'}"
-            )
+            error_key = f"{err[0].__name__ if err and len(err) > 0 else 'Unknown'}"
             if error_key not in self._shown_errors:
                 self._shown_errors.add(error_key)
 
@@ -167,42 +149,22 @@ class MercuryVisualTestResult(unittest.TestResult):
                 if err and len(err) > 1 and err[1]:
                     error_msg = str(err[1])
                     # Show first line of error for quick understanding
-                    first_line = (
-                        error_msg.split("\n")[0]
-                        if error_msg
-                        else "No error message"
-                    )
+                    first_line = error_msg.split("\n")[0] if error_msg else "No error message"
                     print(f"   Message: {first_line}")
 
                     # Check for common import errors
-                    if (
-                        "OperationalError" in str(err[0])
-                        and "readonly" in first_line
-                    ):
-                        print(
-                            "   💡 Fix: Run './fix_test_db.sh' in your project directory"
-                        )
+                    if "OperationalError" in str(err[0]) and "readonly" in first_line:
+                        print("   💡 Fix: Run './fix_test_db.sh' in your project directory")
                         # Set flag for main process to show database tips
                         os.environ["MERCURY_DB_ERROR_DETECTED"] = "1"
-                    elif (
-                        "OperationalError" in str(err[0])
-                        and "no such table" in first_line
-                    ):
-                        print(
-                            "   💡 Database not set up properly - migrations may need to run"
-                        )
+                    elif "OperationalError" in str(err[0]) and "no such table" in first_line:
+                        print("   💡 Database not set up properly - migrations may need to run")
                         os.environ["MERCURY_DB_ERROR_DETECTED"] = "1"
-                    elif "ImportError" in str(
-                        err[0]
-                    ) or "ModuleNotFoundError" in str(err[0]):
-                        print(
-                            "   💡 Hint: Check if all required packages are installed"
-                        )
+                    elif "ImportError" in str(err[0]) or "ModuleNotFoundError" in str(err[0]):
+                        print("   💡 Hint: Check if all required packages are installed")
 
                     # Show that we're suppressing duplicate errors
-                    print(
-                        f"   (Suppressing further {error_key} errors to reduce output)"
-                    )
+                    print(f"   (Suppressing further {error_key} errors to reduce output)")
 
         if self.visual_display:
             self.visual_display.on_test_error(test_name, err)
@@ -216,9 +178,7 @@ class MercuryVisualTestResult(unittest.TestResult):
         isolation_issue = None
         if err and len(err) > 1:
             error_msg = str(err[1]) if err[1] else ""
-            isolation_issue = self.isolation_detector.analyze_failure(
-                test_name, error_msg
-            )
+            isolation_issue = self.isolation_detector.analyze_failure(test_name, error_msg)
 
         # Only print failure details for non-bulk failures to reduce spam
         self._failure_count += 1
@@ -229,22 +189,16 @@ class MercuryVisualTestResult(unittest.TestResult):
                 print(f"❌ Test Import/Setup Failure: {test_name}")
             else:
                 if isolation_issue:
-                    print(
-                        f"❌ Test Failure: {test_name} ⚠️ [Possible Isolation Issue]"
-                    )
+                    print(f"❌ Test Failure: {test_name} ⚠️ [Possible Isolation Issue]")
                     print(f"   Issue: {isolation_issue}")
                 else:
                     print(f"❌ Test Failure: {test_name}")
         elif self._failure_count == 4:
-            print(
-                "   (Suppressing further failure output, see summary at end)"
-            )
+            print("   (Suppressing further failure output, see summary at end)")
 
         if self.visual_display:
             # Pass isolation info to display
-            self.visual_display.on_test_failure(
-                test_name, err, isolation_issue=isolation_issue
-            )
+            self.visual_display.on_test_failure(test_name, err, isolation_issue=isolation_issue)
 
     def addSkip(self, test, reason):
         """Called when a test is skipped."""
@@ -263,7 +217,7 @@ class MercuryVisualTestResult(unittest.TestResult):
         # This is a simple approach - the test passed if no new failures/errors were added
         current_failures = len(self.failures) + len(self.errors)
         return current_failures > self._failure_count
-    
+
     def _is_mercury_test(self, test):
         """Check if test is a Mercury test case."""
         # Check class hierarchy for Mercury test cases
@@ -279,29 +233,32 @@ class MercuryVisualTestResult(unittest.TestResult):
                 return True
 
         # Check if test has Mercury attributes
-        return hasattr(test, "_mercury_enabled") or hasattr(
-            test, "_mercury_metrics"
-        )
+        return hasattr(test, "_mercury_enabled") or hasattr(test, "_mercury_metrics")
 
     def _extract_mercury_metrics(self, test):
         """Extract Mercury performance metrics from test if available."""
         import logging
+
         logger = logging.getLogger(__name__)
         test_name = f"{test.__class__.__name__}.{getattr(test, '_testMethodName', 'unknown')}"
-        
+
         logger.debug(f"Extracting metrics for {test_name}")
         logger.debug(f"Test class: {test.__class__.__name__}")
-        logger.debug(f"Test attributes: {[attr for attr in dir(test) if attr.startswith('_mercury') or attr.startswith('_test')]}")
-        logger.debug(f"Test class attributes: {[attr for attr in dir(test.__class__) if attr.startswith('_mercury') or attr.startswith('_test')]}")
-        
+        logger.debug(
+            f"Test attributes: {[attr for attr in dir(test) if attr.startswith('_mercury') or attr.startswith('_test')]}"
+        )
+        logger.debug(
+            f"Test class attributes: {[attr for attr in dir(test.__class__) if attr.startswith('_mercury') or attr.startswith('_test')]}"
+        )
+
         # Check if this is actually a Mercury test
         is_mercury = self._is_mercury_test(test)
         logger.debug(f"Is Mercury test: {is_mercury}")
-        
+
         if not is_mercury:
             logger.debug(f"Not a Mercury test, skipping extraction")
             return None
-        
+
         # Use the monitor hook to extract metrics
         from .monitor_hook import extract_mercury_metrics, get_mercury_hook
 
@@ -313,7 +270,7 @@ class MercuryVisualTestResult(unittest.TestResult):
             return metrics
         else:
             logger.debug("No metrics from hook system")
-            
+
         # NEW: Try to get metrics directly from the hook's store using test name
         hook = get_mercury_hook()
         captured = hook.get_metrics_for_test(test_name)
@@ -337,13 +294,13 @@ class MercuryVisualTestResult(unittest.TestResult):
         logger.debug("Checking Mercury attributes...")
 
         # Show what Mercury-related attributes exist
-        mercury_attrs = [attr for attr in dir(test) if 'mercury' in attr.lower()]
-        test_attrs = [attr for attr in dir(test) if attr.startswith('_test')]
+        mercury_attrs = [attr for attr in dir(test) if "mercury" in attr.lower()]
+        test_attrs = [attr for attr in dir(test) if attr.startswith("_test")]
         logger.debug(f"Mercury attrs on instance: {mercury_attrs}")
         logger.debug(f"Test attrs on instance: {test_attrs}")
-        
-        class_mercury_attrs = [attr for attr in dir(test.__class__) if 'mercury' in attr.lower()]
-        class_test_attrs = [attr for attr in dir(test.__class__) if attr.startswith('_test')]
+
+        class_mercury_attrs = [attr for attr in dir(test.__class__) if "mercury" in attr.lower()]
+        class_test_attrs = [attr for attr in dir(test.__class__) if attr.startswith("_test")]
         logger.debug(f"Mercury attrs on class: {class_mercury_attrs}")
         logger.debug(f"Test attrs on class: {class_test_attrs}")
 
@@ -362,20 +319,22 @@ class MercuryVisualTestResult(unittest.TestResult):
                 # Get the most recent execution
                 last_execution = executions[-1]
                 logger.debug(f"Last execution type: {type(last_execution)}")
-                logger.debug(f"Last execution attributes: {dir(last_execution) if hasattr(last_execution, '__dict__') else 'No __dict__'}")
-                
+                logger.debug(
+                    f"Last execution attributes: {dir(last_execution) if hasattr(last_execution, '__dict__') else 'No __dict__'}"
+                )
+
                 if hasattr(last_execution, "__dict__"):
                     # Convert execution object to dict - match the actual attribute names
                     logger.debug(f"Converting execution object to dict")
-                    
+
                     # Extract response time (stored as response_time, convert to ms)
                     response_time = getattr(last_execution, "response_time", 0)
                     response_time_ms = response_time if response_time else 0
-                    
+
                     # Extract memory usage (stored as memory_usage, already in MB)
                     memory_usage = getattr(last_execution, "memory_usage", 0)
                     memory_usage_mb = memory_usage if memory_usage else 0
-                    
+
                     metrics = {
                         "response_time_ms": response_time_ms,
                         "query_count": getattr(last_execution, "query_count", 0),
@@ -391,9 +350,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                     if hasattr(last_execution, "django_issues"):
                         django_issues = last_execution.django_issues
                         if hasattr(django_issues, "has_n_plus_one"):
-                            metrics["n_plus_one_detected"] = (
-                                django_issues.has_n_plus_one
-                            )
+                            metrics["n_plus_one_detected"] = django_issues.has_n_plus_one
 
                     # Get grade from performance score
                     if hasattr(last_execution, "performance_score"):
@@ -419,7 +376,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                 # Convert execution object to dict - match actual attribute names
                 response_time = getattr(last_execution, "response_time", 0)
                 memory_usage = getattr(last_execution, "memory_usage", 0)
-                
+
                 metrics = {
                     "response_time_ms": response_time if response_time else 0,
                     "query_count": getattr(last_execution, "query_count", 0),
@@ -429,7 +386,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                     "grade": None,
                     "n_plus_one_detected": False,
                 }
-                
+
                 # Extract grade from performance score
                 if hasattr(last_execution, "performance_score"):
                     score = last_execution.performance_score
@@ -437,7 +394,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                         metrics["grade"] = score.grade
                     elif hasattr(score, "letter_grade"):
                         metrics["grade"] = score.letter_grade
-                
+
                 # Extract N+1 detection
                 if hasattr(last_execution, "django_issues"):
                     django_issues = last_execution.django_issues
@@ -454,7 +411,7 @@ class MercuryVisualTestResult(unittest.TestResult):
             if hasattr(last_metrics, "__dict__"):
                 response_time = getattr(last_metrics, "response_time", 0)
                 memory_usage = getattr(last_metrics, "memory_usage", 0)
-                
+
                 metrics = {
                     "response_time_ms": response_time if response_time else 0,
                     "query_count": getattr(last_metrics, "query_count", 0),
@@ -464,7 +421,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                     "grade": None,
                     "n_plus_one_detected": False,
                 }
-                
+
                 # Extract grade
                 if hasattr(last_metrics, "performance_score"):
                     score = last_metrics.performance_score
@@ -474,7 +431,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                         metrics["grade"] = score.letter_grade
                 elif hasattr(last_metrics, "grade"):
                     metrics["grade"] = last_metrics.grade
-                
+
                 # Extract N+1 detection
                 if hasattr(last_metrics, "django_issues"):
                     django_issues = last_metrics.django_issues
@@ -486,16 +443,18 @@ class MercuryVisualTestResult(unittest.TestResult):
                 metrics = last_metrics
 
         # 5. Mercury monitor attribute
-        if not metrics and hasattr(test, "mercury_monitor") and hasattr(
-            test.mercury_monitor, "metrics"
+        if (
+            not metrics
+            and hasattr(test, "mercury_monitor")
+            and hasattr(test.mercury_monitor, "metrics")
         ):
             logger.debug("Found mercury_monitor attribute")
             monitor = test.mercury_monitor
             monitor_metrics = monitor.metrics
-            
+
             response_time = getattr(monitor_metrics, "response_time", 0)
             memory_usage = getattr(monitor_metrics, "memory_usage", 0)
-            
+
             metrics = {
                 "response_time_ms": response_time if response_time else 0,
                 "query_count": getattr(monitor_metrics, "query_count", 0),
@@ -505,7 +464,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                 "grade": None,
                 "n_plus_one_detected": False,
             }
-            
+
             # Extract grade
             if hasattr(monitor_metrics, "performance_score"):
                 score = monitor_metrics.performance_score
@@ -515,7 +474,7 @@ class MercuryVisualTestResult(unittest.TestResult):
                     metrics["grade"] = score.letter_grade
             elif hasattr(monitor_metrics, "grade"):
                 metrics["grade"] = monitor_metrics.grade
-            
+
             # Extract N+1 detection
             if hasattr(monitor_metrics, "django_issues"):
                 django_issues = monitor_metrics.django_issues
@@ -534,22 +493,22 @@ class MercuryVisualTestResult(unittest.TestResult):
         # Return None if no metrics found, otherwise filter out None values
         if not metrics:
             return None
-        
+
         # Filter out None values
         filtered_metrics = {k: v for k, v in metrics.items() if v is not None}
-        
+
         # Check if the filtered metrics are meaningful
         # (not just all zeros/defaults)
         has_meaningful_data = (
-            filtered_metrics.get("query_count", 0) > 0 or
-            filtered_metrics.get("response_time_ms", 0) > 0 or
-            filtered_metrics.get("memory_usage_mb", 0) > 0 or
-            filtered_metrics.get("cache_hits", 0) > 0 or
-            filtered_metrics.get("cache_misses", 0) > 0 or
-            filtered_metrics.get("n_plus_one_detected", False) or
-            (filtered_metrics.get("grade") and filtered_metrics.get("grade").strip())
+            filtered_metrics.get("query_count", 0) > 0
+            or filtered_metrics.get("response_time_ms", 0) > 0
+            or filtered_metrics.get("memory_usage_mb", 0) > 0
+            or filtered_metrics.get("cache_hits", 0) > 0
+            or filtered_metrics.get("cache_misses", 0) > 0
+            or filtered_metrics.get("n_plus_one_detected", False)
+            or (filtered_metrics.get("grade") and filtered_metrics.get("grade").strip())
         )
-        
+
         # Debug log what we're returning
         if has_meaningful_data:
             logger.debug(f"Returning meaningful metrics for {test_name}: {filtered_metrics}")

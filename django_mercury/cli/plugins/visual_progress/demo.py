@@ -29,9 +29,7 @@ def show_visual_demo():
     display = MercuryVisualDisplay(console)
 
     # Print intro
-    console.print(
-        "\n[bold cyan]🚀 Django Mercury Visual Testing - Demo Mode[/bold cyan]\n"
-    )
+    console.print("\n[bold cyan]🚀 Django Mercury Visual Testing - Demo Mode[/bold cyan]\n")
     console.print("This is a demonstration of the visual test runner.")
     console.print(
         "When running actual tests, use: [bold]mercury-test --visual [test_path][/bold]\n"
@@ -125,13 +123,7 @@ def show_visual_demo():
     # Print additional info
     console.print("\n[bold green]Demo complete![/bold green]")
     console.print("\nTo run actual tests with visual output:")
-    console.print(
-        "  [bold]mercury-test --visual[/bold]              # Run all tests"
-    )
-    console.print(
-        "  [bold]mercury-test --visual tests.api[/bold]   # Run specific tests"
-    )
-    console.print(
-        "  [bold]mercury-test --visual --parallel[/bold]  # Run tests in parallel"
-    )
+    console.print("  [bold]mercury-test --visual[/bold]              # Run all tests")
+    console.print("  [bold]mercury-test --visual tests.api[/bold]   # Run specific tests")
+    console.print("  [bold]mercury-test --visual --parallel[/bold]  # Run tests in parallel")
     console.print("\nFor more options: [bold]mercury-test --help[/bold]\n")

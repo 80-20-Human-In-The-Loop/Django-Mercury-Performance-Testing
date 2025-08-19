@@ -21,9 +21,7 @@ class StdoutCapture(io.StringIO):
     in the visual display's log buffer.
     """
 
-    def __init__(
-        self, display: "MercuryVisualDisplay", is_stderr: bool = False
-    ):
+    def __init__(self, display: "MercuryVisualDisplay", is_stderr: bool = False):
         """
         Initialize the capture stream.
 

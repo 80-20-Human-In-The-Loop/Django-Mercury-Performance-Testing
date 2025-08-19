@@ -40,10 +40,7 @@ class MercuryVisualTestRunner(DiscoverRunner):
 
         # Set up interrupt handling
         self.interrupted = False
-        self.original_sigint_handler = signal.signal(
-            signal.SIGINT, self._handle_interrupt
-        )
-
+        self.original_sigint_handler = signal.signal(signal.SIGINT, self._handle_interrupt)
 
         # Check if Rich is available
         if not RICH_AVAILABLE:
@@ -82,15 +79,8 @@ class MercuryVisualTestRunner(DiscoverRunner):
         # Show summary of what was completed
         if hasattr(self.visual_display, "stats"):
             stats = self.visual_display.stats
-            completed = (
-                stats["passed"]
-                + stats["failed"]
-                + stats["errors"]
-                + stats["skipped"]
-            )
-            print(
-                f"\n📊 Tests completed before interruption: {completed}/{stats['total']}"
-            )
+            completed = stats["passed"] + stats["failed"] + stats["errors"] + stats["skipped"]
+            print(f"\n📊 Tests completed before interruption: {completed}/{stats['total']}")
             if stats["passed"] > 0:
                 print(f"✅ Passed: {stats['passed']}")
             if stats["failed"] > 0:
@@ -100,9 +90,7 @@ class MercuryVisualTestRunner(DiscoverRunner):
             if stats["skipped"] > 0:
                 print(f"⏭️  Skipped: {stats['skipped']}")
 
-        print(
-            "\nUse 'mercury-test --visual [specific_test]' to run individual tests."
-        )
+        print("\nUse 'mercury-test --visual [specific_test]' to run individual tests.")
 
         # Restore original handler and re-raise to exit
         signal.signal(signal.SIGINT, self.original_sigint_handler)
@@ -204,9 +192,7 @@ class MercuryVisualTestRunner(DiscoverRunner):
             # Handle unexpected errors
             # Unexpected error during test execution
             if self.visual_display:
-                self.visual_display.add_to_log_buffer(
-                    f"❌ Error: {str(e)[:40]}"
-                )
+                self.visual_display.add_to_log_buffer(f"❌ Error: {str(e)[:40]}")
             if self.visual_display and self.visual_display.live:
                 try:
                     self.visual_display.live.stop()
@@ -279,9 +265,7 @@ class MercuryVisualTestRunner(DiscoverRunner):
         # Create visual result factory that captures visual_display
         visual_display = self.visual_display
 
-        def create_visual_result(
-            stream=None, descriptions=None, verbosity=None
-        ):
+        def create_visual_result(stream=None, descriptions=None, verbosity=None):
             return MercuryVisualTestResult(
                 stream=stream,
                 descriptions=descriptions,

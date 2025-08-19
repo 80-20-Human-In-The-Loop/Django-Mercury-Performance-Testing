@@ -65,7 +65,7 @@ class MetricsTracker:
         if not self._is_meaningful_metrics(metrics):
             # Don't count tests with empty metrics
             return
-        
+
         self.test_metrics.append(metrics)
         self.mercury_test_count += 1
 
@@ -81,16 +81,10 @@ class MetricsTracker:
             self.n_plus_one_count += 1
 
         # Update extremes
-        if (
-            not self.slowest_test
-            or metrics.response_time_ms > self.slowest_test.response_time_ms
-        ):
+        if not self.slowest_test or metrics.response_time_ms > self.slowest_test.response_time_ms:
             self.slowest_test = metrics
 
-        if (
-            not self.most_queries_test
-            or metrics.query_count > self.most_queries_test.query_count
-        ):
+        if not self.most_queries_test or metrics.query_count > self.most_queries_test.query_count:
             self.most_queries_test = metrics
 
         if (
@@ -120,37 +114,35 @@ class MetricsTracker:
     def _is_meaningful_metrics(self, metrics: TestMetrics) -> bool:
         """
         Check if metrics contain meaningful data.
-        
+
         Metrics are considered meaningful if they have:
         - Non-zero query count, response time, or memory usage
         - A performance grade
         - N+1 detection
         - Cache activity
-        
+
         Args:
             metrics: TestMetrics to check
-            
+
         Returns:
             True if metrics are meaningful, False if they're empty/default
         """
         # Has a grade (indicates real assessment)
         if metrics.grade and metrics.grade.strip():
             return True
-            
+
         # Has N+1 detection
         if metrics.n_plus_one_detected:
             return True
-            
+
         # Has non-zero performance data
-        if (metrics.query_count > 0 or 
-            metrics.response_time_ms > 0 or 
-            metrics.memory_usage_mb > 0):
+        if metrics.query_count > 0 or metrics.response_time_ms > 0 or metrics.memory_usage_mb > 0:
             return True
-            
+
         # Has cache activity
         if metrics.cache_hits > 0 or metrics.cache_misses > 0:
             return True
-            
+
         # All values are zero/default - not meaningful
         return False
 
@@ -170,22 +162,16 @@ class MetricsTracker:
         # Add extremes if available
         if self.slowest_test:
             test_name = self.slowest_test.test_name.split(".")[-1][:20]
-            insights["slowest_test"] = (
-                f"{test_name}: {self.slowest_test.response_time_ms:.0f}ms"
-            )
+            insights["slowest_test"] = f"{test_name}: {self.slowest_test.response_time_ms:.0f}ms"
 
         if self.most_queries_test:
             test_name = self.most_queries_test.test_name.split(".")[-1][:20]
-            insights["most_queries"] = (
-                f"{test_name}: {self.most_queries_test.query_count}Q"
-            )
+            insights["most_queries"] = f"{test_name}: {self.most_queries_test.query_count}Q"
 
         # Add ranges if we have data
         if self.test_metrics:
             if self.query_range[0] != float("inf"):
-                insights["query_range"] = (
-                    f"{self.query_range[0]}-{self.query_range[1]} queries"
-                )
+                insights["query_range"] = f"{self.query_range[0]}-{self.query_range[1]} queries"
 
             if self.time_range[0] != float("inf"):
                 min_time = f"{self.time_range[0]:.0f}ms"
@@ -234,13 +220,9 @@ class MetricsTracker:
             if metrics.n_plus_one_detected:
                 offenders.append(f"🔴 {test_name}: N+1 detected!")
             elif metrics.query_count > 20:
-                offenders.append(
-                    f"⚠️ {test_name}: {metrics.query_count} queries"
-                )
+                offenders.append(f"⚠️ {test_name}: {metrics.query_count} queries")
             elif metrics.response_time_ms > 500:
-                offenders.append(
-                    f"🐌 {test_name}: {metrics.response_time_ms:.0f}ms"
-                )
+                offenders.append(f"🐌 {test_name}: {metrics.response_time_ms:.0f}ms")
             else:
                 offenders.append(f"📊 {test_name}: Grade {metrics.grade}")
 
@@ -271,24 +253,30 @@ class MetricsTracker:
             test_parts = metrics.test_name.split(".")
             if len(test_parts) >= 2:
                 # Show last two parts: TestClass.test_method
-                test_class = test_parts[-2] if len(test_parts[-2]) <= 30 else test_parts[-2][:27] + "..."
-                test_method = test_parts[-1] if len(test_parts[-1]) <= 40 else test_parts[-1][:37] + "..."
+                test_class = (
+                    test_parts[-2] if len(test_parts[-2]) <= 30 else test_parts[-2][:27] + "..."
+                )
+                test_method = (
+                    test_parts[-1] if len(test_parts[-1]) <= 40 else test_parts[-1][:37] + "..."
+                )
                 test_name = f"{test_class}.{test_method}"
             else:
                 # Fallback to just the last part if structure is different
-                test_name = test_parts[-1] if len(test_parts[-1]) <= 50 else test_parts[-1][:47] + "..."
+                test_name = (
+                    test_parts[-1] if len(test_parts[-1]) <= 50 else test_parts[-1][:47] + "..."
+                )
 
             # Identify the main issue - be more specific about what's poor
             issues = []
-            
+
             # Always show both time and queries for context
             time_str = f"{metrics.response_time_ms:.0f}ms"
             query_str = f"{metrics.query_count}Q" if metrics.query_count > 0 else None
-            
+
             # Check for specific performance problems
             high_queries = metrics.query_count > 20
             slow_response = metrics.response_time_ms > 200
-            
+
             # Build the issue string showing both metrics
             if high_queries and slow_response:
                 # Both are problematic
@@ -308,13 +296,13 @@ class MetricsTracker:
                 issues.append(time_str)
                 if query_str:
                     issues.append(query_str)
-                    
+
             # Add N+1 detection if present
             if metrics.n_plus_one_detected:
                 issues.append("N+1 detected")
-                
+
             # Add memory if it's significant
-            if hasattr(metrics, 'memory_usage_mb') and metrics.memory_usage_mb > 100:
+            if hasattr(metrics, "memory_usage_mb") and metrics.memory_usage_mb > 100:
                 issues.append(f"{metrics.memory_usage_mb:.0f}MB")
 
             issue_str = ", ".join(issues)
@@ -383,28 +371,21 @@ class IsolationIssueDetector:
 
     # Error patterns that suggest isolation issues
     ISOLATION_PATTERNS = {
-        "DoesNotExist":
-        "Data expected by test was deleted or modified by another test",
-        "does not exist":
-        "Data expected by test was deleted or modified by another test",
+        "DoesNotExist": "Data expected by test was deleted or modified by another test",
+        "does not exist": "Data expected by test was deleted or modified by another test",
         "already accepted": "Shared state was modified by another test",
         "already exists": "Data conflicts due to shared state between tests",
-        "Permission denied":
-        "User context or permissions changed between tests",
+        "Permission denied": "User context or permissions changed between tests",
         "IntegrityError": "Database constraints violated due to shared state",
-        "duplicate key":
-        "Attempting to create data that already exists from another test",
-        "UNIQUE constraint failed":
-        "Data uniqueness violated due to test interference",
+        "duplicate key": "Attempting to create data that already exists from another test",
+        "UNIQUE constraint failed": "Data uniqueness violated due to test interference",
         "Cannot delete": "Referenced by data from another test",
     }
 
     def __init__(self):
         """Initialize the isolation detector."""
         self.detected_issues = {}  # Track issues per test
-        self.isolation_candidates = (
-            set()
-        )  # Tests likely having isolation issues
+        self.isolation_candidates = set()  # Tests likely having isolation issues
 
     def analyze_failure(self, test_name: str, error: str) -> str | None:
         """
@@ -454,9 +435,7 @@ class IsolationIssueDetector:
         """
         summary = {}
         for test_name, issues in self.detected_issues.items():
-            summary[test_name] = list(
-                {issue["description"] for issue in issues}
-            )
+            summary[test_name] = list({issue["description"] for issue in issues})
         return summary
 
     def get_fix_suggestions(self, test_name: str) -> list[str]:
@@ -473,9 +452,7 @@ class IsolationIssueDetector:
             return []
 
         suggestions = []
-        patterns = {
-            issue["pattern"] for issue in self.detected_issues[test_name]
-        }
+        patterns = {issue["pattern"] for issue in self.detected_issues[test_name]}
 
         if "DoesNotExist" in patterns or "does not exist" in patterns:
             suggestions.extend(

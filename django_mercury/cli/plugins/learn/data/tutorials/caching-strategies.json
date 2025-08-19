@@ -1,0 +1,108 @@
+{
+  "tutorial": {
+    "id": "caching-strategies",
+    "title": "Django Caching Strategies",
+    "description": "Learn effective caching techniques to boost Django application performance",
+    "concept": "caching-strategies",
+    "difficulty": "intermediate",
+    "tags": ["caching", "performance", "optimization", "django"],
+    "sections": [
+      {
+        "title": "Understanding Caching Fundamentals",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "What is Caching?",
+            "content": "Caching stores frequently accessed data in a fast storage layer to reduce expensive operations like database queries or complex calculations.",
+            "key_points": [
+              "Reduces response time by avoiding expensive operations",
+              "Improves user experience through faster page loads",
+              "Reduces server load and database pressure",
+              "Must balance freshness vs performance"
+            ],
+            "examples": [
+              "Storing database query results in memory",
+              "Caching rendered HTML fragments",
+              "Saving computed values for reuse"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your Django e-commerce site has slow product pages that take 2-3 seconds to load",
+            "problem": "Each product page makes 10+ database queries and performs expensive calculations for pricing and recommendations"
+          }
+        ],
+        "questions": [
+          {
+            "text": "Which operation would benefit MOST from caching in a Django application?",
+            "choices": [
+              {
+                "text": "Complex database aggregation queries that run on every page load",
+                "is_correct": true
+              },
+              {
+                "text": "Simple user authentication checks",
+                "is_correct": false
+              },
+              {
+                "text": "Static file serving",
+                "is_correct": false
+              },
+              {
+                "text": "Form validation",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Complex database aggregations are expensive operations that often return the same results for multiple users. Caching these results provides the biggest performance improvement."
+          }
+        ]
+      },
+      {
+        "title": "Django Cache Framework",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Django's Built-in Cache Framework",
+            "content": "Django provides a unified caching interface that supports multiple backends and cache levels.",
+            "key_points": [
+              "Per-site cache: Cache entire pages",
+              "Per-view cache: Cache specific view outputs",
+              "Template fragment cache: Cache parts of templates",
+              "Low-level cache API: Cache arbitrary data"
+            ],
+            "examples": [
+              "CACHE_MIDDLEWARE for full page caching",
+              "@cache_page decorator for view caching",
+              "{% cache %} template tag for fragments",
+              "cache.set() and cache.get() for custom data"
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "When would you use template fragment caching instead of view-level caching?",
+            "choices": [
+              {
+                "text": "When only part of the page changes frequently while other parts remain static",
+                "is_correct": true
+              },
+              {
+                "text": "When you want to cache the entire page output",
+                "is_correct": false
+              },
+              {
+                "text": "When you need to cache API responses",
+                "is_correct": false
+              },
+              {
+                "text": "When you want to cache database connections",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Template fragment caching is perfect when you have mixed content - some parts change frequently (like user-specific data) while others are static (like product details). This gives you granular control over what gets cached."
+          }
+        ]
+      }
+    ]
+  }
+}

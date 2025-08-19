@@ -13,6 +13,7 @@ try:
     from rich.prompt import IntPrompt
     from rich.table import Table
     from rich.text import Text
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
@@ -93,7 +94,7 @@ class QuizSystem:
                 question="If your view loads 50 blog posts and shows each author's name, how many queries would Django make without optimization?",
                 options=[
                     "1 query total",
-                    "2 queries total", 
+                    "2 queries total",
                     "51 queries total (1 for posts + 50 for authors)",
                     "50 queries total",
                 ],
@@ -154,7 +155,6 @@ class QuizSystem:
                 concept="n_plus_one_queries",
                 difficulty="intermediate",
             ),
-
             # Response Time Questions
             Quiz(
                 question="Your API endpoint takes 500ms to respond. What's the FIRST thing you should check?",
@@ -182,7 +182,6 @@ class QuizSystem:
                 concept="caching",
                 difficulty="intermediate",
             ),
-
             # Memory Management Questions
             Quiz(
                 question="Your test shows high memory usage when processing large querysets. What's the best approach?",
@@ -210,7 +209,6 @@ class QuizSystem:
                 concept="memory_optimization",
                 difficulty="advanced",
             ),
-
             # Serialization Questions
             Quiz(
                 question="DRF serialization is slow for nested relationships. What's the best optimization?",
@@ -225,7 +223,6 @@ class QuizSystem:
                 concept="serialization",
                 difficulty="intermediate",
             ),
-
             # Database Indexing Questions
             Quiz(
                 question="When should you add a database index?",
@@ -240,7 +237,6 @@ class QuizSystem:
                 concept="database_optimization",
                 difficulty="intermediate",
             ),
-
             # Testing Performance Questions
             Quiz(
                 question="What does Django Mercury's grade 'S' mean for your test?",
@@ -255,9 +251,7 @@ class QuizSystem:
                 concept="mercury_grading",
                 difficulty="beginner",
             ),
-
             # ADVANCED EXPERT-LEVEL QUESTIONS
-
             # Advanced N+1 and Query Optimization
             Quiz(
                 question="You have a complex view with nested relationships (User -> Profile -> Company -> Employees). What's the most efficient prefetching strategy?",
@@ -272,7 +266,6 @@ class QuizSystem:
                 concept="advanced_query_optimization",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="When using Prefetch() objects, what's the benefit of customizing the queryset parameter?",
                 options=[
@@ -283,10 +276,9 @@ class QuizSystem:
                 ],
                 correct_answer=1,
                 explanation="Prefetch(queryset=...) lets you customize the prefetched queryset with filters, ordering, select_related(), and other optimizations. This prevents fetching unnecessary data and optimizes nested relationships.",
-                concept="advanced_query_optimization", 
+                concept="advanced_query_optimization",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="In Django, what's the difference between iterator() and iterator(chunk_size=1000)?",
                 options=[
@@ -300,7 +292,6 @@ class QuizSystem:
                 concept="memory_optimization",
                 difficulty="advanced",
             ),
-
             # Advanced Caching Strategies
             Quiz(
                 question="What's the main risk of using Django's cache.get_or_set() in high-traffic applications?",
@@ -315,7 +306,6 @@ class QuizSystem:
                 concept="advanced_caching",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="For a high-traffic API with user-specific data, which caching pattern is most effective?",
                 options=[
@@ -329,8 +319,7 @@ class QuizSystem:
                 concept="advanced_caching",
                 difficulty="advanced",
             ),
-
-            # Advanced Database Optimization  
+            # Advanced Database Optimization
             Quiz(
                 question="You have a query filtering on created_at and category_id with ordering by updated_at. What's the optimal index strategy?",
                 options=[
@@ -344,7 +333,6 @@ class QuizSystem:
                 concept="database_optimization",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="What's the performance impact of using GenericForeignKey in Django models?",
                 options=[
@@ -358,7 +346,6 @@ class QuizSystem:
                 concept="database_optimization",
                 difficulty="advanced",
             ),
-
             # Advanced Serialization and API Performance
             Quiz(
                 question="In DRF, which SerializerMethodField pattern is most performance-efficient for calculated fields?",
@@ -373,7 +360,6 @@ class QuizSystem:
                 concept="serialization_optimization",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="For paginated API endpoints with large datasets, which approach minimizes database load?",
                 options=[
@@ -387,7 +373,6 @@ class QuizSystem:
                 concept="api_optimization",
                 difficulty="advanced",
             ),
-
             # Advanced Testing and Monitoring
             Quiz(
                 question="What's the most accurate way to measure Django view performance in production-like conditions?",
@@ -402,7 +387,6 @@ class QuizSystem:
                 concept="performance_monitoring",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="In high-load Django applications, what's the primary benefit of database connection pooling?",
                 options=[
@@ -416,13 +400,12 @@ class QuizSystem:
                 concept="scalability",
                 difficulty="advanced",
             ),
-
             # Advanced Architecture and Scaling
             Quiz(
                 question="For a Django app with read-heavy workloads, what's the most effective scaling strategy?",
                 options=[
                     "Vertical scaling (bigger servers)",
-                    "Read replicas with database routing and aggressive caching", 
+                    "Read replicas with database routing and aggressive caching",
                     "Microservices architecture",
                     "Horizontal scaling with load balancers only",
                 ],
@@ -431,7 +414,6 @@ class QuizSystem:
                 concept="scalability",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="What's the main performance consideration when using Django's select_for_update()?",
                 options=[
@@ -445,7 +427,6 @@ class QuizSystem:
                 concept="concurrency",
                 difficulty="advanced",
             ),
-
             # Advanced Security and Performance
             Quiz(
                 question="How does Django's ALLOWED_HOSTS setting impact performance in production?",
@@ -460,7 +441,6 @@ class QuizSystem:
                 concept="security_performance",
                 difficulty="advanced",
             ),
-
             Quiz(
                 question="What's the performance impact of Django's DEBUG=True in production?",
                 options=[
@@ -493,16 +473,12 @@ class QuizSystem:
         Returns:
             Quiz object or None if no quiz available
         """
-        relevant_quizzes = [
-            q for q in self.quiz_database
-            if q.concept == concept
-        ]
+        relevant_quizzes = [q for q in self.quiz_database if q.concept == concept]
 
         if not relevant_quizzes:
             # Try to find a related quiz
             relevant_quizzes = [
-                q for q in self.quiz_database
-                if concept in q.concept or q.concept in concept
+                q for q in self.quiz_database if concept in q.concept or q.concept in concept
             ]
 
         return random.choice(relevant_quizzes) if relevant_quizzes else None
@@ -529,7 +505,7 @@ class QuizSystem:
         if not self.console or not RICH_AVAILABLE:
             # Fallback to basic text output
             from django_mercury.cli.educational.utils import is_interactive_environment, safe_input
-            
+
             print("\n" + "=" * 50)
             print("📚 QUIZ TIME!")
             if context:
@@ -576,14 +552,17 @@ class QuizSystem:
 
         # Get answer
         from django_mercury.cli.educational.utils import is_interactive_environment
-        
+
         if is_interactive_environment():
             try:
-                answer = IntPrompt.ask(
-                    "\n[bold]Your answer[/bold]",
-                    choices=["1", "2", "3", "4"],
-                    show_choices=False,
-                ) - 1
+                answer = (
+                    IntPrompt.ask(
+                        "\n[bold]Your answer[/bold]",
+                        choices=["1", "2", "3", "4"],
+                        show_choices=False,
+                    )
+                    - 1
+                )
             except (EOFError, KeyboardInterrupt):
                 self.console.print("\n[yellow]Quiz skipped[/yellow]")
                 return False
@@ -641,47 +620,52 @@ class QuizSystem:
         """
         # Get a quiz for this concept
         quiz = self.get_quiz_for_concept(concept)
-        
+
         if not quiz:
             # No quiz available for this concept
             return {
-                'answered': False,
-                'correct': False,
-                'wants_to_learn': False,
-                'concept': concept,
-                'message': f"No quiz available for concept: {concept}"
+                "answered": False,
+                "correct": False,
+                "wants_to_learn": False,
+                "concept": concept,
+                "message": f"No quiz available for concept: {concept}",
             }
-        
+
         # Ask the quiz
-        correct = self.ask_quiz(quiz, context=f"Testing your understanding of {concept.replace('_', ' ')}")
-        
+        correct = self.ask_quiz(
+            quiz, context=f"Testing your understanding of {concept.replace('_', ' ')}"
+        )
+
         # Ask if they want to learn more
         from django_mercury.cli.educational.utils import is_interactive_environment, safe_confirm
-        
+
         wants_to_learn = False
         if is_interactive_environment():
             if self.console and RICH_AVAILABLE:
                 try:
                     from rich.prompt import Confirm
+
                     wants_to_learn = Confirm.ask(
                         "\n[yellow]Would you like to see detailed optimization guidance?[/yellow]",
-                        default=True
+                        default=True,
                     )
                 except (EOFError, KeyboardInterrupt):
                     pass
             else:
                 # Fallback to basic input
-                wants_to_learn = safe_confirm("\nWould you like to see detailed optimization guidance?", default=True)
+                wants_to_learn = safe_confirm(
+                    "\nWould you like to see detailed optimization guidance?", default=True
+                )
         else:
             # Non-interactive mode - default to showing guidance
             wants_to_learn = True
-        
+
         return {
-            'answered': True,
-            'correct': correct,
-            'wants_to_learn': wants_to_learn,
-            'concept': concept,
-            'quiz': quiz.question if quiz else None
+            "answered": True,
+            "correct": correct,
+            "wants_to_learn": wants_to_learn,
+            "concept": concept,
+            "quiz": quiz.question if quiz else None,
         }
 
     def show_session_summary(self) -> None:
@@ -737,14 +721,14 @@ class QuizSystem:
         if issue_type == "n_plus_one_queries":
             query_count = issue_details.get("query_count", 0)
             severity = issue_details.get("severity", "").upper()
-            
+
             if severity in ["SEVERE", "CRITICAL"]:
                 return Quiz(
                     question=f"🚨 CRITICAL: Your test executed {query_count} queries! This indicates a severe N+1 problem. What's the IMMEDIATE fix?",
                     options=[
                         "Add more database indexes",
                         "Use select_related() for ForeignKey relationships",
-                        "Switch to a faster database server", 
+                        "Switch to a faster database server",
                         "Implement caching for all queries",
                     ],
                     correct_answer=1,
@@ -770,7 +754,7 @@ class QuizSystem:
         # High Query Count (without N+1)
         elif issue_type == "high_query_count":
             query_count = issue_details.get("query_count", 0)
-            
+
             if query_count > 50:
                 return Quiz(
                     question=f"Your test made {query_count} database queries. What optimization should you prioritize?",
@@ -791,19 +775,19 @@ class QuizSystem:
                     options=[
                         "Database indexing",
                         "select_related() and prefetch_related()",
-                        "Using raw SQL everywhere", 
+                        "Using raw SQL everywhere",
                         "Increasing database connections",
                     ],
                     correct_answer=1,
                     explanation=f"Even with {query_count} queries, there's room for improvement. select_related() and prefetch_related() can often reduce this to 1-3 queries total.",
-                    concept="query_optimization", 
+                    concept="query_optimization",
                     difficulty="beginner",
                 )
 
         # Slow Response Time with Real Metrics
         elif issue_type == "slow_response_time":
             response_time = issue_details.get("response_time", 0)
-            
+
             if response_time > 1000:  # > 1 second
                 return Quiz(
                     question=f"🐌 Your endpoint took {response_time:.0f}ms (over 1 second!). What's the most critical issue to fix?",
@@ -837,7 +821,7 @@ class QuizSystem:
                     question=f"Good job! Your endpoint took only {response_time:.0f}ms. What makes response times fast?",
                     options=[
                         "Faster server hardware only",
-                        "Efficient database queries and minimal round trips", 
+                        "Efficient database queries and minimal round trips",
                         "Using more expensive hosting",
                         "Having fewer users",
                     ],
@@ -850,7 +834,7 @@ class QuizSystem:
         # Memory Usage with Real Data
         elif issue_type == "memory_optimization":
             memory_usage = issue_details.get("memory_usage", 0)
-            
+
             if memory_usage > 100:
                 return Quiz(
                     question=f"Your test used {memory_usage:.1f}MB of memory. For large datasets, what's the best approach?",
@@ -876,7 +860,7 @@ class QuizSystem:
                     ],
                     correct_answer=1,
                     explanation=f"Your {memory_usage:.1f}MB is efficient! values() and values_list() return lightweight dictionaries/tuples instead of full model instances, keeping memory usage minimal.",
-                    concept="memory_optimization", 
+                    concept="memory_optimization",
                     difficulty="beginner",
                 )
 
@@ -884,7 +868,7 @@ class QuizSystem:
         elif issue_type == "general_performance":
             score = issue_details.get("score", 0)
             grade = issue_details.get("grade", "F")
-            
+
             if score < 50:  # F grade
                 return Quiz(
                     question=f"Your performance score is {score}/100 (Grade {grade}). What's the most impactful first step?",

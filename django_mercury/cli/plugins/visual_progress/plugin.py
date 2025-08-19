@@ -88,9 +88,7 @@ class VisualProgressPlugin(MercuryPlugin):
         if getattr(args, "visual", False):
             # Check if any test labels were provided
             has_test_labels = (
-                hasattr(args, "test_labels")
-                and args.test_labels
-                and len(args.test_labels) > 0
+                hasattr(args, "test_labels") and args.test_labels and len(args.test_labels) > 0
             )
             # Check if any other command flags are present
             has_other_commands = any(
@@ -104,9 +102,7 @@ class VisualProgressPlugin(MercuryPlugin):
             # Handle if --visual is specified and either:
             # 1. Test labels are provided (run tests)
             # 2. No test labels and no other commands (demo mode)
-            if has_test_labels or (
-                not has_test_labels and not has_other_commands
-            ):
+            if has_test_labels or (not has_test_labels and not has_other_commands):
                 return True
 
         return False
@@ -120,9 +116,7 @@ class VisualProgressPlugin(MercuryPlugin):
 
         # Check if we have test labels to run
         has_test_labels = (
-            hasattr(args, "test_labels")
-            and args.test_labels
-            and len(args.test_labels) > 0
+            hasattr(args, "test_labels") and args.test_labels and len(args.test_labels) > 0
         )
 
         if has_test_labels:
@@ -171,9 +165,7 @@ class VisualProgressPlugin(MercuryPlugin):
             if not settings_module:
                 capture.stop_capture()
                 print("❌ Error: Could not detect Django settings module.")
-                print(
-                    "   Please set DJANGO_SETTINGS_MODULE environment variable."
-                )
+                print("   Please set DJANGO_SETTINGS_MODULE environment variable.")
                 return 1
 
             # Set up Django environment
@@ -193,21 +185,24 @@ class VisualProgressPlugin(MercuryPlugin):
 
             # Create visual display with proper config
             console = Console()
-            
+
             # Load Mercury config to check for hints plugin and profile
             hints_enabled = False
-            profile = 'expert'
+            profile = "expert"
             try:
                 from django_mercury.cli.config.config_manager import MercuryConfigManager
+
                 config_manager = MercuryConfigManager()
                 config_manager.load_config()
-                hints_enabled = 'hints' in config_manager.get_enabled_plugins()
+                hints_enabled = "hints" in config_manager.get_enabled_plugins()
                 profile = config_manager.get_profile()
             except Exception:
                 # If config loading fails, default to no hints and expert profile
                 pass
-            
-            visual_display = MercuryVisualDisplay(console, hints_enabled=hints_enabled, profile=profile)
+
+            visual_display = MercuryVisualDisplay(
+                console, hints_enabled=hints_enabled, profile=profile
+            )
 
             # Hand off any captured output to the visual display
             capture.handoff_to_display(visual_display)
@@ -218,17 +213,14 @@ class VisualProgressPlugin(MercuryPlugin):
                 interactive=False,
                 failfast=getattr(args, "failfast", False),
                 keepdb=getattr(args, "keepdb", False),
-                parallel=getattr(args, "parallel", None)
-                or 0,  # Handle None properly
+                parallel=getattr(args, "parallel", None) or 0,  # Handle None properly
             )
-            
+
             # Set the visual display we created with proper config
             runner.visual_display = visual_display
 
             # Run tests with visual feedback
-            test_labels = (
-                args.test_labels if hasattr(args, "test_labels") else []
-            )
+            test_labels = args.test_labels if hasattr(args, "test_labels") else []
             failures = runner.run_tests(test_labels)
 
             # Show suppressed logs if requested
@@ -372,9 +364,7 @@ class VisualProgressPlugin(MercuryPlugin):
         ):
             return  # Let the new visual test runner handle this
 
-    def post_test_hook(
-        self, args: Namespace, result: int, elapsed_time: float
-    ) -> None:
+    def post_test_hook(self, args: Namespace, result: int, elapsed_time: float) -> None:
         """Cleanup visual progress after tests complete."""
         # Skip hooks if using --visual with test labels (new runner handles it)
         if (

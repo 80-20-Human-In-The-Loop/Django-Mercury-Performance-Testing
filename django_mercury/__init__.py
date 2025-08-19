@@ -25,85 +25,100 @@ def __getattr__(name):
     if name == "DjangoMercuryAPITestCase":
         try:
             from .python_bindings.django_integration_mercury import DjangoMercuryAPITestCase
+
             return DjangoMercuryAPITestCase
         except Exception as e:
             # If Django isn't configured, return a placeholder that explains the issue
             import warnings
+
             # Only show warning if it's not a Django configuration issue
             if "ImproperlyConfigured" not in str(e.__class__.__name__):
                 warnings.warn(f"Could not import DjangoMercuryAPITestCase: {e}")
-            
+
             class DjangoMercuryAPITestCasePlaceholder:
                 def __init__(self, *args, **kwargs):
                     raise ImportError(
                         "DjangoMercuryAPITestCase requires Django to be configured. "
                         "Make sure DJANGO_SETTINGS_MODULE is set before importing."
                     )
+
             return DjangoMercuryAPITestCasePlaceholder
     elif name == "DjangoPerformanceAPITestCase":
         try:
             from .python_bindings.django_integration import DjangoPerformanceAPITestCase
+
             return DjangoPerformanceAPITestCase
         except Exception as e:
             # If Django isn't configured, return a placeholder that explains the issue
             import warnings
+
             # Only show warning if it's not a Django configuration issue
             if "ImproperlyConfigured" not in str(e.__class__.__name__):
                 warnings.warn(f"Could not import DjangoPerformanceAPITestCase: {e}")
-            
+
             class DjangoPerformanceAPITestCasePlaceholder:
                 def __init__(self, *args, **kwargs):
                     raise ImportError(
                         "DjangoPerformanceAPITestCase requires Django to be configured. "
                         "Make sure DJANGO_SETTINGS_MODULE is set before importing."
                     )
+
             return DjangoPerformanceAPITestCasePlaceholder
 
     # Monitor functions
     elif name == "monitor_django_view":
         try:
             from .python_bindings.monitor import monitor_django_view
+
             return monitor_django_view
         except Exception as e:
             import warnings
+
             if "ImproperlyConfigured" not in str(e.__class__.__name__):
                 warnings.warn(f"Could not import monitor_django_view: {e}")
-            
+
             def monitor_django_view_placeholder(*args, **kwargs):
                 raise ImportError(
                     "monitor_django_view requires Django to be configured. "
                     "Make sure DJANGO_SETTINGS_MODULE is set before importing."
                 )
+
             return monitor_django_view_placeholder
     elif name == "monitor_django_model":
         try:
             from .python_bindings.monitor import monitor_django_model
+
             return monitor_django_model
         except Exception as e:
             import warnings
+
             if "ImproperlyConfigured" not in str(e.__class__.__name__):
                 warnings.warn(f"Could not import monitor_django_model: {e}")
-            
+
             def monitor_django_model_placeholder(*args, **kwargs):
                 raise ImportError(
                     "monitor_django_model requires Django to be configured. "
                     "Make sure DJANGO_SETTINGS_MODULE is set before importing."
                 )
+
             return monitor_django_model_placeholder
     elif name == "monitor_serializer":
         try:
             from .python_bindings.monitor import monitor_serializer
+
             return monitor_serializer
         except Exception as e:
             import warnings
+
             if "ImproperlyConfigured" not in str(e.__class__.__name__):
                 warnings.warn(f"Could not import monitor_serializer: {e}")
-            
+
             def monitor_serializer_placeholder(*args, **kwargs):
                 raise ImportError(
                     "monitor_serializer requires Django to be configured. "
                     "Make sure DJANGO_SETTINGS_MODULE is set before importing."
                 )
+
             return monitor_serializer_placeholder
     elif name == "EnhancedPerformanceMonitor":
         from .python_bindings.monitor import EnhancedPerformanceMonitor
@@ -135,40 +150,40 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def enable_educational_testing(level='beginner'):
+def enable_educational_testing(level="beginner"):
     """
     Enable Django Mercury Educational Testing Mode programmatically.
-    
+
     This function configures Django to use Mercury's educational test runner
     and sets the appropriate environment variables for educational mode.
-    
+
     Args:
         level: Educational difficulty level ('beginner', 'intermediate', 'advanced')
-    
+
     Example:
         In your Django settings.py or manage.py:
-        
+
         from django_mercury import enable_educational_testing
         enable_educational_testing('intermediate')
-    
+
     Returns:
         str: The test runner class path that was configured
     """
     import os
     from django.conf import settings
-    
+
     # Set environment variables
-    os.environ['MERCURY_EDU'] = '1'
-    os.environ['MERCURY_EDUCATIONAL_MODE'] = 'true'
-    os.environ['MERCURY_EDU_LEVEL'] = level
-    
+    os.environ["MERCURY_EDU"] = "1"
+    os.environ["MERCURY_EDUCATIONAL_MODE"] = "true"
+    os.environ["MERCURY_EDU_LEVEL"] = level
+
     # Configure Django to use educational test runner
-    test_runner = 'django_mercury.test_runner.EducationalTestRunner'
-    
+    test_runner = "django_mercury.test_runner.EducationalTestRunner"
+
     # Update Django settings if they're already configured
     if settings.configured:
         settings.TEST_RUNNER = test_runner
-    
+
     return test_runner
 
 

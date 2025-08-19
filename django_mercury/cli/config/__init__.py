@@ -10,7 +10,7 @@ from .config_generator import MercuryConfigGenerator
 from .profile_templates import AUDIENCE_PROFILES
 
 __all__ = [
-    'MercuryConfigManager',
-    'MercuryConfigGenerator',
-    'AUDIENCE_PROFILES',
+    "MercuryConfigManager",
+    "MercuryConfigGenerator",
+    "AUDIENCE_PROFILES",
 ]

@@ -49,9 +49,7 @@ def guess_test_module_path(test_name: str) -> str:
     return test_name
 
 
-def calculate_simple_mercury_grade(
-    query_count: int, response_time_ms: float
-) -> str:
+def calculate_simple_mercury_grade(query_count: int, response_time_ms: float) -> str:
     """
     Calculate a grade using simplified Mercury scoring logic.
 

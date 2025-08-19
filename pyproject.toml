@@ -95,7 +95,7 @@ Changelog = "https://github.com/Django-Mercury/Performance-Testing/blob/main/CHA
 
 [project.scripts]
 mercury-test = "django_mercury.cli.mercury_test:main"
-mercury-analyze = "django_mercury.python_bindings.cli:main"
+
 
 [tool.setuptools]
 packages = [
@@ -242,16 +242,27 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 addopts = [
     "--verbose",
     "--tb=short",
     "--strict-markers",
+    "-ra",
+    "--color=yes",
 ]
+norecursedirs = [".git", ".tox", "build", "dist", "*.egg", "venv", "test_build"]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
+    "unit: Unit tests",
+    "integration: Integration tests", 
+    "performance: Performance tests",
+    "slow: Slow tests",
+    "django: Tests requiring Django",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
 ]
 
 [tool.ruff]

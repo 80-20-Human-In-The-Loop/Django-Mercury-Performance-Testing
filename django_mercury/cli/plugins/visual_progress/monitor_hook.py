@@ -51,7 +51,7 @@ class MercuryMonitorHook:
         # Global query tracking using Django's connection.queries
         self._query_tracking: dict[str, dict[str, Any]] = {}
         self._current_test_start_queries = 0
-        
+
         # Track the currently running test
         self._current_test_name = None
 
@@ -75,36 +75,35 @@ class MercuryMonitorHook:
 
             # Create hooked version
             def hooked_exit(monitor_self, exc_type, exc_val, exc_tb):
-                operation_name = getattr(monitor_self, 'operation_name', 'unknown')
+                operation_name = getattr(monitor_self, "operation_name", "unknown")
                 logger.debug(f"Hooked __exit__ called for operation: {operation_name}")
-                logger.debug(f"Monitor attributes: {[attr for attr in dir(monitor_self) if not attr.startswith('__')]}")
-                
-                # Call original exit first
-                result = self._original_monitor_exit(
-                    monitor_self, exc_type, exc_val, exc_tb
+                logger.debug(
+                    f"Monitor attributes: {[attr for attr in dir(monitor_self) if not attr.startswith('__')]}"
                 )
+
+                # Call original exit first
+                result = self._original_monitor_exit(monitor_self, exc_type, exc_val, exc_tb)
 
                 # Capture metrics if available
                 if hasattr(monitor_self, "_metrics") and monitor_self._metrics:
                     logger.debug(f"Monitor has _metrics attribute, capturing...")
                     logger.debug(f"Metrics type: {type(monitor_self._metrics)}")
-                    logger.debug(f"Metrics attributes: {dir(monitor_self._metrics) if hasattr(monitor_self._metrics, '__dict__') else 'No __dict__'}")
+                    logger.debug(
+                        f"Metrics attributes: {dir(monitor_self._metrics) if hasattr(monitor_self._metrics, '__dict__') else 'No __dict__'}"
+                    )
                     self._capture_metrics_from_monitor(monitor_self)
                 else:
                     logger.debug(f"Monitor has no _metrics attribute or it's None")
-                    logger.debug(f"Available attributes: {[attr for attr in dir(monitor_self) if '_' in attr]}")
+                    logger.debug(
+                        f"Available attributes: {[attr for attr in dir(monitor_self) if '_' in attr]}"
+                    )
 
                 # ALSO capture query count from the monitor's query tracker
-                if (
-                    hasattr(monitor_self, "_query_tracker")
-                    and monitor_self._query_tracker
-                ):
+                if hasattr(monitor_self, "_query_tracker") and monitor_self._query_tracker:
                     query_tracker = monitor_self._query_tracker
                     if hasattr(query_tracker, "query_count"):
                         # Store this globally for the test
-                        operation_name = getattr(
-                            monitor_self, "operation_name", "unknown"
-                        )
+                        operation_name = getattr(monitor_self, "operation_name", "unknown")
                         with self._lock:
                             if operation_name not in self._query_tracking:
                                 self._query_tracking[operation_name] = {}
@@ -139,9 +138,7 @@ class MercuryMonitorHook:
                     EnhancedPerformanceMonitor,
                 )
 
-                EnhancedPerformanceMonitor.__exit__ = (
-                    self._original_monitor_exit
-                )
+                EnhancedPerformanceMonitor.__exit__ = self._original_monitor_exit
 
             self._enabled = False
             logger.debug("Mercury monitor hook disabled")
@@ -154,13 +151,13 @@ class MercuryMonitorHook:
         try:
             logger.debug(f"Attempting to capture metrics from monitor for {monitor.operation_name}")
             logger.debug(f"Monitor type: {type(monitor)}")
-            
+
             metrics = monitor._metrics
             if not metrics:
                 logger.debug(f"No metrics found on monitor for {monitor.operation_name}")
                 logger.debug(f"Monitor._metrics is: {metrics}")
                 return
-            
+
             logger.debug(f"Found metrics: {metrics}")
             logger.debug(f"Metrics type: {type(metrics)}")
 
@@ -179,12 +176,8 @@ class MercuryMonitorHook:
             )
 
             # Extract N+1 detection
-            if captured.django_issues and hasattr(
-                captured.django_issues, "has_n_plus_one"
-            ):
-                captured.n_plus_one_detected = (
-                    captured.django_issues.has_n_plus_one
-                )
+            if captured.django_issues and hasattr(captured.django_issues, "has_n_plus_one"):
+                captured.n_plus_one_detected = captured.django_issues.has_n_plus_one
 
             # Extract grade
             if captured.performance_score:
@@ -198,7 +191,7 @@ class MercuryMonitorHook:
                 if monitor.operation_name not in self._metrics_store:
                     self._metrics_store[monitor.operation_name] = []
                 self._metrics_store[monitor.operation_name].append(captured)
-                
+
                 # ALSO store by current test name if we know it
                 if self._current_test_name:
                     if self._current_test_name not in self._metrics_store:
@@ -217,10 +210,8 @@ class MercuryMonitorHook:
                         performance_score=captured.performance_score,
                     )
                     self._metrics_store[self._current_test_name].append(test_captured)
-                    logger.debug(
-                        f"Also stored metrics for test '{self._current_test_name}'"
-                    )
-                
+                    logger.debug(f"Also stored metrics for test '{self._current_test_name}'")
+
                 # Debug: log what we're storing
                 logger.debug(
                     f"Captured metrics for '{monitor.operation_name}': "
@@ -238,15 +229,12 @@ class MercuryMonitorHook:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(f"Looking for metrics for test: {test_name}")
                 logger.debug(f"Available operation names: {list(self._metrics_store.keys())}")
-            
+
             # Try exact match first
-            if (
-                test_name in self._metrics_store
-                and self._metrics_store[test_name]
-            ):
+            if test_name in self._metrics_store and self._metrics_store[test_name]:
                 logger.debug(f"Found exact match for {test_name}")
                 return self._metrics_store[test_name][-1]
-            
+
             # Try with .comprehensive suffix (Mercury tests use this)
             comprehensive_name = f"{test_name}.comprehensive"
             if (
@@ -261,7 +249,7 @@ class MercuryMonitorHook:
                 if test_name in op_name and metrics_list:
                     logger.debug(f"Found partial match: {op_name} contains {test_name}")
                     return metrics_list[-1]
-            
+
             logger.debug(f"No metrics found for {test_name}")
 
         return None
@@ -279,13 +267,9 @@ class MercuryMonitorHook:
                 if tracking.get("query_context"):
                     try:
                         tracking["query_context"].__exit__(None, None, None)
-                        logger.debug(
-                            f"Closed query context for {test_name} during clear"
-                        )
+                        logger.debug(f"Closed query context for {test_name} during clear")
                     except Exception as e:
-                        logger.debug(
-                            f"Error closing context for {test_name}: {e}"
-                        )
+                        logger.debug(f"Error closing context for {test_name}: {e}")
 
             # Clear all tracking data
             self._metrics_store.clear()
@@ -303,9 +287,7 @@ class MercuryMonitorHook:
 
                     if hasattr(connection, "queries"):
                         connection.queries.clear()
-                        logger.debug(
-                            "Manually cleared Django queries during clear"
-                        )
+                        logger.debug("Manually cleared Django queries during clear")
                 except:
                     pass
 
@@ -320,7 +302,7 @@ class MercuryMonitorHook:
         with self._lock:
             self._current_test_name = test_name
             logger.debug(f"Set current test name to: {test_name}")
-        
+
         try:
             from django.conf import settings
             from django.db import connection, reset_queries
@@ -333,18 +315,11 @@ class MercuryMonitorHook:
                     tracked_test,
                     tracking_data,
                 ) in self._query_tracking.items():
-                    if (
-                        tracking_data.get("query_context")
-                        and tracked_test != test_name
-                    ):
+                    if tracking_data.get("query_context") and tracked_test != test_name:
                         try:
-                            tracking_data["query_context"].__exit__(
-                                None, None, None
-                            )
+                            tracking_data["query_context"].__exit__(None, None, None)
                             tracking_data["query_context"] = None
-                            logger.debug(
-                                f"Closed unclosed context for {tracked_test}"
-                            )
+                            logger.debug(f"Closed unclosed context for {tracked_test}")
                         except:
                             pass
 
@@ -366,17 +341,13 @@ class MercuryMonitorHook:
                 # If reset_queries is not available, try to clear manually
                 if hasattr(connection, "queries"):
                     connection.queries.clear()
-                    logger.debug(
-                        f"Manually cleared connection.queries for {test_name}"
-                    )
+                    logger.debug(f"Manually cleared connection.queries for {test_name}")
 
             # Method 1: Try to use Django's query tracking (should now be 0 after reset)
             if hasattr(connection, "queries"):
                 start_count = len(connection.queries)
                 with self._lock:
-                    self._query_tracking[test_name][
-                        "start_count"
-                    ] = start_count
+                    self._query_tracking[test_name]["start_count"] = start_count
                 logger.debug(
                     f"Django connection.queries available, start count after reset: {start_count}"
                 )
@@ -386,9 +357,7 @@ class MercuryMonitorHook:
                 capture_context = CaptureQueriesContext(connection)
                 capture_context.__enter__()
                 with self._lock:
-                    self._query_tracking[test_name][
-                        "query_context"
-                    ] = capture_context
+                    self._query_tracking[test_name]["query_context"] = capture_context
                 logger.debug(f"Started CaptureQueriesContext for {test_name}")
             except Exception as e:
                 logger.debug(f"Could not start CaptureQueriesContext: {e}")
@@ -410,7 +379,7 @@ class MercuryMonitorHook:
         with self._lock:
             self._current_test_name = None
             logger.debug(f"Cleared current test name (was: {test_name})")
-        
+
         try:
             from django.conf import settings
             from django.db import connection, connections, reset_queries
@@ -441,18 +410,14 @@ class MercuryMonitorHook:
                         # CRITICAL: Reset queries after capturing to prevent accumulation
                         try:
                             reset_queries()
-                            logger.debug(
-                                f"Reset queries after capturing for {test_name}"
-                            )
+                            logger.debug(f"Reset queries after capturing for {test_name}")
                         except:
                             if hasattr(connection, "queries"):
                                 connection.queries.clear()
 
                         return query_count
                     except Exception as e:
-                        logger.debug(
-                            f"Error getting queries from CaptureQueriesContext: {e}"
-                        )
+                        logger.debug(f"Error getting queries from CaptureQueriesContext: {e}")
 
                 # Method 2: FALLBACK - Use connection.queries if CaptureQueriesContext failed
                 if hasattr(connection, "queries"):
@@ -486,9 +451,7 @@ class MercuryMonitorHook:
                     # CRITICAL: Reset queries after capturing to prevent accumulation
                     try:
                         reset_queries()
-                        logger.debug(
-                            f"Reset queries after capturing for {test_name}"
-                        )
+                        logger.debug(f"Reset queries after capturing for {test_name}")
                     except:
                         if hasattr(connection, "queries"):
                             connection.queries.clear()
@@ -503,9 +466,7 @@ class MercuryMonitorHook:
                     if hasattr(conn, "queries"):
                         conn_queries = len(conn.queries)
                         total_queries += conn_queries
-                        logger.debug(
-                            f"Connection '{alias}' has {conn_queries} queries"
-                        )
+                        logger.debug(f"Connection '{alias}' has {conn_queries} queries")
                         # Clear queries on this connection too
                         try:
                             conn.queries.clear()
@@ -513,9 +474,7 @@ class MercuryMonitorHook:
                             pass
 
                 if total_queries > 0:
-                    logger.debug(
-                        f"Total queries across all connections: {total_queries}"
-                    )
+                    logger.debug(f"Total queries across all connections: {total_queries}")
                     tracking["query_count"] = total_queries
                     return total_queries
 
@@ -560,48 +519,23 @@ class MercuryMonitorHook:
         metrics = {}
         test_name = f"{test.__class__.__name__}.{getattr(test, '_testMethodName', 'unknown')}"
 
-        # Debug: Check if C extensions are in use
-        try:
-            from django_mercury.python_bindings.c_bindings import c_extensions
-
-            if c_extensions and (
-                c_extensions.metrics_engine or c_extensions.query_analyzer
-            ):
-                logger.debug(f"C extensions detected for test {test_name}")
-                logger.debug(
-                    f"  metrics_engine: {c_extensions.metrics_engine is not None}"
-                )
-                logger.debug(
-                    f"  query_analyzer: {c_extensions.query_analyzer is not None}"
-                )
-        except ImportError:
-            logger.debug("Could not import c_extensions")
+        # Pure Python mode - C extensions permanently removed
+        logger.debug(f"Running test {test_name} in pure Python mode")
 
         # Debug: Log what attributes the test has
         logger.debug(f"Test {test_name} attributes:")
         for attr in dir(test):
-            if (
-                attr.startswith("_mercury")
-                or attr.startswith("_test")
-                or "metrics" in attr.lower()
-            ):
+            if attr.startswith("_mercury") or attr.startswith("_test") or "metrics" in attr.lower():
                 logger.debug(f"  {attr}: {hasattr(test, attr)}")
 
         # Also check class attributes
         logger.debug(f"Test class {test.__class__.__name__} attributes:")
         for attr in dir(test.__class__):
-            if (
-                attr.startswith("_mercury")
-                or attr.startswith("_test")
-                or "metrics" in attr.lower()
-            ):
+            if attr.startswith("_mercury") or attr.startswith("_test") or "metrics" in attr.lower():
                 logger.debug(f"  {attr}: {hasattr(test.__class__, attr)}")
 
         # Method 1: Check test class for _test_executions
-        if (
-            hasattr(test.__class__, "_test_executions")
-            and test.__class__._test_executions
-        ):
+        if hasattr(test.__class__, "_test_executions") and test.__class__._test_executions:
             try:
                 # Get the most recent execution
                 last_execution = test.__class__._test_executions[-1]
@@ -609,12 +543,8 @@ class MercuryMonitorHook:
                 # Extract metrics from execution
                 metrics = {
                     "query_count": getattr(last_execution, "query_count", 0),
-                    "response_time_ms": getattr(
-                        last_execution, "response_time", 0
-                    ),
-                    "memory_usage_mb": getattr(
-                        last_execution, "memory_usage", 0
-                    ),
+                    "response_time_ms": getattr(last_execution, "response_time", 0),
+                    "memory_usage_mb": getattr(last_execution, "memory_usage", 0),
                     "cache_hits": getattr(last_execution, "cache_hits", 0),
                     "cache_misses": getattr(last_execution, "cache_misses", 0),
                     "n_plus_one_detected": False,
@@ -625,9 +555,7 @@ class MercuryMonitorHook:
                 if hasattr(last_execution, "django_issues"):
                     django_issues = last_execution.django_issues
                     if hasattr(django_issues, "has_n_plus_one"):
-                        metrics["n_plus_one_detected"] = (
-                            django_issues.has_n_plus_one
-                        )
+                        metrics["n_plus_one_detected"] = django_issues.has_n_plus_one
 
                 # Get grade
                 if hasattr(last_execution, "performance_score"):
@@ -635,9 +563,7 @@ class MercuryMonitorHook:
                     if hasattr(score, "grade"):
                         metrics["grade"] = score.grade
 
-                logger.debug(
-                    f"Extracted metrics from _test_executions: {metrics}"
-                )
+                logger.debug(f"Extracted metrics from _test_executions: {metrics}")
                 return metrics
 
             except Exception as e:

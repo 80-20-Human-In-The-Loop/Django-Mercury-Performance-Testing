@@ -18,13 +18,14 @@ from django.db import connection
 from django.db.backends.utils import CursorWrapper
 import django.db.backends.utils
 
-# --- C Extension Integration ---
-try:
-    from .c_bindings import c_extensions
+# Django availability flag for tests
+DJANGO_AVAILABLE = True
 
-    C_EXTENSIONS_AVAILABLE = c_extensions.query_analyzer is not None
-except ImportError:
-    C_EXTENSIONS_AVAILABLE = False
+
+# --- C Extension Integration ---
+# Pure Python mode - C extensions permanently removed
+C_EXTENSIONS_AVAILABLE = False
+c_extensions = None
 
 # --- Data Classes ---
 
@@ -81,7 +82,7 @@ class DjangoQueryTracker:
         try:
             # After reset, this should be 0, but we store it just in case
             self._start_query_count = (
-                len(connection.queries) if hasattr(connection, 'queries') else 0
+                len(connection.queries) if hasattr(connection, "queries") else 0
             )
             if self._start_query_count > 0:
                 # Log warning if queries weren't properly reset
@@ -95,16 +96,14 @@ class DjangoQueryTracker:
 
     def _reset_c_extensions(self) -> None:
         """Reset C extension query analyzer if available."""
-        if C_EXTENSIONS_AVAILABLE:
-            try:
-                c_extensions.query_analyzer.reset_query_analyzer()
-            except Exception as e:
-                self.logger.debug(f"C extension reset failed: {e}")
+        # Pure Python mode - no C extensions to reset
+        pass
 
     def _should_patch_cursor(self) -> bool:
         """Determine if cursor patching is needed."""
         try:
             from django.conf import settings
+
             return not settings.DEBUG
         except Exception as e:
             self.logger.debug(f"Could not determine DEBUG mode: {e}")
@@ -117,6 +116,10 @@ class DjangoQueryTracker:
         This method primarily uses Django's connection.queries when DEBUG=True,
         with a fallback to cursor patching for production environments.
         """
+        # Check if Django is available
+        if not DJANGO_AVAILABLE:
+            return
+
         # Initialize tracking state
         self._initialize_tracking()
 
@@ -194,11 +197,12 @@ class DjangoQueryTracker:
 
         # Sync with Django's built-in query tracking if available
         try:
-            if hasattr(connection, 'queries'):
-                current_queries = connection.queries[self._start_query_count:]
+            if hasattr(connection, "queries"):
+                current_queries = connection.queries[self._start_query_count :]
 
                 # Debug logging to verify isolation
                 import logging
+
                 logger = logging.getLogger(__name__)
                 total_queries_in_log = len(connection.queries)
                 queries_during_monitoring = len(current_queries)
@@ -209,8 +213,8 @@ class DjangoQueryTracker:
 
                 for query in current_queries:
                     # Convert Django's query format to our QueryInfo format
-                    sql = query.get('sql', '')
-                    time_str = query.get('time', '0')
+                    sql = query.get("sql", "")
+                    time_str = query.get("time", "0")
                     try:
                         exec_time = float(time_str)
                     except (ValueError, TypeError):
@@ -224,6 +228,7 @@ class DjangoQueryTracker:
                         self.total_time += exec_time
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             # Ignore sync errors, we still have our tracked queries
             logger.debug(f"Query sync error: {e}")
@@ -251,19 +256,8 @@ class DjangoQueryTracker:
         if not self.is_active:
             return
 
-        # Use C extension for high-performance query analysis if available
-        if C_EXTENSIONS_AVAILABLE:
-            try:
-                # Send query to C extension for analysis (time in seconds)
-                c_extensions.query_analyzer.analyze_query(sql.encode("utf-8"), time)
-                # Increment the metrics engine counter
-                if c_extensions.metrics_engine:
-                    c_extensions.metrics_engine.increment_query_count()
-            except Exception as e:
-                # Log error but continue with Python fallback
-                import logging
-
-                logging.getLogger(__name__).debug(f"C extension query analysis failed: {e}")
+        # Pure Python mode - C extensions removed
+        # Query analysis handled by pure Python implementation
         else:
             # Legacy C library support (for backward compatibility)
             try:
@@ -274,6 +268,7 @@ class DjangoQueryTracker:
                     lib.increment_query_count()
             except Exception as e:
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.debug(f"C library error: {e}")
 
@@ -323,27 +318,7 @@ class DjangoQueryTracker:
             List[str]: A list of strings describing potential N+1 patterns found.
         """
         # Use C extension for enhanced N+1 detection if available
-        if C_EXTENSIONS_AVAILABLE:
-            try:
-                # Check if N+1 patterns detected by C extension
-                has_n_plus_one = c_extensions.query_analyzer.detect_n_plus_one_patterns()
-                if has_n_plus_one:
-                    severity = c_extensions.query_analyzer.get_n_plus_one_severity()
-                    suggestion = (
-                        c_extensions.query_analyzer.get_optimization_suggestion()
-                        .decode("utf-8")
-                    )
-
-                    severity_levels = ["NONE", "MILD", "MODERATE", "HIGH", "SEVERE", "CRITICAL"]
-                    severity_text = severity_levels[min(severity, 5)]
-
-                    return [f"N+1 Pattern Detected: {severity_text} severity - {suggestion}"]
-            except Exception as e:
-                import logging
-
-                logging.getLogger(__name__).debug(f"C extension N+1 detection failed: {e}")
-
-        # Python fallback
+        # Pure Python N+1 detection - C extensions removed
         duplicates = self.get_duplicate_queries()
         n_plus_one_patterns = []
         for normalized_sql, query_list in duplicates.items():
@@ -419,6 +394,10 @@ class DjangoCacheTracker:
 
     def start(self) -> None:
         """Starts tracking cache operations."""
+        # Check if Django is available
+        if not DJANGO_AVAILABLE:
+            return
+
         self.is_active = True
         self.operations.clear()
         self.hits = 0
@@ -467,6 +446,7 @@ class DjangoCacheTracker:
                 getattr(lib, function_name)()
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.debug(f"C library update failed: {e}")
 

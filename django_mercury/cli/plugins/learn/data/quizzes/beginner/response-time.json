@@ -1,0 +1,188 @@
+{
+  "quiz": {
+    "id": "response_time_beginner",
+    "title": "Django Response Time Optimization",
+    "description": "Learn to identify and fix response time bottlenecks in Django applications",
+    "difficulty": "beginner",
+    "concept": "response_time_optimization",
+    "tags": ["performance", "response-time", "bottlenecks", "optimization"],
+    "passing_score": 0.7,
+    "questions": [
+      {
+        "id": "response_time_target",
+        "question_type": "multiple_choice",
+        "text": "What is the recommended maximum response time for a Django web page to maintain good user experience?",
+        "answers": [
+          {
+            "text": "Under 100ms",
+            "is_correct": false,
+            "explanation": "100ms is ideal for API endpoints, but too strict for full web pages."
+          },
+          {
+            "text": "Under 200ms",
+            "is_correct": true,
+            "explanation": "Correct! Under 200ms is the gold standard for web page response times. Users perceive anything under 200ms as instant."
+          },
+          {
+            "text": "Under 500ms",
+            "is_correct": false,
+            "explanation": "500ms is acceptable but not optimal. Users start to notice delays around 250ms."
+          },
+          {
+            "text": "Under 1 second",
+            "is_correct": false,
+            "explanation": "1 second is too slow for modern web expectations. Users will notice the delay."
+          }
+        ],
+        "explanation": "The 200ms rule: anything under 200ms feels instant to users. Between 200ms-1s feels sluggish, and over 1s feels broken. Aim for under 200ms for optimal user experience.",
+        "hints": [
+          "Think about what feels 'instant' to users...",
+          "Consider modern web performance standards"
+        ],
+        "difficulty": "beginner",
+        "concept": "response_time_optimization",
+        "tags": ["targets", "user-experience", "standards"]
+      },
+      {
+        "id": "response_time_measurement",
+        "question_type": "multiple_choice",
+        "text": "Which tool is best for measuring Django response times during development?",
+        "answers": [
+          {
+            "text": "Django Debug Toolbar",
+            "is_correct": true,
+            "explanation": "Perfect! Django Debug Toolbar shows exact timing for SQL queries, template rendering, and total response time - essential for development optimization."
+          },
+          {
+            "text": "Google PageSpeed Insights",
+            "is_correct": false,
+            "explanation": "PageSpeed focuses on frontend performance, not Django server response times."
+          },
+          {
+            "text": "Browser DevTools Network tab",
+            "is_correct": false,
+            "explanation": "Network tab shows total time but doesn't break down Django-specific bottlenecks."
+          },
+          {
+            "text": "Server access logs",
+            "is_correct": false,
+            "explanation": "Access logs show response times but lack detail about what's causing slowness."
+          }
+        ],
+        "explanation": "Django Debug Toolbar is the developer's best friend - it shows SQL query count, execution time, template rendering time, and identifies exactly where your response time is being spent.",
+        "hints": [
+          "Which tool shows Django-specific timing breakdowns?",
+          "Think about development vs production tools..."
+        ],
+        "difficulty": "beginner",
+        "concept": "response_time_optimization",
+        "tags": ["tools", "measurement", "debug-toolbar"]
+      },
+      {
+        "id": "response_time_bottleneck",
+        "question_type": "scenario",
+        "text": "Your Django page takes 800ms to load. Debug Toolbar shows: Template rendering: 50ms, Python code: 100ms, Database queries: 650ms. What should you optimize first?",
+        "answers": [
+          {
+            "text": "Template rendering (50ms)",
+            "is_correct": false,
+            "explanation": "Template rendering is only 6% of total time - not the bottleneck."
+          },
+          {
+            "text": "Python code execution (100ms)",
+            "is_correct": false,
+            "explanation": "Python code is only 12% of total time - not the primary issue."
+          },
+          {
+            "text": "Database queries (650ms)",
+            "is_correct": true,
+            "explanation": "Exactly! Database queries are 81% of your response time. This is classic - focus on the biggest bottleneck first for maximum impact."
+          },
+          {
+            "text": "All areas equally",
+            "is_correct": false,
+            "explanation": "The 80-20 rule: focus on the biggest bottleneck first. Database queries are clearly the problem."
+          }
+        ],
+        "explanation": "Always optimize the biggest bottleneck first! 650ms out of 800ms (81%) is database queries. Even if you made templates and Python code instant, you'd still have 650ms response time.",
+        "hints": [
+          "Which component takes the most time?",
+          "Apply the 80-20 rule - where's the biggest impact?"
+        ],
+        "difficulty": "beginner",
+        "concept": "response_time_optimization",
+        "tags": ["scenario", "bottleneck-analysis", "prioritization"]
+      },
+      {
+        "id": "response_time_database_fix",
+        "question_type": "multiple_choice",
+        "text": "Your page has 45 database queries taking 650ms total. What's the most likely cause and solution?",
+        "answers": [
+          {
+            "text": "Slow database server → upgrade hardware",
+            "is_correct": false,
+            "explanation": "45 queries is the real problem, not hardware. Fast hardware won't fix inefficient queries."
+          },
+          {
+            "text": "N+1 queries → use select_related() and prefetch_related()",
+            "is_correct": true,
+            "explanation": "Correct! 45 queries strongly suggests N+1 problems. select_related() and prefetch_related() can reduce this to 2-3 queries, cutting response time dramatically."
+          },
+          {
+            "text": "Large result sets → add pagination",
+            "is_correct": false,
+            "explanation": "Large results would show in individual query times, not query count."
+          },
+          {
+            "text": "Missing database connection pooling",
+            "is_correct": false,
+            "explanation": "Connection pooling helps with concurrency but won't reduce 45 queries to a reasonable number."
+          }
+        ],
+        "explanation": "45 queries is a classic N+1 problem symptom. The solution is Django ORM optimization: use select_related() for ForeignKeys and prefetch_related() for ManyToMany relationships to fetch related data efficiently.",
+        "hints": [
+          "What pattern causes many queries?",
+          "How can Django ORM fetch related data efficiently?"
+        ],
+        "difficulty": "beginner",
+        "concept": "response_time_optimization",
+        "tags": ["database", "n+1-queries", "orm-optimization"]
+      },
+      {
+        "id": "response_time_quick_wins",
+        "question_type": "multiple_choice",
+        "text": "You need to improve response times quickly before a product launch. Which optimization gives the fastest results?",
+        "answers": [
+          {
+            "text": "Rewrite views in a faster language",
+            "is_correct": false,
+            "explanation": "Rewriting takes weeks/months and usually provides minimal gains compared to database optimization."
+          },
+          {
+            "text": "Add database query optimization (select_related, prefetch_related)",
+            "is_correct": true,
+            "explanation": "Perfect! Database query optimization often provides 5-10x speed improvements and can be implemented in hours, not weeks."
+          },
+          {
+            "text": "Implement complex caching system",
+            "is_correct": false,
+            "explanation": "Caching is powerful but complex to implement correctly. Fix the underlying queries first."
+          },
+          {
+            "text": "Optimize frontend JavaScript and CSS",
+            "is_correct": false,
+            "explanation": "Frontend optimization helps page loading but doesn't fix Django response time bottlenecks."
+          }
+        ],
+        "explanation": "Database query optimization is the highest-impact, lowest-effort improvement for Django apps. Adding select_related() to a few views can cut response times from 800ms to 100ms in minutes.",
+        "hints": [
+          "What gives the biggest impact with least effort?",
+          "Think about the 80-20 rule for optimization"
+        ],
+        "difficulty": "beginner",
+        "concept": "response_time_optimization",
+        "tags": ["quick-wins", "database", "pragmatic-optimization"]
+      }
+    ]
+  }
+}

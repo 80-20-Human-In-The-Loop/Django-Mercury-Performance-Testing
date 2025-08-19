@@ -77,9 +77,7 @@ class OutputCapture:
         self.save_to_file = False
         self.log_file_path = "test_output.log"
 
-    def start_capture(
-        self, suppress_all: bool = True, save_to_file: bool = False
-    ):
+    def start_capture(self, suppress_all: bool = True, save_to_file: bool = False):
         """
         Start capturing all output.
 
@@ -270,9 +268,7 @@ class StreamCapture(io.StringIO):
         # If capturing is disabled, write to original stream
         if not self.capture.capturing:
             original = (
-                self.capture.original_stderr
-                if self.is_stderr
-                else self.capture.original_stdout
+                self.capture.original_stderr if self.is_stderr else self.capture.original_stdout
             )
             if original:
                 return original.write(text)
@@ -295,32 +291,20 @@ class StreamCapture(io.StringIO):
             self.line_buffer = ""
 
         # Flush original stream if available
-        original = (
-            self.capture.original_stderr
-            if self.is_stderr
-            else self.capture.original_stdout
-        )
+        original = self.capture.original_stderr if self.is_stderr else self.capture.original_stdout
         if original and hasattr(original, "flush"):
             original.flush()
 
     def isatty(self) -> bool:
         """Check if this is a TTY (needed for some libraries)."""
-        original = (
-            self.capture.original_stderr
-            if self.is_stderr
-            else self.capture.original_stdout
-        )
+        original = self.capture.original_stderr if self.is_stderr else self.capture.original_stdout
         if original and hasattr(original, "isatty"):
             return original.isatty()
         return False
 
     def fileno(self) -> int:
         """Get file descriptor (needed for some operations)."""
-        original = (
-            self.capture.original_stderr
-            if self.is_stderr
-            else self.capture.original_stdout
-        )
+        original = self.capture.original_stderr if self.is_stderr else self.capture.original_stdout
         if original and hasattr(original, "fileno"):
             return original.fileno()
         raise io.UnsupportedOperation("fileno")

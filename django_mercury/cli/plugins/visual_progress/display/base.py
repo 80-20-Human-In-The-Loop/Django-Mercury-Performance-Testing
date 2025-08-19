@@ -43,7 +43,7 @@ class MercuryVisualDisplay:
     of concerns.
     """
 
-    def __init__(self, console: Console, hints_enabled=False, profile='expert'):
+    def __init__(self, console: Console, hints_enabled=False, profile="expert"):
         """
         Initialize the visual display.
 
@@ -55,12 +55,10 @@ class MercuryVisualDisplay:
         # Configuration
         self.hints_enabled = hints_enabled
         self.profile = profile
-        
+
         # Core composition objects
         self.test_tracker = TestExecutionTracker()
-        self.display_state = DisplayRenderState(
-            console, create_display_layout()
-        )
+        self.display_state = DisplayRenderState(console, create_display_layout())
         self.metrics_tracker = get_global_tracker()
         self.output_capture = OutputCaptureState()
 
@@ -81,9 +79,7 @@ class MercuryVisualDisplay:
                 self.add_to_log_buffer(f"{SYMBOLS['cross']} Display error")
 
         except Exception as e:
-            self.add_to_log_buffer(
-                f"{SYMBOLS['cross']} Display error: {str(e)[:40]}"
-            )
+            self.add_to_log_buffer(f"{SYMBOLS['cross']} Display error: {str(e)[:40]}")
 
     def stop_live_display(self):
         """Stop the live display and clear the screen."""
@@ -106,19 +102,13 @@ class MercuryVisualDisplay:
         """Called when a test starts."""
         # Only log Mercury tests and errors to reduce spam
         if is_mercury:
-            self.add_to_log_buffer(
-                f"{SYMBOLS['target']} Mercury: {test_name.split('.')[-1][:30]}"
-            )
+            self.add_to_log_buffer(f"{SYMBOLS['target']} Mercury: {test_name.split('.')[-1][:30]}")
         elif "Error" in test_name:
-            self.add_to_log_buffer(
-                f"{SYMBOLS['warning']} Error: {test_name.split('.')[-1][:30]}"
-            )
+            self.add_to_log_buffer(f"{SYMBOLS['warning']} Error: {test_name.split('.')[-1][:30]}")
 
         # Update test tracker
         display_name = format_test_name_for_display(test_name)
-        self.test_tracker.update_test_start(
-            test_name, is_mercury, display_name
-        )
+        self.test_tracker.update_test_start(test_name, is_mercury, display_name)
 
         # Only update display every 10th test to reduce overhead
         if self.test_tracker.should_update_display(10):
@@ -134,9 +124,7 @@ class MercuryVisualDisplay:
     ):
         """Called when a test completes."""
         # Update test tracker
-        self.test_tracker.update_test_complete(
-            test_name, duration, passed, is_mercury
-        )
+        self.test_tracker.update_test_complete(test_name, duration, passed, is_mercury)
 
         # Process Mercury metrics if available
         if is_mercury:
@@ -145,6 +133,7 @@ class MercuryVisualDisplay:
             else:
                 # Mercury test but no metrics captured - likely C extensions issue
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.debug(f"Mercury test {test_name} completed but no metrics captured")
 
@@ -193,11 +182,11 @@ class MercuryVisualDisplay:
 
         # Add to metrics tracker (will be filtered if not meaningful)
         self.metrics_tracker.add_metrics(test_metrics)
-        
+
         # Track that we saw a Mercury test even if metrics were empty
         # This is important for the summary display
-        if test_name not in getattr(self, '_mercury_tests_seen', set()):
-            if not hasattr(self, '_mercury_tests_seen'):
+        if test_name not in getattr(self, "_mercury_tests_seen", set()):
+            if not hasattr(self, "_mercury_tests_seen"):
                 self._mercury_tests_seen = set()
             self._mercury_tests_seen.add(test_name)
 
@@ -206,9 +195,7 @@ class MercuryVisualDisplay:
 
         # Add insights for special cases
         if metrics.get("n_plus_one_detected"):
-            self.test_tracker.add_mercury_insight(
-                f"N+1 in {test_name.split('.')[-1]}"
-            )
+            self.test_tracker.add_mercury_insight(f"N+1 in {test_name.split('.')[-1]}")
         elif metrics.get("query_count", 0) > 50:
             self.test_tracker.add_mercury_insight(
                 f"High queries ({metrics['query_count']}) in {test_name.split('.')[-1]}"

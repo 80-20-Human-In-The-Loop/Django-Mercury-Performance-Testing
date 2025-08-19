@@ -1,0 +1,188 @@
+{
+  "quiz": {
+    "id": "database_indexing_beginner",
+    "title": "Django Database Indexing",
+    "description": "Learn when and how to use database indexes for Django performance optimization",
+    "difficulty": "beginner",
+    "concept": "database_indexing",
+    "tags": ["database", "indexes", "performance", "queries", "optimization"],
+    "passing_score": 0.7,
+    "questions": [
+      {
+        "id": "index_purpose",
+        "question_type": "multiple_choice",
+        "text": "What is the primary purpose of a database index?",
+        "answers": [
+          {
+            "text": "Store backup copies of data",
+            "is_correct": false,
+            "explanation": "Indexes don't store backups - they store references to speed up data lookup."
+          },
+          {
+            "text": "Speed up data retrieval (SELECT queries)",
+            "is_correct": true,
+            "explanation": "Correct! Indexes are like a book's index - they create fast lookup paths to find data without scanning entire tables. They dramatically speed up WHERE, ORDER BY, and JOIN operations."
+          },
+          {
+            "text": "Reduce database storage space",
+            "is_correct": false,
+            "explanation": "Indexes actually use additional storage space to improve query speed."
+          },
+          {
+            "text": "Prevent data corruption",
+            "is_correct": false,
+            "explanation": "Data integrity is handled by constraints and validation, not indexes."
+          }
+        ],
+        "explanation": "Database indexes work like a book's index - instead of reading every page (table scan), you can jump directly to the relevant pages (indexed lookup). This turns O(n) searches into O(log n) operations.",
+        "hints": [
+          "Think about how you find a word in a dictionary...",
+          "What makes database queries faster?"
+        ],
+        "difficulty": "beginner",
+        "concept": "database_indexing",
+        "tags": ["concept", "purpose", "performance"]
+      },
+      {
+        "id": "slow_query_diagnosis",
+        "question_type": "scenario",
+        "text": "Your query `User.objects.filter(email='john@example.com')` takes 2 seconds on a table with 1 million users. What's likely missing?",
+        "answers": [
+          {
+            "text": "Database connection pooling",
+            "is_correct": false,
+            "explanation": "Connection pooling helps concurrency but won't speed up individual queries."
+          },
+          {
+            "text": "An index on the email field",
+            "is_correct": true,
+            "explanation": "Exactly! Without an index on email, the database must scan all 1 million rows to find matches. An index on email would make this lookup nearly instant (milliseconds instead of seconds)."
+          },
+          {
+            "text": "More RAM on the database server",
+            "is_correct": false,
+            "explanation": "More RAM helps but won't solve the fundamental efficiency problem of scanning 1 million rows."
+          },
+          {
+            "text": "Faster SSD storage",
+            "is_correct": false,
+            "explanation": "Faster storage helps but scanning 1 million rows is still inefficient regardless of storage speed."
+          }
+        ],
+        "explanation": "Filtering on non-indexed fields forces full table scans. An index on the email field creates a sorted lookup structure, turning a 2-second scan into a millisecond lookup operation.",
+        "hints": [
+          "What happens when you search without an index?",
+          "Think about finding one record in 1 million..."
+        ],
+        "difficulty": "beginner",
+        "concept": "database_indexing",
+        "tags": ["scenario", "slow-queries", "diagnosis"]
+      },
+      {
+        "id": "django_index_creation",
+        "question_type": "multiple_choice",
+        "text": "How do you add a database index to a Django model field?",
+        "answers": [
+          {
+            "text": "email = models.EmailField(index=True)",
+            "is_correct": true,
+            "explanation": "Perfect! Adding db_index=True or index=True to any Django field creates a database index. This is the simplest way to index individual fields."
+          },
+          {
+            "text": "Run `python manage.py create_index email`",
+            "is_correct": false,
+            "explanation": "Django doesn't have a create_index management command. Indexes are created through model definitions."
+          },
+          {
+            "text": "Add index in settings.py DATABASES configuration",
+            "is_correct": false,
+            "explanation": "Database settings don't define indexes - they're defined in models or migrations."
+          },
+          {
+            "text": "Create index manually in database shell only",
+            "is_correct": false,
+            "explanation": "While possible, Django's ORM should manage indexes through model definitions for consistency."
+          }
+        ],
+        "explanation": "Django provides db_index=True for single fields, or Meta.indexes for complex indexes. Django automatically creates migration files and applies indexes when you run makemigrations and migrate.",
+        "hints": [
+          "How do you modify Django model fields?",
+          "Think about Django's declarative model syntax"
+        ],
+        "difficulty": "beginner",
+        "concept": "database_indexing",
+        "tags": ["django", "model-definition", "implementation"]
+      },
+      {
+        "id": "index_tradeoffs",
+        "question_type": "multiple_choice",
+        "text": "What is the main downside of adding too many database indexes?",
+        "answers": [
+          {
+            "text": "Queries become slower",
+            "is_correct": false,
+            "explanation": "Indexes make queries faster, not slower (though the wrong indexes can have minimal impact)."
+          },
+          {
+            "text": "INSERT/UPDATE/DELETE operations become slower",
+            "is_correct": true,
+            "explanation": "Correct! Every time you INSERT/UPDATE/DELETE data, all indexes on that table must be updated too. Too many indexes can significantly slow down write operations while improving reads."
+          },
+          {
+            "text": "Database becomes more secure",
+            "is_correct": false,
+            "explanation": "Indexes don't affect security - they're purely performance-related."
+          },
+          {
+            "text": "Tables cannot be deleted",
+            "is_correct": false,
+            "explanation": "Indexes don't prevent table operations - they can be dropped with the table."
+          }
+        ],
+        "explanation": "Indexes speed up reads but slow down writes. Each index must be maintained on every INSERT/UPDATE/DELETE. The key is indexing frequently-queried fields while avoiding over-indexing rarely-used fields.",
+        "hints": [
+          "What happens when you modify data that's indexed?",
+          "Think about read vs write performance"
+        ],
+        "difficulty": "beginner",
+        "concept": "database_indexing",
+        "tags": ["tradeoffs", "write-performance", "optimization-balance"]
+      },
+      {
+        "id": "compound_index_scenario",
+        "question_type": "scenario",
+        "text": "You frequently query: `Order.objects.filter(customer_id=123, status='pending')`. What's the most efficient indexing strategy?",
+        "answers": [
+          {
+            "text": "Separate indexes on customer_id and status",
+            "is_correct": false,
+            "explanation": "Separate indexes can help but aren't optimal for this specific combined query pattern."
+          },
+          {
+            "text": "Single compound index on (customer_id, status)",
+            "is_correct": true,
+            "explanation": "Perfect! A compound index on (customer_id, status) is optimized for this exact query pattern. It creates a combined lookup structure that can efficiently find orders for a specific customer with a specific status."
+          },
+          {
+            "text": "Index only customer_id since it's more selective",
+            "is_correct": false,
+            "explanation": "While customer_id helps, the query also filters by status - a compound index handles both conditions optimally."
+          },
+          {
+            "text": "No indexes needed - Django ORM optimizes automatically",
+            "is_correct": false,
+            "explanation": "Django ORM doesn't automatically create indexes - you must define them based on your query patterns."
+          }
+        ],
+        "explanation": "Compound indexes are designed for multi-field queries. They're most effective when field order matches query patterns: put the most selective field first, then additional fields in order of selectivity.",
+        "hints": [
+          "What type of index handles multiple fields efficiently?",
+          "Think about combined search criteria"
+        ],
+        "difficulty": "beginner",
+        "concept": "database_indexing",
+        "tags": ["compound-index", "multi-field", "query-optimization"]
+      }
+    ]
+  }
+}

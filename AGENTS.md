@@ -66,3 +66,9 @@ Transform errors into learning opportunities:
 - **Level 2** (`--verbose`): Detailed technical information
 - **Level 3** (`--edu`): Full educational context with examples
 - Allow users to drill down based on their needs and expertise
+
+## Educational Features Enhancement
+- **Student mode with hints/learn plugins**: Always show learning content, even for passing tests
+- **Learning suggestions**: Display `--learn` command suggestions based on test context
+- **Profile switching hints**: Guide users to expert mode when appropriate
+- **Contextual tips**: Show educational content during test execution, not just when issues occur

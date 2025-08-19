@@ -10,4 +10,4 @@ with the plugin discovery mechanism that looks for plugin_*.py files.
 from django_mercury.cli.plugins.visual_progress.plugin import VisualProgressPlugin
 
 # Export the plugin class so the plugin manager can find it
-__all__ = ['VisualProgressPlugin']
+__all__ = ["VisualProgressPlugin"]

@@ -176,28 +176,25 @@ class MercuryThresholdOverride:
 
 class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
     """
-    🎓 Django Mercury Learning & Investigation Test Case
-    
-    A performance learning tool for understanding and investigating Django app performance.
-    Use this to discover performance issues, then switch to DjangoPerformanceAPITestCase
-    for production tests.
-    
-    Purpose: LEARNING AND INVESTIGATION, not production testing
-    
+    🔍 Django Mercury Investigation Test Case
+
+    TEMPORARY testing class for performance issue discovery and workflow guidance.
+
+    Purpose: Umbrella investigation to discover performance issues, then guide
+    transition to DjangoPerformanceAPITestCase for production testing.
+
+    Two-Phase Workflow:
+    1. INVESTIGATION PHASE (this class) - Discover issues automatically
+    2. DOCUMENTATION PHASE (DjangoPerformanceAPITestCase) - Document requirements with assertions
+
     What it does:
-    - Automatically monitors every test method
-    - Identifies the #1 performance issue to investigate
-    - Provides focused, educational guidance
-    - Teaches you what to look for and why
-    
-    Workflow:
-    1. Inherit from DjangoMercuryAPITestCase to investigate
-    2. Run tests to discover performance patterns
-    3. Learn from the focused insights
-    4. Switch to DjangoPerformanceAPITestCase with specific assertions
-    
-    Note: Output is intentionally minimal and educational.
-    For detailed metrics, use DjangoPerformanceAPITestCase.
+    - Automatically monitors performance across all test methods
+    - Discovers the primary performance issue per test
+    - Generates specific DjangoPerformanceAPITestCase assertions
+    - Provides minimal, focused workflow guidance
+    - Shows transition path to production tests
+
+    Key Principle: Mercury class is TEMPORARY, Performance class is FOREVER.
     """
 
     # Class-level configuration - Optimized for learning
@@ -225,6 +222,7 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
         super().__init__(*args, **kwargs)
         self._operation_profiles = self._initialize_operation_profiles()
         self._test_context: Dict[str, Any] = {}
+        self._investigative_monitor = None
 
     def setUp(self):
         """Enhanced setup with automatic Mercury initialization."""
@@ -574,18 +572,18 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
 
         return recommendations
 
-    def _check_educational_opportunities(
-        self, 
-        test_name: str, 
-        metrics: "EnhancedPerformanceMetrics_Python", 
-        operation_type: str, 
-        context: Dict[str, Any]
+    def _run_performance_investigation(
+        self,
+        test_name: str,
+        metrics: "EnhancedPerformanceMetrics_Python",
+        operation_type: str,
+        context: Dict[str, Any],
     ) -> None:
-        """Check for educational opportunities and trigger interventions when appropriate.
-        
-        This method integrates with the interactive educational system to provide
-        learning moments based on actual test performance data.
-        
+        """Run performance investigation and discovery for the two-phase workflow.
+
+        This method integrates with the investigative monitoring system to discover
+        performance issues and guide workflow transition.
+
         Args:
             test_name: Name of the test method
             metrics: Performance metrics from the test
@@ -593,142 +591,67 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
             context: Test context information
         """
         try:
-            from django_mercury.cli.educational.interactive_ui import InteractiveUI
-            from django_mercury.cli.educational.quiz_system import QuizSystem
-            from django_mercury.cli.educational.progress_tracker import ProgressTracker
-            from django_mercury.python_bindings.educational_monitor import EducationalMonitor
-            
-            # Initialize educational components if needed
-            if not hasattr(self, '_educational_ui'):
-                self._educational_ui = InteractiveUI()
-                self._educational_progress = ProgressTracker()
-                self._educational_quiz = QuizSystem(
-                    console=self._educational_ui.console,
-                    progress_tracker=self._educational_progress
+            from django_mercury.python_bindings.investigative_monitor import InvestigativeMonitor
+
+            # Initialize investigative monitor if needed
+            if not self._investigative_monitor:
+                # Minimal output by default - focused on discovery
+                self._investigative_monitor = InvestigativeMonitor(
+                    console=None,  # No rich output by default
+                    minimal_output=True,  # Keep it focused
                 )
-                # Determine interactive mode based on multiple factors
-                interactive = True
-                if os.environ.get('MERCURY_AGENT_MODE') == 'true':
-                    interactive = False
-                elif os.environ.get('MERCURY_NON_INTERACTIVE', '').lower() in ('1', 'true', 'yes'):
-                    interactive = False
-                elif os.environ.get('CI') or os.environ.get('CONTINUOUS_INTEGRATION'):
-                    interactive = False
-                # But if educational mode is explicitly set, respect that
-                elif os.environ.get('MERCURY_EDU') == '1' and os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true':
-                    interactive = True
-                    
-                self._educational_monitor = EducationalMonitor(
-                    console=self._educational_ui.console,
-                    quiz_system=self._educational_quiz,
-                    progress_tracker=self._educational_progress,
-                    interactive_mode=interactive
-                )
-            
-            # Check for various learning opportunities based on metrics
-            issues_found = []
-            
-            # N+1 Query Detection
-            if (hasattr(metrics, 'django_issues') and 
-                metrics.django_issues and 
-                metrics.django_issues.has_n_plus_one):
-                issues_found.append({
-                    'type': 'n_plus_one_queries',
-                    'severity': metrics.django_issues.n_plus_one_analysis.severity_text,
-                    'query_count': metrics.query_count,
-                    'message': f"N+1 queries detected: {metrics.query_count} queries executed"
-                })
-            
-            # High Query Count (even without N+1)
-            elif metrics.query_count > 10:
-                issues_found.append({
-                    'type': 'high_query_count', 
-                    'query_count': metrics.query_count,
-                    'message': f"High query count: {metrics.query_count} queries executed"
-                })
-            
-            # Slow Response Time
-            if metrics.response_time > 200:
-                issues_found.append({
-                    'type': 'slow_response_time',
-                    'response_time': metrics.response_time,
-                    'message': f"Slow response time: {metrics.response_time:.2f}ms"
-                })
-            
-            # High Memory Usage
-            if metrics.memory_usage > 50:
-                issues_found.append({
-                    'type': 'memory_optimization',
-                    'memory_usage': metrics.memory_usage,
-                    'message': f"High memory usage: {metrics.memory_usage:.2f}MB"
-                })
-            
-            # Poor Performance Score
-            if (hasattr(metrics, 'performance_score') and 
-                metrics.performance_score and 
-                metrics.performance_score.total_score < 70):
-                issues_found.append({
-                    'type': 'general_performance',
-                    'score': metrics.performance_score.total_score,
-                    'grade': metrics.performance_score.letter_grade,
-                    'message': f"Performance score: {metrics.performance_score.letter_grade} ({metrics.performance_score.total_score:.0f}/100)"
-                })
-            
-            # If educational opportunities exist, handle them
-            if issues_found:
-                for issue in issues_found:
-                    # Record the learning opportunity
-                    self._educational_progress.record_concept_learned(issue['type'])
-                    
-                    # Handle the issue educationally if interactive
-                    if self._educational_monitor.interactive_mode:
-                        self._educational_monitor.handle_performance_issue(
-                            test=test_name,
-                            error_msg=issue['message']
+
+            # Prepare metrics dictionary for investigation
+            investigation_metrics = {
+                "query_count": metrics.query_count,
+                "response_time": metrics.response_time,
+                "memory_usage": metrics.memory_usage,
+                "has_n_plus_one": (
+                    hasattr(metrics, "django_issues")
+                    and metrics.django_issues
+                    and metrics.django_issues.has_n_plus_one
+                ),
+                "performance_score": (
+                    metrics.performance_score.total_score
+                    if hasattr(metrics, "performance_score") and metrics.performance_score
+                    else None
+                ),
+            }
+
+            # Run investigation analysis with proper test name
+            discovered_issue = self._investigative_monitor.analyze_test_performance(
+                test_name=test_name, metrics=investigation_metrics, operation_type=operation_type
+            )
+
+            # Only show minimal guidance for significant issues
+            if discovered_issue and discovered_issue.severity in ["HIGH", "MEDIUM"]:
+                # Show minimal inline guidance with colors - no interruption
+                try:
+                    from .colors import colors, EduLiteColorScheme
+
+                    if discovered_issue.severity == "HIGH":
+                        issue_title = discovered_issue.issue_type.replace("_", " ").title()
+                        severity_color = EduLiteColorScheme.CRITICAL
+                        print(
+                            f"{colors.colorize('🔍', EduLiteColorScheme.ACCENT)} {colors.colorize(test_name, EduLiteColorScheme.TEXT)}: {colors.colorize(issue_title, severity_color)} {colors.colorize(f'({discovered_issue.severity})', severity_color)}"
                         )
-                    
-                    # Check if we should show a quiz for this concept
-                    if (self._educational_quiz and 
-                        self._educational_progress.should_show_quiz(issue['type'])):
-                        
-                        # Get contextual quiz for this specific issue
-                        quiz = self._educational_quiz.create_contextual_quiz(
-                            issue['type'], issue
+                        print(
+                            f"   {colors.colorize('→', EduLiteColorScheme.OPTIMIZATION)} {colors.colorize(discovered_issue.suggested_assertions[0], EduLiteColorScheme.SUCCESS)}"
                         )
-                        
-                        if quiz and self._educational_monitor.interactive_mode:
-                            self._educational_quiz.ask_quiz(
-                                quiz=quiz,
-                                context=f"Based on {test_name} performance analysis"
-                            )
-            
-            # Even if no issues, check for learning opportunities on good performance
-            elif (hasattr(metrics, 'performance_score') and 
-                  metrics.performance_score and 
-                  metrics.performance_score.total_score >= 90):
-                
-                # Celebrate excellent performance occasionally
-                import random
-                if random.random() < 0.1 and self._educational_monitor.interactive_mode:  # 10% chance
-                    self._educational_ui.show_celebration(
-                        f"Excellent performance in {test_name}! "
-                        f"Grade: {metrics.performance_score.letter_grade}"
-                    )
-                    
-                    # Maybe ask a quiz about what made this test perform well
-                    excellence_quiz = self._educational_quiz.get_quiz_for_concept("general_performance")
-                    if excellence_quiz and random.random() < 0.3:  # 30% chance
-                        self._educational_quiz.ask_quiz(
-                            quiz=excellence_quiz,
-                            context=f"Understanding why {test_name} performed excellently"
+                except ImportError:
+                    # Fallback without colors
+                    if discovered_issue.severity == "HIGH":
+                        print(
+                            f"🔍 {test_name}: {discovered_issue.issue_type.replace('_', ' ').title()} ({discovered_issue.severity})"
                         )
-                        
+                        print(f"   → {discovered_issue.suggested_assertions[0]}")
+
         except ImportError:
-            # Educational components not available, skip silently
+            # Investigative components not available, skip silently
             pass
         except Exception as e:
-            # Log educational system errors but don't break tests
-            logger.debug(f"Educational system error in {test_name}: {e}")
+            # Log investigative system errors but don't break tests
+            logger.debug(f"Investigative system error in {test_name}: {e}")
 
     def _auto_wrap_test_method(self, original_method: Callable) -> Callable:
         """Automatically wrap test methods with performance monitoring."""
@@ -779,7 +702,6 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                 # Run comprehensive analysis with intelligent settings, but catch threshold failures
                 start_time = time.perf_counter()
                 try:
-
                     # Run analysis with test context and educational guidance
                     metrics: EnhancedPerformanceMetrics_Python = (
                         self_inner.run_comprehensive_analysis(
@@ -789,7 +711,9 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                             expect_response_under=thresholds.get("response_time"),
                             expect_memory_under=thresholds.get("memory_usage"),
                             expect_queries_under=thresholds.get("query_count"),
-                            print_analysis=False if self._learning_mode else self._verbose_reporting,
+                            print_analysis=(
+                                False if self._learning_mode else self._verbose_reporting
+                            ),
                             show_scoring=False if self._learning_mode else self._auto_scoring,
                             auto_detect_n_plus_one=True,
                             test_file=test_file,
@@ -801,14 +725,11 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                     )
                     test_executed = True
                     context["response_time"] = metrics.response_time  # directly from monitor
-                    
-                    # Enhanced Educational Integration - Always check for learning opportunities
-                    if os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true' and metrics:
-                        self_inner._check_educational_opportunities(
-                            test_method or operation_name,
-                            metrics,
-                            operation_type,
-                            context
+
+                    # Investigative Integration - Run performance investigation for workflow guidance
+                    if self._learning_mode and metrics:
+                        self_inner._run_performance_investigation(
+                            test_method or operation_name, metrics, operation_type, context
                         )
                 except Exception as monitor_exception:
                     response_time = (
@@ -821,39 +742,10 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                         # This is likely a threshold failure, try to extract metrics from the monitor
                         # We'll catch the exception and re-raise it after tracking
                         test_executed = True
-                        
-                        # Check for educational mode and trigger intervention
-                        if os.environ.get('MERCURY_EDUCATIONAL_MODE') == 'true':
-                            try:
-                                from django_mercury.python_bindings.educational_monitor import EducationalMonitor
-                                from django_mercury.cli.educational.interactive_ui import InteractiveUI
-                                
-                                # Create educational components
-                                ui = InteractiveUI()
-                                # Check if we should be interactive
-                                interactive = True
-                                if os.environ.get('MERCURY_NON_INTERACTIVE', '').lower() in ('1', 'true', 'yes'):
-                                    interactive = False
-                                elif os.environ.get('CI') or os.environ.get('CONTINUOUS_INTEGRATION'):
-                                    interactive = False
-                                # Educational mode override
-                                elif os.environ.get('MERCURY_EDU') == '1':
-                                    interactive = True
-                                    
-                                monitor = EducationalMonitor(
-                                    console=ui.console,
-                                    interactive_mode=interactive
-                                )
-                                
-                                # Handle the performance issue educationally
-                                monitor.handle_performance_issue(
-                                    test=test_method or operation_name,
-                                    error_msg=str(monitor_exception)
-                                )
-                            except ImportError:
-                                # Educational components not available, continue normally
-                                pass
-                        
+
+                        # Educational guidance is now handled by CLI plugins
+                        # No inline educational intervention during test execution
+
                         raise monitor_exception
                     else:
                         # Some other error, re-raise immediately
@@ -893,6 +785,18 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
             finally:
                 # Always track execution if we got metrics (even if test failed)
                 if test_executed and metrics:
+                    # Store test name and operation type in metrics for summary (as dynamic attributes)
+                    setattr(
+                        metrics,
+                        "test_name",
+                        test_method
+                        or (
+                            operation_name.split(".")[-1]
+                            if "." in operation_name
+                            else operation_name
+                        ),
+                    )
+                    setattr(metrics, "operation_type", operation_type)
 
                     # Generate contextual recommendations
                     recommendations = self_inner._generate_contextual_recommendations(
@@ -906,22 +810,31 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
                     # In learning mode, only show critical issues per test
                     if self._learning_mode and not self._verbose_reporting:
                         # Only show output if there's something to learn
-                        if metrics.performance_score.grade in ['D', 'F'] or (
-                            metrics.django_issues.has_n_plus_one and 
-                            metrics.django_issues.n_plus_one_analysis.severity_level > 0 and
-                            metrics.django_issues.n_plus_one_analysis.query_count > 0
+                        if metrics.performance_score.grade in ["D", "F"] or (
+                            metrics.django_issues.has_n_plus_one
+                            and metrics.django_issues.n_plus_one_analysis.severity_level > 0
+                            and metrics.django_issues.n_plus_one_analysis.query_count > 0
                         ):
                             # Show ONE key learning point per test
                             test_display_name = f"{original_method.__name__}"
-                            
-                            if metrics.django_issues.has_n_plus_one and metrics.django_issues.n_plus_one_analysis.query_count > 0:
-                                print(f"\n💡 {test_display_name}: N+1 Query Pattern Detected ({metrics.django_issues.n_plus_one_analysis.query_count} queries)")
+
+                            if (
+                                metrics.django_issues.has_n_plus_one
+                                and metrics.django_issues.n_plus_one_analysis.query_count > 0
+                            ):
+                                print(
+                                    f"\n💡 {test_display_name}: N+1 Query Pattern Detected ({metrics.django_issues.n_plus_one_analysis.query_count} queries)"
+                                )
                                 print(f"   → Fix: Use select_related() or prefetch_related()")
                             elif metrics.response_time > 200:
-                                print(f"\n⏱️  {test_display_name}: Slow Response ({metrics.response_time:.0f}ms)")
+                                print(
+                                    f"\n⏱️  {test_display_name}: Slow Response ({metrics.response_time:.0f}ms)"
+                                )
                                 print(f"   → Investigate: Database indexes, query optimization")
                             elif metrics.query_count > 20:
-                                print(f"\n🗃️  {test_display_name}: High Query Count ({metrics.query_count} queries)")
+                                print(
+                                    f"\n🗃️  {test_display_name}: High Query Count ({metrics.query_count} queries)"
+                                )
                                 print(f"   → Consider: Query optimization, caching")
 
                 # Reset per-test thresholds after each test
@@ -1297,17 +1210,26 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
     @classmethod
     def _generate_mercury_executive_summary(cls):
         """Generate executive summary with backward compatibility."""
-        
+
+        # In learning mode, focus on investigative workflow guidance
+        if cls._learning_mode:
+            cls._generate_investigative_summary()
+            return
+
         # Always create dashboard for test compatibility
         if cls._test_executions:
             cls._create_mercury_dashboard()
-        
+
         # Show ANALYSIS header for test compatibility
-        print(f"\n{colors.colorize('🎯 MERCURY INTELLIGENT PERFORMANCE ANALYSIS', EduLiteColorScheme.ACCENT, bold=True)}")
+        print(
+            f"\n{colors.colorize('🎯 MERCURY INTELLIGENT PERFORMANCE ANALYSIS', EduLiteColorScheme.ACCENT, bold=True)}"
+        )
         print(f"{colors.colorize('=' * 80, EduLiteColorScheme.BORDER)}")
-        
+
         if not cls._test_executions:
-            print(f"{colors.colorize('No performance data collected.', EduLiteColorScheme.WARNING)}")
+            print(
+                f"{colors.colorize('No performance data collected.', EduLiteColorScheme.WARNING)}"
+            )
             return
 
         # Calculate aggregate statistics
@@ -1506,38 +1428,43 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
         """Generate focused learning summary for investigation mode."""
         if not cls._test_executions:
             return
-            
+
         # Count critical issues (safely handle Mock objects in tests)
         n_plus_one_tests = 0
         try:
             n_plus_one_tests = sum(
-                1 for m in cls._test_executions
-                if m.django_issues.has_n_plus_one 
+                1
+                for m in cls._test_executions
+                if m.django_issues.has_n_plus_one
                 and m.django_issues.n_plus_one_analysis.query_count > 0
             )
         except (AttributeError, TypeError):
             # Handle Mock objects in tests
             pass
-        
+
         slow_tests = sum(1 for m in cls._test_executions if m.response_time > 200)
         high_query_tests = sum(1 for m in cls._test_executions if m.query_count > 20)
-        failed_tests = len([m for m in cls._test_executions if m.performance_score.grade in ['D', 'F']])
-        
+        failed_tests = len(
+            [m for m in cls._test_executions if m.performance_score.grade in ["D", "F"]]
+        )
+
         # Calculate averages
         total_tests = len(cls._test_executions)
         avg_response = sum(m.response_time for m in cls._test_executions) / total_tests
         avg_queries = sum(m.query_count for m in cls._test_executions) / total_tests
-        
-        print("\n" + "="*60)
+
+        print("\n" + "=" * 60)
         print("🎓 MERCURY LEARNING SUMMARY")
-        print("="*60)
-        
+        print("=" * 60)
+
         # Show the #1 issue to investigate
         if n_plus_one_tests > 0:
             print(f"\n📍 PRIMARY ISSUE: N+1 Query Pattern")
             print(f"   Found in {n_plus_one_tests}/{total_tests} tests")
             print(f"   → Next Step: Add select_related() and prefetch_related()")
-            print(f"   → Learn more: https://docs.djangoproject.com/en/stable/topics/db/optimization/")
+            print(
+                f"   → Learn more: https://docs.djangoproject.com/en/stable/topics/db/optimization/"
+            )
         elif slow_tests > total_tests / 2:
             print(f"\n📍 PRIMARY ISSUE: Slow Response Times")
             print(f"   {slow_tests}/{total_tests} tests over 200ms (avg: {avg_response:.0f}ms)")
@@ -1550,27 +1477,111 @@ class DjangoMercuryAPITestCase(DjangoPerformanceAPITestCase):
             print(f"\n✅ Performance looks good!")
             print(f"   Avg response: {avg_response:.0f}ms")
             print(f"   Avg queries: {avg_queries:.1f}")
-        
+
         # Quick stats
         print(f"\n📊 Quick Stats:")
         print(f"   Tests run: {total_tests}")
         print(f"   Avg response time: {avg_response:.0f}ms")
         print(f"   Avg query count: {avg_queries:.1f}")
-        
+
         # Show grades distribution only if there are issues
         if failed_tests > 0:
             grades = [m.performance_score.grade for m in cls._test_executions]
             from collections import Counter
+
             grade_counts = Counter(grades)
             print(f"   Grades: {', '.join(f'{g}:{c}' for g, c in sorted(grade_counts.items()))}")
-        
+
         # Actionable next step
         print(f"\n💡 Ready to optimize?")
         print(f"   Switch to DjangoPerformanceAPITestCase for production tests")
         print(f"   Add specific assertions: assertResponseTimeLess(), assertQueriesLess()")
-        
-        print("="*60 + "\n")
-    
+
+        print("=" * 60 + "\n")
+
+    @classmethod
+    def _generate_investigative_summary(cls):
+        """Generate investigative workflow summary for the two-phase approach."""
+        print("\n" + "=" * 60)
+        print("🔍 MERCURY INVESTIGATION COMPLETE")
+        print("=" * 60)
+
+        if not cls._test_executions:
+            print("No tests executed.")
+            return
+
+        # Get investigative monitor instance for workflow guidance
+        try:
+            from django_mercury.python_bindings.investigative_monitor import InvestigativeMonitor
+
+            # Create temporary monitor for summary generation
+            summary_monitor = InvestigativeMonitor(minimal_output=True)
+
+            # Populate with discovered issues for summary
+            for i, metrics in enumerate(cls._test_executions):
+                investigation_metrics = {
+                    "query_count": metrics.query_count,
+                    "response_time": metrics.response_time,
+                    "memory_usage": metrics.memory_usage,
+                    "has_n_plus_one": (
+                        hasattr(metrics, "django_issues")
+                        and metrics.django_issues
+                        and metrics.django_issues.has_n_plus_one
+                    ),
+                    "performance_score": (
+                        metrics.performance_score.total_score
+                        if hasattr(metrics, "performance_score") and metrics.performance_score
+                        else None
+                    ),
+                }
+
+                # Extract test name more intelligently
+                test_name = "unknown_test"
+
+                # Try to get from metrics attributes
+                if hasattr(metrics, "test_name") and metrics.test_name:
+                    test_name = metrics.test_name
+                elif hasattr(metrics, "operation_name") and metrics.operation_name:
+                    # Extract test name from operation_name (format: ClassName.test_method)
+                    if "." in metrics.operation_name:
+                        test_name = metrics.operation_name.split(".")[-1]
+                    else:
+                        test_name = metrics.operation_name
+                else:
+                    # Fallback to a more descriptive name
+                    test_name = f"test_{i + 1}"
+
+                operation_type = getattr(metrics, "operation_type", "unknown")
+                summary_monitor.analyze_test_performance(
+                    test_name=test_name,
+                    metrics=investigation_metrics,
+                    operation_type=operation_type,
+                )
+
+            # Show workflow transition guidance
+            summary_monitor.show_workflow_guidance()
+
+        except ImportError:
+            # Fallback to basic summary if investigative monitor not available
+            total_tests = len(cls._test_executions)
+            avg_response = sum(m.response_time for m in cls._test_executions) / total_tests
+            avg_queries = sum(m.query_count for m in cls._test_executions) / total_tests
+
+            print(f"\n📊 Investigation Results:")
+            print(f"   Tests: {total_tests}")
+            print(f"   Avg response: {avg_response:.0f}ms")
+            print(f"   Avg queries: {avg_queries:.1f}")
+
+            print(f"\n🔄 WORKFLOW TRANSITION:")
+            print(f"   Current: INVESTIGATION (DjangoMercuryAPITestCase) - TEMPORARY")
+            print(f"   Next: DOCUMENTATION (DjangoPerformanceAPITestCase) - PERMANENT")
+
+            print(f"\n📋 Next Steps:")
+            print(f"   • Fix discovered performance issues")
+            print(f"   • Switch to DjangoPerformanceAPITestCase")
+            print(f"   • Add specific performance assertions")
+            print("=" * 60 + "\n")
+
     @classmethod
     def _create_mercury_dashboard(cls):
         """Create enhanced dashboard for Mercury test suite summary."""
