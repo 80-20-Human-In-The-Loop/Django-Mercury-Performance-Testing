@@ -1,1 +1,0 @@
-"""Tests for Django Mercury Educational components."""

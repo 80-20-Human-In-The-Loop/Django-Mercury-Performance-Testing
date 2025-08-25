@@ -15,27 +15,17 @@ on:
         type: boolean
         default: false
 
-env:
-  CIBW_BUILD_VERBOSITY: 1
-
 jobs:
-  # Run tests (non-blocking - failures won't prevent deployment)
+  # Run tests
   test:
     name: Run tests
     runs-on: ${{ matrix.os }}
-    continue-on-error: true  # Tests can fail without blocking deployment
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.10', '3.11', '3.12']
     
     steps:
-      - name: Configure Git for Windows paths
-        if: runner.os == 'Windows'
-        run: |
-          git config --global core.protectNTFS false
-          git config --global core.longpaths true
-          
       - uses: actions/checkout@v4
       
       - uses: actions/setup-python@v4
@@ -48,442 +38,81 @@ jobs:
           pip install -e ".[dev]"
           pip install pytest-cov
       
-      - name: Set up MSVC compiler (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-      
-      - name: Install C build dependencies (Ubuntu)
-        if: runner.os == 'Linux'
+      - name: Run tests
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential python3-dev libunwind-dev
+          pytest tests/ --cov=django_mercury --cov-report=term-missing
       
-      - name: Run all tests with CI script (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Verify pure Python implementation
         run: |
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            ./scripts/ci_test_runner.sh linux
-          else
-            ./scripts/ci_test_runner.sh macos
-          fi
-      
-      - name: Build C Extensions (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          echo "Building C extensions on Windows..."
-          echo "PYTHONIOENCODING=utf-8" >> $env:GITHUB_ENV
-          
-          # Set environment variables for Windows build
-          echo "DISTUTILS_USE_SDK=1" >> $env:GITHUB_ENV
-          echo "MSSdk=1" >> $env:GITHUB_ENV
-          
-          # Install build dependencies
-          python -m pip install --upgrade setuptools wheel
-          
-          # Show compiler information
-          echo "Checking for Visual Studio..."
-          where cl.exe 2>$null || echo "cl.exe not in PATH - C extensions may not build"
-          
-          # Try to build C extensions (allowed to fail)
-          echo ""
-          echo "Attempting to build C extensions with setup.py..."
-          python setup.py build_ext --inplace 2>&1 || echo "C extension build failed - will use pure Python"
-          
-          # List built extensions
-          echo ""
-          echo "Looking for built extensions (.pyd files):"
-          $pydFiles = Get-ChildItem -Path . -Filter "*.pyd" -Recurse -ErrorAction SilentlyContinue
-          if ($pydFiles) {
-              $pydFiles | Select-Object FullName
-          } else {
-              echo "  No .pyd files found"
-          }
-          
-          # Explain Windows Python extension format
-          echo ""
-          echo "NOTE: On Windows, Python C extensions use .pyd files (Python Dynamic modules)"
-          echo "      These are the Windows equivalent of .so files on Linux"
-          echo "      Finding .pyd files means the C extensions built successfully!"
-          echo "      (Traditional .dll files are not used for Python extensions)"
-          
-          # Check if any C extensions were built
-          $pydCount = if ($pydFiles) { $pydFiles.Count } else { 0 }
-          if ($pydCount -eq 0) {
-              echo ""
-              echo "INFO: No .pyd files found - using pure Python mode"
-              echo "C_EXTENSIONS_BUILT=0" >> $env:GITHUB_ENV
-              echo "DJANGO_MERCURY_PURE_PYTHON=1" >> $env:GITHUB_ENV
-          } else {
-              echo ""
-              echo "SUCCESS: Found $pydCount .pyd files"
-              echo "C_EXTENSIONS_BUILT=1" >> $env:GITHUB_ENV
-              echo "DJANGO_MERCURY_PURE_PYTHON=0" >> $env:GITHUB_ENV
-          }
-          
-          # Run diagnostics (if available)
-          echo ""
-          echo "Running C extension diagnostics..."
-          if (Test-Path "scripts/diagnose_c_extensions.py") {
-              python scripts/diagnose_c_extensions.py 2>&1 || echo "Diagnostics completed"
-          } else {
-              echo "Diagnostics script not found - skipping"
-          }
-      
-      
-      - name: Run all tests with CI script (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: ./scripts/ci_test_runner.sh windows
-      
-      
-      # NOTE: test_runner.py already executed above in "Run Python tests" step
-      # - name: Run test runner
-      #   run: |
-      #     python test_runner.py || echo "Test runner completed"
-      
-      - name: Check code quality
-        if: matrix.python-version == '3.10' && matrix.os == 'ubuntu-latest'
-        run: |
-          pip install ruff black isort
-          ruff check django_mercury/ || true
-          black --check django_mercury/ || true
-          isort --check-only django_mercury/ || true
+          python -c "import django_mercury; print(f'Version: {django_mercury.__version__}')"
+          python -c "from django_mercury.python_bindings.c_bindings import HAS_C_EXTENSIONS; assert not HAS_C_EXTENSIONS"
 
-  # Build source distribution
-  build_sdist:
-    name: Build source distribution
+  # Build source distribution and pure Python wheel
+  build:
+    name: Build distributions
     runs-on: ubuntu-latest
-    # No dependency on tests - build immediately
+    needs: test
     
     steps:
-      - name: Configure Git for Windows paths
-        if: runner.os == 'Windows'
-        run: |
-          git config --global core.protectNTFS false
-          git config --global core.longpaths true
-          
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for version detection
-      
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip "setuptools>=75.0"
-          pip install build
-      
-      - name: Build source distribution
-        run: python -m build --sdist
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sdist
-          path: dist/*.tar.gz
-
-  # Build wheels for each platform
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}-${{ matrix.archs }}
-    runs-on: ${{ matrix.os }}
-    # No dependency on tests - build immediately
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux x86_64
-          - os: ubuntu-latest
-            archs: x86_64
-            build-name: linux-x86_64
-            
-          # Linux ARM64 (if needed, slower due to emulation)
-          # - os: ubuntu-latest
-          #   archs: aarch64
-          #   build-name: linux-aarch64
-          
-          # macOS Intel
-          - os: macos-13  # Use macos-13 for Intel
-            archs: x86_64
-            build-name: macos-x86_64
-          
-          # macOS Apple Silicon
-          - os: macos-14  # Use macos-14 for Apple Silicon
-            archs: arm64
-            build-name: macos-arm64
-          
-          # macOS Universal (both architectures)
-          - os: macos-latest
-            archs: universal2
-            build-name: macos-universal2
-          
-          # Windows 64-bit
-          - os: windows-latest
-            archs: AMD64
-            build-name: windows-amd64
-    
-    steps:
-      - name: Configure Git for Windows paths
-        if: runner.os == 'Windows'
-        run: |
-          git config --global core.protectNTFS false
-          git config --global core.longpaths true
-          
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      # Set up QEMU for Linux ARM builds (if enabled)
-      - name: Set up QEMU
-        if: runner.os == 'Linux' && matrix.archs == 'aarch64'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-      
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22.0
-        env:
-          CIBW_ARCHS: ${{ matrix.archs }}
-          # Enable C extensions on Windows
-          CIBW_ENVIRONMENT_WINDOWS: DJANGO_MERCURY_PURE_PYTHON=0
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ matrix.build-name }}
-          path: ./wheelhouse/*.whl
-
-  # Test the built wheels
-  # TODO: In the future, make wheel tests mandatory with 90% coverage requirement
-  # TODO: Currently allowing failures to ensure deployment proceeds regardless
-  test_wheels:
-    name: Test wheels on ${{ matrix.os }} Python ${{ matrix.python }}
-    needs: [build_wheels]
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true  # Don't fail the workflow if tests fail
-    timeout-minutes: 15  # Prevent infinite loops - max 15 minutes per job
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ['3.10', '3.11', '3.12']
-    
-    steps:
-      - name: Configure Git for Windows paths
-        if: runner.os == 'Windows'
-        run: |
-          git config --global core.protectNTFS false
-          git config --global core.longpaths true
-          
       - uses: actions/checkout@v4
       
       - uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python }}
+          python-version: '3.10'
       
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist/
-      
-      - name: Display downloaded artifacts
-        shell: bash
-        timeout-minutes: 2  # Simple file listing shouldn't take long
+      - name: Install build tools
         run: |
-          echo "Downloaded artifacts:"
-          ls -la dist/
-          find dist/ -name "*.whl" -o -name "*.tar.gz"
-      
-      - name: Install wheel and test
-        shell: bash
-        timeout-minutes: 10  # Prevent this step from hanging
-        run: |
-          # Install pip and minimal dependencies
           python -m pip install --upgrade pip
-          
-          # Simple wheel discovery - try any available wheel first
-          echo "Looking for any available wheel..."
-          WHEEL=$(find dist/ -name "*.whl" | head -1)
-          
-          if [ -n "$WHEEL" ]; then
-            echo "Found wheel: $WHEEL"
-            pip install "$WHEEL" || {
-              echo "Wheel install failed, trying source distribution..."
-              SDIST=$(find dist/ -name "*.tar.gz" | head -1)
-              pip install "$SDIST" || {
-                echo "Both wheel and source install failed, skipping test"
-                exit 0
-              }
-            }
-          else
-            echo "No wheel found, trying source distribution..."
-            SDIST=$(find dist/ -name "*.tar.gz" | head -1)
-            pip install "$SDIST" || {
-              echo "Source install failed, skipping test"
-              exit 0
-            }
-          fi
-          
-          # Simple import test only - no Django setup required
-          echo "Testing basic import..."
-          python -c "
-          try:
-              import django_mercury
-              print(f'[SUCCESS] django-mercury {django_mercury.__version__} imported')
-          except Exception as e:
-              print(f'[FAILED] Import failed - {e}')
-              exit(1)
-          " || {
-            echo "Import test failed, but continuing..."
-            exit 0
-          }
-
-  # Build status check
-  check_build:
-    name: Check build results
-    needs: [build_sdist, build_wheels]  # No dependency on test_wheels
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist/
+          python -m pip install build twine
       
+      - name: Build distributions
+        run: |
+          python -m build --sdist --wheel
+          
       - name: Check distributions
         run: |
-          echo "Build artifacts:"
-          find dist/ -type f -name "*.whl" -o -name "*.tar.gz" | sort
-          
-          # Count artifacts
-          WHEEL_COUNT=$(find dist/ -name "*.whl" | wc -l)
-          SDIST_COUNT=$(find dist/ -name "*.tar.gz" | wc -l)
-          
-          echo "Found $WHEEL_COUNT wheels and $SDIST_COUNT source distributions"
-          
-          # Check minimum expected artifacts
-          if [ $WHEEL_COUNT -lt 5 ]; then
-            echo "Warning: Expected at least 5 wheels, found $WHEEL_COUNT"
-          fi
-          
-          if [ $SDIST_COUNT -ne 1 ]; then
-            echo "Warning: Expected exactly 1 source distribution, found $SDIST_COUNT"
-          fi
+          twine check dist/*
+          ls -lh dist/
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
 
-  # Publish to Test PyPI (manual trigger or tags)
-  # NOTE: Deployment is independent of wheel tests - we deploy even if wheel tests fail
-  publish_test:
+  # Optional: Publish to Test PyPI
+  publish-test:
     name: Publish to Test PyPI
-    needs: [check_build]  # Only depends on build, NOT on test_wheels
     runs-on: ubuntu-latest
+    needs: build
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_test_pypi == 'true'
     
     steps:
-      - uses: actions/checkout@v4  # Need the fix script
-      
       - uses: actions/download-artifact@v4
         with:
+          name: dist
           path: dist/
-      
-      - name: Flatten directory structure
-        run: |
-          mkdir upload/
-          find dist/ -type f \( -name "*.whl" -o -name "*.tar.gz" \) -exec cp {} upload/ \;
-          ls -la upload/
-          echo "Found $(ls upload/*.whl 2>/dev/null | wc -l) wheel files"
-          echo "Found $(ls upload/*.tar.gz 2>/dev/null | wc -l) source distributions"
-      
-      - name: Fix distribution metadata
-        run: |
-          echo "Fixing metadata in all distributions to remove License-File entries..."
-          python scripts/fix_wheel_metadata.py upload/*.whl upload/*.tar.gz --verbose || echo "No distributions to fix"
-      
-      - name: Fix wheel platform tags if needed
-        run: |
-          echo "Checking for wheels with linux_x86_64 tags that need fixing..."
-          for wheel in upload/*linux_x86_64*.whl; do
-            if [ -f "$wheel" ]; then
-              newname=${wheel/linux_x86_64/manylinux_2_34_x86_64}
-              echo "Renaming: $(basename $wheel) -> $(basename $newname)"
-              mv "$wheel" "$newname"
-            fi
-          done
-          echo "Platform tags fixed (if any needed fixing)"
-      
-      - name: Check Test PyPI token
-        run: |
-          if [[ -z "${{ secrets.TEST_PYPI_API_TOKEN }}" ]]; then
-            echo "ERROR: TEST_PYPI_API_TOKEN is not set"
-            exit 1
-          fi
-          echo "TEST_PYPI_API_TOKEN is configured (length: ${#TEST_PYPI_API_TOKEN})"
-        env:
-          TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
       
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          packages-dir: upload/
           skip-existing: true
-          verbose: true
-          attestations: false
-        continue-on-error: true
-      
-      - name: Check upload status
-        if: failure()
-        run: |
-          echo "::warning::Test PyPI upload failed. This might be because:"
-          echo "::warning::1. The version already exists (even partially)"
-          echo "::warning::2. Token permissions are incorrect"
-          echo "::warning::3. Package metadata has issues"
-          echo "::warning::Check https://test.pypi.org/project/django-mercury-performance/"
 
-  # Publish to PyPI (only on version tags)
-  # NOTE: Deployment is independent of wheel tests - we deploy even if wheel tests fail
+  # Publish to PyPI on version tags
   publish:
     name: Publish to PyPI
-    needs: [check_build]  # Only depends on build, NOT on test_wheels
     runs-on: ubuntu-latest
+    needs: build
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     
     steps:
-      - uses: actions/checkout@v4  # Need the fix script
-      
       - uses: actions/download-artifact@v4
         with:
+          name: dist
           path: dist/
-      
-      - name: Flatten directory structure
-        run: |
-          mkdir upload/
-          find dist/ -type f \( -name "*.whl" -o -name "*.tar.gz" \) -exec cp {} upload/ \;
-          ls -la upload/
-      
-      - name: Fix distribution metadata
-        run: |
-          echo "Fixing metadata in all distributions to remove License-File entries..."
-          python scripts/fix_wheel_metadata.py upload/*.whl upload/*.tar.gz --verbose || echo "No distributions to fix"
-      
-      - name: Fix wheel platform tags if needed
-        run: |
-          echo "Checking for wheels with linux_x86_64 tags that need fixing..."
-          for wheel in upload/*linux_x86_64*.whl; do
-            if [ -f "$wheel" ]; then
-              newname=${wheel/linux_x86_64/manylinux_2_34_x86_64}
-              echo "Renaming: $(basename $wheel) -> $(basename $newname)"
-              mv "$wheel" "$newname"
-            fi
-          done
-          echo "Platform tags fixed (if any needed fixing)"
-      
-      - name: Check distributions
-        run: |
-          pip install --upgrade "twine>=5.0.0" "setuptools>=75.0"
-          twine check upload/*
       
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          packages-dir: upload/
+          skip-existing: true

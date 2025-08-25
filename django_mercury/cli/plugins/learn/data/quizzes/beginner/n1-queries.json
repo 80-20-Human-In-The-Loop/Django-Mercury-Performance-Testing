@@ -1,0 +1,188 @@
+{
+  "quiz": {
+    "id": "n1_queries_beginner",
+    "title": "N+1 Query Optimization",
+    "description": "Learn to identify and fix the most common Django performance issue",
+    "difficulty": "beginner",
+    "concept": "n_plus_one_queries",
+    "tags": ["database", "orm", "queries", "performance"],
+    "passing_score": 0.7,
+    "questions": [
+      {
+        "id": "n1_basic_concept",
+        "question_type": "multiple_choice",
+        "text": "Your Django app loads 100 users but makes 230 database queries. What is this called?",
+        "answers": [
+          {
+            "text": "Database overload",
+            "is_correct": false,
+            "explanation": "Not a database overload issue - the database can handle queries fine."
+          },
+          {
+            "text": "N+1 query problem",
+            "is_correct": true,
+            "explanation": "Exactly! N+1 queries = 1 query for the list + N queries for related data."
+          },
+          {
+            "text": "Memory leak",
+            "is_correct": false,
+            "explanation": "Memory leaks are different - this is about excessive database queries."
+          },
+          {
+            "text": "Caching problem",
+            "is_correct": false,
+            "explanation": "While caching could help, the root issue is the N+1 query pattern."
+          }
+        ],
+        "explanation": "The N+1 query problem happens when you fetch a list of objects (1 query) then access related data for each object (N additional queries). 100 users + 130 related queries = 230 total queries!",
+        "hints": [
+          "Think about what causes 230 queries for 100 objects...",
+          "Each user is probably triggering additional queries for related data"
+        ],
+        "difficulty": "beginner",
+        "concept": "n_plus_one_queries",
+        "tags": ["concept", "identification"]
+      },
+      {
+        "id": "n1_django_solution",
+        "question_type": "multiple_choice", 
+        "text": "Which Django ORM method prevents N+1 queries for ForeignKey relationships?",
+        "answers": [
+          {
+            "text": "prefetch_related()",
+            "is_correct": false,
+            "explanation": "prefetch_related() is for ManyToMany and reverse ForeignKey relationships."
+          },
+          {
+            "text": "select_related()",
+            "is_correct": true,
+            "explanation": "Correct! select_related() performs SQL JOINs to fetch ForeignKey data in one query."
+          },
+          {
+            "text": "only()",
+            "is_correct": false,
+            "explanation": "only() limits fields but doesn't solve N+1 queries."
+          },
+          {
+            "text": "filter()",
+            "is_correct": false,
+            "explanation": "filter() narrows results but doesn't optimize related data fetching."
+          }
+        ],
+        "explanation": "select_related() performs SQL JOINs to fetch related ForeignKey and OneToOne relationships in a single database query, eliminating the N+1 problem.",
+        "hints": [
+          "Which method joins tables in the database?",
+          "Think about SQL JOINs..."
+        ],
+        "difficulty": "beginner",
+        "concept": "n_plus_one_queries",
+        "tags": ["django", "orm", "solution"]
+      },
+      {
+        "id": "n1_real_scenario",
+        "question_type": "scenario",
+        "text": "Your e-commerce site shows 50 products. Each product displays its category name. Without optimization, how many queries will Django make?",
+        "answers": [
+          {
+            "text": "1 query total",
+            "is_correct": false,
+            "explanation": "Only 1 query would be ideal but impossible without optimization."
+          },
+          {
+            "text": "50 queries total",
+            "is_correct": false,
+            "explanation": "This would be N queries, but we need 1 more for the initial list."
+          },
+          {
+            "text": "51 queries total (1 for products + 50 for categories)",
+            "is_correct": true,
+            "explanation": "Exactly! 1 query gets the products, then 50 more queries get each product's category - classic N+1."
+          },
+          {
+            "text": "100 queries total",
+            "is_correct": false,
+            "explanation": "That would be too many - we only need one query per category access."
+          }
+        ],
+        "explanation": "Without select_related('category'), Django makes 1 query for Product.objects.all(), then 1 query for each product.category.name access = 51 total queries.",
+        "hints": [
+          "Count: products query + one query per category access",
+          "N+1 means N queries for related data + 1 for the main list"
+        ],
+        "difficulty": "beginner", 
+        "concept": "n_plus_one_queries",
+        "tags": ["scenario", "counting", "ecommerce"]
+      },
+      {
+        "id": "n1_detection",
+        "question_type": "multiple_choice",
+        "text": "What's the EASIEST way to spot N+1 query problems in development?",
+        "answers": [
+          {
+            "text": "Reading all your code line by line",
+            "is_correct": false,
+            "explanation": "Too time-consuming and error-prone for complex applications."
+          },
+          {
+            "text": "Django Debug Toolbar showing query count",
+            "is_correct": true,
+            "explanation": "Perfect! Debug Toolbar shows exactly how many queries each page makes."
+          },
+          {
+            "text": "Waiting for user complaints",
+            "is_correct": false,
+            "explanation": "Too late! You want to catch issues before users experience them."
+          },
+          {
+            "text": "Monitoring server CPU usage",
+            "is_correct": false,
+            "explanation": "CPU usage doesn't directly show N+1 query patterns."
+          }
+        ],
+        "explanation": "Django Debug Toolbar shows the exact number of SQL queries executed for each request, making N+1 problems immediately obvious. Django Mercury also automatically detects these patterns!",
+        "hints": [
+          "Which tool shows you database queries in development?",
+          "Think about debugging tools that count queries..."
+        ],
+        "difficulty": "beginner",
+        "concept": "n_plus_one_queries", 
+        "tags": ["detection", "tools", "debugging"]
+      },
+      {
+        "id": "n1_optimization_impact",
+        "question_type": "multiple_choice",
+        "text": "After adding select_related('category') to your 50-product query, how many database queries will you have?",
+        "answers": [
+          {
+            "text": "Still 51 queries",
+            "is_correct": false,
+            "explanation": "select_related() should dramatically reduce the query count."
+          },
+          {
+            "text": "25 queries (50% reduction)",
+            "is_correct": false,
+            "explanation": "select_related() is much more effective than a 50% reduction."
+          },
+          {
+            "text": "1 query (joins products and categories)",
+            "is_correct": true,
+            "explanation": "Exactly! select_related() performs a SQL JOIN, fetching all data in one query."
+          },
+          {
+            "text": "2 queries (one for products, one for all categories)",
+            "is_correct": false,
+            "explanation": "That would be prefetch_related() behavior, not select_related()."
+          }
+        ],
+        "explanation": "select_related('category') performs a SQL JOIN between products and categories tables, retrieving all necessary data in a single query. This is the power of proper ORM optimization!",
+        "hints": [
+          "select_related() does SQL JOINs - how many queries is that?",
+          "Think about what a JOIN accomplishes..."
+        ],
+        "difficulty": "beginner",
+        "concept": "n_plus_one_queries",
+        "tags": ["optimization", "impact", "join"]
+      }
+    ]
+  }
+}

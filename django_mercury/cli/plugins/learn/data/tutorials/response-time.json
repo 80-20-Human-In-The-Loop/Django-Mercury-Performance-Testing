@@ -1,0 +1,528 @@
+{
+  "tutorial": {
+    "id": "response-time",
+    "title": "Django Response Time Optimization",
+    "description": "Master response time analysis and optimization techniques to build lightning-fast Django applications",
+    "concept": "response-time", 
+    "difficulty": "intermediate",
+    "tags": ["response-time", "performance", "optimization", "speed", "latency", "user-experience"],
+    "estimated_time": "50 minutes",
+    "learning_objectives": [
+      "Measure and analyze Django application response times",
+      "Identify common causes of slow response times",
+      "Optimize database queries for faster responses", 
+      "Implement effective caching strategies",
+      "Use profiling tools to find performance bottlenecks",
+      "Set up monitoring for production response time tracking"
+    ],
+    "prerequisites": [
+      "Basic Django development experience",
+      "Understanding of HTTP request/response cycle",
+      "Familiarity with Django ORM basics"
+    ],
+    "sections": [
+      {
+        "title": "Understanding Response Time Fundamentals",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "What is Response Time?",
+            "content": "Response time is the total time from when a user makes a request until they receive a complete response. It directly impacts user experience and business metrics.",
+            "key_points": [
+              "Measured from request start to response completion",
+              "Includes network latency, server processing, and database queries",
+              "Critical for user experience - users expect sub-second responses",
+              "Affects SEO rankings, conversion rates, and user retention"
+            ],
+            "examples": [
+              "E-commerce: 100ms delay = 1% revenue loss",
+              "Search: 500ms delay = 20% traffic drop", 
+              "Mobile apps: >3 seconds = 53% user abandonment"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your Django e-commerce site's product pages take 2.5 seconds to load. Users are complaining about slow performance, and your bounce rate has increased by 25%.",
+            "problem": "The marketing team reports that competitors' sites load in under 800ms. Your CEO wants the site to load in under 1 second or consider switching platforms."
+          },
+          {
+            "type": "measurement_guide",
+            "title": "How to Measure Response Time",
+            "techniques": [
+              {
+                "tool": "Django Debug Toolbar",
+                "purpose": "Development response time analysis",
+                "usage": "Shows total request time and breakdown by component"
+              },
+              {
+                "tool": "Django Mercury", 
+                "purpose": "Automated performance grading",
+                "usage": "Provides response time grades and optimization suggestions"
+              },
+              {
+                "tool": "Browser DevTools",
+                "purpose": "Real user experience measurement",
+                "usage": "Network tab shows actual load times from user perspective"
+              },
+              {
+                "tool": "APM Tools (New Relic, Datadog)",
+                "purpose": "Production monitoring",
+                "usage": "Track response times across all users and endpoints"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your Django API endpoint takes 1.5 seconds to respond. What should you investigate FIRST?",
+            "choices": [
+              {
+                "text": "Add more server memory and CPU",
+                "is_correct": false
+              },
+              {
+                "text": "Check database query performance with Django Debug Toolbar",
+                "is_correct": true
+              },
+              {
+                "text": "Upgrade to the latest Django version",
+                "is_correct": false
+              },
+              {
+                "text": "Switch to a different web server like Nginx"
+              }
+            ],
+            "explanation": "Database queries are the most common cause of slow response times in Django applications. Django Debug Toolbar will show you exactly which queries are slow and how many are being executed. Infrastructure changes should come after identifying the actual bottleneck."
+          }
+        ]
+      },
+      {
+        "title": "Database Query Optimization for Speed",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Database Queries: The #1 Response Time Killer",
+            "content": "Database operations typically account for 60-80% of response time in Django applications. Optimizing queries provides the biggest performance gains.",
+            "key_points": [
+              "Slow queries can block the entire request",
+              "Missing indexes cause full table scans",
+              "Too many queries create cumulative delays",
+              "Large result sets consume memory and transfer time"
+            ],
+            "examples": [
+              "Unindexed WHERE clause: 2000ms → 50ms with index",
+              "N+1 queries: 500ms → 80ms with select_related()",
+              "Large pagination: 1200ms → 200ms with proper LIMIT/OFFSET"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Before and After: Query Optimization",
+            "before_code": "# Slow: Multiple queries + no indexing\ndef product_search(request):\n    query = request.GET.get('q', '')\n    \n    # Problem 1: No database index on 'name' field\n    products = Product.objects.filter(\n        name__icontains=query\n    )[:20]  # 800ms for large tables\n    \n    results = []\n    for product in products:\n        # Problem 2: N+1 queries for categories\n        results.append({\n            'name': product.name,\n            'category': product.category.name,  # +20 queries\n            'price': product.price\n        })\n    \n    return JsonResponse({'products': results})\n    \n# Total response time: ~1200ms",
+            "after_code": "# Fast: Optimized queries + proper indexing\ndef product_search(request):\n    query = request.GET.get('q', '')\n    \n    # Solution 1: Database index on name field (in migrations)\n    # Solution 2: select_related to avoid N+1\n    products = Product.objects.filter(\n        name__icontains=query\n    ).select_related('category')[:20]  # 120ms with index\n    \n    # Solution 3: Use values() for minimal data transfer\n    results = products.values(\n        'name', 'category__name', 'price'\n    )\n    \n    return JsonResponse({'products': list(results)})\n    \n# Total response time: ~150ms (8x faster)",
+            "impact": "Response time improved from 1200ms to 150ms (87% reduction). Database index migration and query optimization provided 8x speed improvement."
+          },
+          {
+            "type": "indexing_guide",
+            "title": "Strategic Database Indexing for Speed",
+            "strategies": [
+              {
+                "pattern": "Search Fields",
+                "example": "Product.name, User.email",
+                "index_type": "db_index=True or Index()",
+                "impact": "Full table scan → Index lookup (100x faster)"
+              },
+              {
+                "pattern": "Filter + Order Combinations",
+                "example": "ORDER BY created_at WHERE status='active'",
+                "index_type": "Composite index on (status, created_at)",
+                "impact": "Eliminates sorting after filtering"
+              },
+              {
+                "pattern": "Foreign Key Lookups",
+                "example": "product.category_id",
+                "index_type": "Automatic with ForeignKey",
+                "impact": "Fast JOIN operations"
+              },
+              {
+                "pattern": "Date Range Queries",
+                "example": "created_at BETWEEN start AND end",
+                "index_type": "B-tree index on date fields",
+                "impact": "Efficient range scans"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You have a Django view that filters 100,000 products by category and sorts by price. The query takes 3 seconds. What's the MOST effective optimization?",
+            "choices": [
+              {
+                "text": "Add caching to store the results",
+                "is_correct": false
+              },
+              {
+                "text": "Create a composite database index on (category, price)",
+                "is_correct": true
+              },
+              {
+                "text": "Use pagination to limit results",
+                "is_correct": false
+              },
+              {
+                "text": "Switch to raw SQL queries",
+                "is_correct": false
+              }
+            ],
+            "explanation": "A composite index on (category, price) allows the database to filter by category first, then sort the filtered results by price efficiently. This eliminates the need to scan the full table and sort all records. Caching helps but doesn't fix the underlying slow query."
+          }
+        ]
+      },
+      {
+        "title": "Efficient Data Loading Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Loading Only What You Need",
+            "content": "Reduce response time by loading only the data required for each request. Transfer less data, process faster.",
+            "key_points": [
+              "Use only() and defer() to limit field loading",
+              "Implement pagination for large datasets",
+              "Apply values() for API responses",
+              "Use iterator() for large batch processing"
+            ],
+            "examples": [
+              "only('name', 'price') for product listings",
+              "Pagination with 20 items per page instead of loading all",
+              "values() for JSON API responses"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Data Loading Optimization Techniques",
+            "before_code": "# Inefficient: Loading unnecessary data\ndef user_list_api(request):\n    # Problem 1: Loads ALL fields including large text fields\n    users = User.objects.all()  # Includes bio, description, etc.\n    \n    # Problem 2: Loads ALL users at once\n    # Problem 3: Creates heavy model instances\n    result = []\n    for user in users:  # Could be 10,000+ users\n        result.append({\n            'id': user.id,\n            'username': user.username,\n            'email': user.email,\n            'last_login': user.last_login\n        })\n    \n    return JsonResponse({'users': result})\n    \n# Memory usage: High, Response time: 2-5 seconds",
+            "after_code": "# Efficient: Optimized data loading\nfrom django.core.paginator import Paginator\n\ndef user_list_api(request):\n    page = request.GET.get('page', 1)\n    \n    # Solution 1: Load only needed fields\n    users = User.objects.only(\n        'id', 'username', 'email', 'last_login'\n    )\n    \n    # Solution 2: Implement pagination\n    paginator = Paginator(users, 20)  # 20 users per page\n    page_obj = paginator.get_page(page)\n    \n    # Solution 3: Use values() for lightweight data\n    result = page_obj.object_list.values(\n        'id', 'username', 'email', 'last_login'\n    )\n    \n    return JsonResponse({\n        'users': list(result),\n        'has_next': page_obj.has_next(),\n        'page': page_obj.number,\n        'total_pages': paginator.num_pages\n    })\n    \n# Memory usage: Low, Response time: 150-300ms",
+            "impact": "Reduced memory usage by 80% and response time from 2-5 seconds to 150-300ms through field limiting and pagination."
+          },
+          {
+            "type": "pagination_patterns",
+            "title": "Pagination Strategies for Performance",
+            "patterns": [
+              {
+                "name": "Limit/Offset Pagination",
+                "use_case": "Standard web pages with page numbers",
+                "code": "paginator = Paginator(queryset, 20)\npage = paginator.get_page(page_num)",
+                "pros": "Simple, familiar UX",
+                "cons": "Slower for deep pages (OFFSET 10000)"
+              },
+              {
+                "name": "Cursor-Based Pagination", 
+                "use_case": "APIs, infinite scroll, real-time feeds",
+                "code": "products = Product.objects.filter(id__gt=last_id).order_by('id')[:20]",
+                "pros": "Consistent performance, handles real-time data",
+                "cons": "No random page access"
+              },
+              {
+                "name": "Time-Based Pagination",
+                "use_case": "Activity feeds, logs, time-series data",
+                "code": "posts = Post.objects.filter(created_at__lt=last_timestamp).order_by('-created_at')[:20]",
+                "pros": "Natural for time-ordered data",
+                "cons": "Requires timestamp ordering"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You need to display a user profile page that shows basic info (name, email) but your User model has 20 fields including large text fields. How do you optimize the query?",
+            "choices": [
+              {
+                "text": "Use User.objects.all() and access only needed fields in template",
+                "is_correct": false
+              },
+              {
+                "text": "Use User.objects.only('name', 'email') to load specific fields",
+                "is_correct": true
+              },
+              {
+                "text": "Create a separate UserProfile model",
+                "is_correct": false
+              },
+              {
+                "text": "Use raw SQL SELECT name, email FROM users",
+                "is_correct": false
+              }
+            ],
+            "explanation": "only() tells Django to load only the specified fields from the database, reducing data transfer and memory usage. This is much more efficient than loading all fields and only using some. The other approaches either don't solve the problem or create unnecessary complexity."
+          }
+        ]
+      },
+      {
+        "title": "Caching Strategies for Instant Responses",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Caching: The Response Time Multiplier",
+            "content": "Strategic caching can reduce response times from seconds to milliseconds by storing computed results and avoiding expensive operations.",
+            "key_points": [
+              "Cache expensive database queries and computations",
+              "Use different cache levels: database, application, browser",
+              "Implement cache invalidation strategies",
+              "Monitor cache hit rates for effectiveness"
+            ],
+            "examples": [
+              "Query caching: 500ms → 5ms for repeated searches",
+              "Template fragment caching: 800ms → 50ms for complex pages",
+              "API response caching: 1200ms → 20ms for static data"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Implementing Strategic Caching",
+            "before_code": "# Slow: No caching, repeated expensive operations\ndef product_stats_dashboard(request):\n    # Expensive aggregation query - runs every request\n    stats = {\n        'total_products': Product.objects.count(),  # 200ms\n        'avg_price': Product.objects.aggregate(\n            avg_price=Avg('price')\n        )['avg_price'],  # 300ms\n        'top_categories': Category.objects.annotate(\n            product_count=Count('products')\n        ).order_by('-product_count')[:5],  # 400ms\n        'recent_orders': Order.objects.filter(\n            created_at__gte=timezone.now() - timedelta(days=7)\n        ).count()  # 250ms\n    }\n    \n    return render(request, 'dashboard.html', {'stats': stats})\n    \n# Total response time: ~1150ms per request",
+            "after_code": "# Fast: Strategic caching implementation\nfrom django.core.cache import cache\nfrom django.views.decorators.cache import cache_page\nfrom django.utils import timezone\nfrom datetime import timedelta\n\n@cache_page(60 * 5)  # Cache entire page for 5 minutes\ndef product_stats_dashboard(request):\n    cache_key = 'dashboard_stats'\n    stats = cache.get(cache_key)\n    \n    if stats is None:\n        # Only run expensive queries when cache is empty\n        stats = {\n            'total_products': Product.objects.count(),\n            'avg_price': Product.objects.aggregate(\n                avg_price=Avg('price')\n            )['avg_price'],\n            'top_categories': list(Category.objects.annotate(\n                product_count=Count('products')\n            ).order_by('-product_count')[:5].values(\n                'name', 'product_count'\n            )),\n            'recent_orders': Order.objects.filter(\n                created_at__gte=timezone.now() - timedelta(days=7)\n            ).count()\n        }\n        \n        # Cache for 10 minutes\n        cache.set(cache_key, stats, 60 * 10)\n    \n    return render(request, 'dashboard.html', {'stats': stats})\n    \n# First request: 1150ms, Cached requests: 15-30ms",
+            "impact": "First request unchanged (1150ms), but subsequent requests serve from cache in 15-30ms (38x faster). Cache hit ratio of 95% means most users get instant responses."
+          },
+          {
+            "type": "caching_strategy_guide",
+            "title": "Choosing the Right Caching Strategy",
+            "strategies": [
+              {
+                "level": "Database Query Caching",
+                "technique": "cache.get_or_set() around expensive queries",
+                "use_case": "Complex aggregations, search results",
+                "ttl": "5-60 minutes",
+                "invalidation": "On data updates"
+              },
+              {
+                "level": "Template Fragment Caching", 
+                "technique": "{% cache %} template tag",
+                "use_case": "Expensive template rendering, widgets",
+                "ttl": "10-30 minutes",
+                "invalidation": "Version-based or time-based"
+              },
+              {
+                "level": "Full Page Caching",
+                "technique": "@cache_page decorator",
+                "use_case": "Static pages, public content",
+                "ttl": "30 minutes - 24 hours",
+                "invalidation": "URL-based, rarely changes"
+              },
+              {
+                "level": "CDN/Browser Caching",
+                "technique": "HTTP Cache-Control headers",
+                "use_case": "Static assets, API responses",
+                "ttl": "1 hour - 1 year",
+                "invalidation": "Version strings, ETags"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your Django view calculates expensive product statistics that change once per hour. The calculation takes 2 seconds. What's the BEST caching strategy?",
+            "choices": [
+              {
+                "text": "Cache the entire page for 24 hours",
+                "is_correct": false
+              },
+              {
+                "text": "Cache the calculated statistics for 1 hour with automatic invalidation",
+                "is_correct": true
+              },
+              {
+                "text": "Cache individual database queries for 5 minutes",
+                "is_correct": false
+              },
+              {
+                "text": "Use browser caching with long expiration",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Since the data changes hourly, caching the calculated statistics for 1 hour matches the data update frequency perfectly. This provides maximum cache hits while ensuring data freshness. Individual query caching is less efficient, and 24-hour page caching would serve stale data."
+          }
+        ]
+      },
+      {
+        "title": "Profiling and Performance Monitoring",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Measuring to Improve: Profiling Tools",
+            "content": "Use profiling tools to identify exact bottlenecks in your Django application and measure the impact of optimizations.",
+            "key_points": [
+              "Profile before optimizing - measure actual bottlenecks",
+              "Use different tools for different environments",
+              "Monitor both development and production performance",
+              "Track performance over time to catch regressions"
+            ],
+            "examples": [
+              "cProfile for line-by-line Python performance",
+              "Django Debug Toolbar for request analysis",
+              "APM tools for production monitoring"
+            ]
+          },
+          {
+            "type": "profiling_guide",
+            "title": "Profiling Tools and Techniques",
+            "tools": [
+              {
+                "tool": "Django Debug Toolbar",
+                "purpose": "Development request analysis",
+                "usage": "Shows SQL queries, template rendering, cache hits",
+                "install": "pip install django-debug-toolbar",
+                "output": "Visual panels showing timing breakdown"
+              },
+              {
+                "tool": "cProfile + py-spy",
+                "purpose": "Python code profiling",
+                "usage": "Find slow functions and hot paths",
+                "install": "Built-in (cProfile) + pip install py-spy",
+                "output": "Function call statistics and flame graphs"
+              },
+              {
+                "tool": "Django Silk",
+                "purpose": "Request profiling with persistence",
+                "usage": "Store and analyze request profiles over time",
+                "install": "pip install django-silk",
+                "output": "Web interface for profile analysis"
+              },
+              {
+                "tool": "Django Mercury",
+                "purpose": "Automated performance testing",
+                "usage": "Continuous performance monitoring",
+                "install": "Your current setup!",
+                "output": "Performance grades and optimization suggestions"
+              }
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Implementing Performance Monitoring",
+            "before_code": "# Basic view without monitoring\ndef product_list(request):\n    products = Product.objects.all()[:50]\n    return render(request, 'products.html', {'products': products})",
+            "after_code": "# Enhanced view with performance monitoring\nimport time\nimport logging\nfrom django.db import connection\nfrom django.conf import settings\n\nperformance_logger = logging.getLogger('performance')\n\ndef product_list(request):\n    start_time = time.time()\n    initial_queries = len(connection.queries) if settings.DEBUG else 0\n    \n    try:\n        products = Product.objects.select_related('category').all()[:50]\n        result = render(request, 'products.html', {'products': products})\n        \n        # Performance metrics\n        response_time = (time.time() - start_time) * 1000  # ms\n        query_count = len(connection.queries) - initial_queries if settings.DEBUG else 0\n        \n        # Log performance data\n        performance_logger.info(\n            f'product_list - Response time: {response_time:.1f}ms, '\n            f'Queries: {query_count}, User: {request.user.id if request.user.is_authenticated else \"anon\"}'\n        )\n        \n        # Add performance headers for monitoring\n        result['X-Response-Time'] = f'{response_time:.1f}ms'\n        result['X-Query-Count'] = str(query_count)\n        \n        return result\n        \n    except Exception as e:\n        performance_logger.error(\n            f'product_list - Error: {str(e)}, '\n            f'Time: {(time.time() - start_time) * 1000:.1f}ms'\n        )\n        raise",
+            "impact": "Provides detailed performance logging and metrics for continuous monitoring and optimization tracking."
+          }
+        ],
+        "questions": [
+          {
+            "text": "You suspect a Django view is slow but don't know why. What's the FIRST tool you should use to identify the bottleneck?",
+            "choices": [
+              {
+                "text": "Add print statements throughout the code",
+                "is_correct": false
+              },
+              {
+                "text": "Use Django Debug Toolbar to analyze the request",
+                "is_correct": true
+              },
+              {
+                "text": "Check server CPU and memory usage",
+                "is_correct": false
+              },
+              {
+                "text": "Run load tests with multiple users",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Django Debug Toolbar provides a comprehensive breakdown of where time is spent in your request: SQL queries, template rendering, cache operations, etc. This gives you specific data about what's slow so you can optimize the right thing. Other approaches either provide incomplete information or come later in the optimization process."
+          }
+        ]
+      },
+      {
+        "title": "Production Response Time Optimization",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Production-Ready Performance Patterns",
+            "content": "Implement production-grade optimizations that scale with traffic and provide consistent fast response times.",
+            "key_points": [
+              "Use connection pooling for database efficiency",
+              "Implement proper async handling for I/O operations",
+              "Set up CDN for static assets and API responses",
+              "Monitor and alert on response time degradation"
+            ],
+            "examples": [
+              "Database connection pooling: 50ms → 10ms per query",
+              "Async views for external API calls",
+              "CDN caching: 500ms → 50ms for static content"
+            ]
+          },
+          {
+            "type": "production_checklist",
+            "title": "Production Response Time Checklist",
+            "categories": [
+              {
+                "category": "Database Optimization",
+                "items": [
+                  "Connection pooling configured (pgbouncer/connection pools)",
+                  "Query optimization with indexes on filtered/sorted fields",
+                  "Database query monitoring and slow query alerts",
+                  "Read replicas for read-heavy workloads"
+                ]
+              },
+              {
+                "category": "Application Layer",
+                "items": [
+                  "Async views for external API calls",
+                  "Background tasks for heavy processing (Celery)",
+                  "Efficient serialization (DRF with proper field selection)",
+                  "Memory-efficient querysets (iterator, values, only)"
+                ]
+              },
+              {
+                "category": "Caching Infrastructure",
+                "items": [
+                  "Redis/Memcached for application caching",
+                  "CDN for static assets and API responses",
+                  "HTTP caching headers properly configured",
+                  "Cache warming strategies for critical data"
+                ]
+              },
+              {
+                "category": "Monitoring & Alerting",
+                "items": [
+                  "APM tools monitoring response times",
+                  "Alerts for response time degradation",
+                  "Performance budgets and SLA tracking",
+                  "Regular performance regression testing"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Production-Ready Async View Example",
+            "before_code": "# Synchronous view blocking on external API\ndef user_dashboard(request):\n    user = request.user\n    \n    # Blocking external API call - 500ms\n    weather_data = requests.get(\n        f'https://api.weather.com/v1/current?lat={user.lat}&lon={user.lon}'\n    ).json()\n    \n    # Blocking payment API call - 300ms\n    payment_info = requests.get(\n        f'https://payments.example.com/user/{user.id}/balance'\n    ).json()\n    \n    # Database queries - 200ms\n    recent_orders = user.orders.all()[:5]\n    \n    return render(request, 'dashboard.html', {\n        'weather': weather_data,\n        'balance': payment_info,\n        'orders': recent_orders\n    })\n    \n# Total response time: ~1000ms",
+            "after_code": "# Async view with concurrent external calls\nimport asyncio\nimport aiohttp\nfrom django.http import JsonResponse\nfrom asgiref.sync import sync_to_async\nfrom django.core.cache import cache\n\nasync def user_dashboard_async(request):\n    user = request.user\n    \n    # Concurrent external API calls\n    async with aiohttp.ClientSession() as session:\n        # Start both API calls concurrently\n        weather_task = asyncio.create_task(\n            fetch_weather_data(session, user.lat, user.lon)\n        )\n        payment_task = asyncio.create_task(\n            fetch_payment_info(session, user.id)\n        )\n        \n        # Database query runs concurrently\n        orders_task = asyncio.create_task(\n            sync_to_async(lambda: list(\n                user.orders.select_related('product').all()[:5]\n            ))()\n        )\n        \n        # Wait for all operations to complete\n        weather_data, payment_info, recent_orders = await asyncio.gather(\n            weather_task, payment_task, orders_task\n        )\n    \n    return JsonResponse({\n        'weather': weather_data,\n        'balance': payment_info,\n        'orders': [{'name': o.product.name, 'total': str(o.total)} for o in recent_orders]\n    })\n\nasync def fetch_weather_data(session, lat, lon):\n    cache_key = f'weather_{lat}_{lon}'\n    cached = cache.get(cache_key)\n    if cached:\n        return cached\n    \n    async with session.get(\n        f'https://api.weather.com/v1/current?lat={lat}&lon={lon}'\n    ) as response:\n        data = await response.json()\n        cache.set(cache_key, data, 300)  # Cache for 5 minutes\n        return data\n\n# Total response time: ~250ms (4x faster)",
+            "impact": "Reduced response time from 1000ms to 250ms by running external API calls concurrently instead of sequentially. Added caching for frequently accessed data."
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your Django view makes 3 external API calls that each take 200ms. Currently they run sequentially (600ms total). What's the BEST optimization?",
+            "choices": [
+              {
+                "text": "Cache the API responses for 1 hour",
+                "is_correct": false
+              },
+              {
+                "text": "Use async/await to run the API calls concurrently",
+                "is_correct": true
+              },
+              {
+                "text": "Move the API calls to a background task",
+                "is_correct": false
+              },
+              {
+                "text": "Increase the API timeout to get faster responses",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Running the API calls concurrently with async/await allows all three 200ms calls to execute simultaneously, reducing total time from 600ms to ~200ms. This provides immediate response time improvement. Caching helps but doesn't solve the concurrent execution problem, and background tasks change the user experience."
+          }
+        ]
+      }
+    ]
+  }
+}

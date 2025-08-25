@@ -95,7 +95,6 @@ ENV_VARS: Final[Dict[str, str]] = {
 
 # Default paths
 DEFAULT_PATHS: Final[Dict[str, str]] = {
-    "MERCURY_CONFIG": "mercury_config.json",
     "C_LIBRARY": "c_core/libperformance.so",
 }
 

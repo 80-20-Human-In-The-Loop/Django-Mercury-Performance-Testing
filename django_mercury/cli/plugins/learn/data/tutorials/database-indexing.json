@@ -1,0 +1,594 @@
+{
+  "tutorial": {
+    "id": "database-indexing",
+    "title": "Django Database Indexing Mastery",
+    "description": "Master database indexing strategies to dramatically improve Django application performance",
+    "concept": "database-indexing",
+    "difficulty": "intermediate",
+    "tags": ["database", "indexing", "performance", "queries", "optimization", "sql"],
+    "estimated_time": "40 minutes",
+    "learning_objectives": [
+      "Understand how database indexes work and when to use them",
+      "Identify queries that need indexing in Django applications",
+      "Implement strategic indexing for common Django patterns",
+      "Use Django's database index features effectively",
+      "Monitor and measure index performance impact",
+      "Avoid common indexing mistakes and anti-patterns"
+    ],
+    "prerequisites": [
+      "Basic understanding of database concepts",
+      "Django ORM knowledge",
+      "Familiarity with Django migrations"
+    ],
+    "sections": [
+      {
+        "title": "Database Index Fundamentals",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "What Are Database Indexes?",
+            "content": "Database indexes are data structures that dramatically improve query performance by creating fast lookup paths to your data. Think of them as a book's index - instead of reading every page to find a topic, you use the index to jump directly to the right page.",
+            "key_points": [
+              "Indexes speed up SELECT queries by avoiding full table scans",
+              "They work like a sorted lookup table pointing to actual data",
+              "Indexes have overhead - they slow down INSERT/UPDATE/DELETE operations",
+              "Strategic indexing can improve query performance by 10x-1000x"
+            ],
+            "examples": [
+              "User lookup by email: 2000ms → 5ms with index",
+              "Product search by category: 1500ms → 50ms with index",
+              "Order filtering by date range: 3000ms → 100ms with index"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your Django e-commerce site's product search takes 3-5 seconds when users filter by category and price range. The products table has 500,000 records.",
+            "problem": "Customers are abandoning searches due to slow response times. The database is doing full table scans for every search query, checking every single product record."
+          },
+          {
+            "type": "index_anatomy",
+            "title": "How Database Indexes Work",
+            "explanation": "An index creates a separate, sorted data structure that points to the actual table rows. When you query with a WHERE clause, the database can use the index to quickly find matching rows instead of scanning the entire table.",
+            "example": {
+              "without_index": {
+                "description": "Full table scan",
+                "process": [
+                  "Database reads row 1: Product(name='Laptop', category='Electronics')",
+                  "Database reads row 2: Product(name='Book', category='Literature')",
+                  "Database reads row 3: Product(name='Phone', category='Electronics')",
+                  "... continues for all 500,000 rows",
+                  "Returns matching rows"
+                ],
+                "time": "3000ms for 500,000 rows"
+              },
+              "with_index": {
+                "description": "Index lookup",
+                "process": [
+                  "Database looks up 'Electronics' in category index",
+                  "Index returns pointers to rows: [1, 3, 157, 298, ...]",
+                  "Database reads only the matching rows directly",
+                  "Returns results"
+                ],
+                "time": "50ms for same query"
+              }
+            }
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your Django model has 100,000 User records. A query filtering by email takes 2 seconds. What's the MOST likely solution?",
+            "choices": [
+              {
+                "text": "Add more server RAM to cache the query results",
+                "is_correct": false
+              },
+              {
+                "text": "Create a database index on the email field",
+                "is_correct": true
+              },
+              {
+                "text": "Use select_related() to optimize the query",
+                "is_correct": false
+              },
+              {
+                "text": "Switch to a NoSQL database for better performance",
+                "is_correct": false
+              }
+            ],
+            "explanation": "A 2-second query on 100,000 records strongly indicates a full table scan. Creating an index on the email field allows the database to quickly locate matching records instead of scanning every row. This typically improves performance by 100x or more for lookup queries."
+          }
+        ]
+      },
+      {
+        "title": "Django Index Implementation",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Django's Built-in Indexing Features",
+            "content": "Django provides multiple ways to create database indexes through model fields and Meta options. Understanding these options helps you implement the right indexing strategy.",
+            "key_points": [
+              "db_index=True for simple single-field indexes",
+              "indexes = [] in Meta class for complex indexes",
+              "unique=True automatically creates an index",
+              "ForeignKey fields get indexes automatically"
+            ],
+            "examples": [
+              "email = models.EmailField(db_index=True)",
+              "indexes = [models.Index(fields=['category', 'price'])]",
+              "class Meta: unique_together = [('user', 'product')]"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Implementing Django Indexes",
+            "before_code": "# Before: No indexes, slow queries\nclass Product(models.Model):\n    name = models.CharField(max_length=200)\n    category = models.CharField(max_length=100)  # Frequently filtered\n    price = models.DecimalField(max_digits=10, decimal_places=2)  # Frequently filtered\n    brand = models.CharField(max_length=100)  # Sometimes filtered\n    created_at = models.DateTimeField(auto_now_add=True)  # Used for ordering\n    is_active = models.BooleanField(default=True)  # Frequently filtered\n    \n    # Common queries that are slow:\n    # Product.objects.filter(category='Electronics', is_active=True)\n    # Product.objects.filter(price__gte=100, price__lte=500)\n    # Product.objects.filter(brand='Apple').order_by('-created_at')\n    \n# Query performance: 2000-5000ms for large tables",
+            "after_code": "# After: Strategic indexing for fast queries\nclass Product(models.Model):\n    name = models.CharField(max_length=200, db_index=True)  # For search\n    category = models.CharField(max_length=100)  # Indexed in Meta\n    price = models.DecimalField(max_digits=10, decimal_places=2)  # Indexed in Meta\n    brand = models.CharField(max_length=100, db_index=True)  # Simple index\n    created_at = models.DateTimeField(auto_now_add=True, db_index=True)  # For ordering\n    is_active = models.BooleanField(default=True)  # Indexed in Meta\n    \n    class Meta:\n        indexes = [\n            # Composite index for common filter combination\n            models.Index(fields=['category', 'is_active'], name='cat_active_idx'),\n            \n            # Price range queries\n            models.Index(fields=['price'], name='price_idx'),\n            \n            # Brand + date ordering\n            models.Index(fields=['brand', '-created_at'], name='brand_date_idx'),\n            \n            # Full-text search (PostgreSQL)\n            # models.Index(fields=['name'], name='name_search_idx'),\n        ]\n        \n        # This also creates indexes\n        unique_together = [('name', 'brand')]  # Prevent duplicate products\n    \n# Common queries now fast:\n# Product.objects.filter(category='Electronics', is_active=True)  # Uses cat_active_idx\n# Product.objects.filter(price__gte=100, price__lte=500)  # Uses price_idx\n# Product.objects.filter(brand='Apple').order_by('-created_at')  # Uses brand_date_idx\n\n# Query performance: 50-200ms for same queries",
+            "impact": "Query performance improved from 2000-5000ms to 50-200ms (10-100x faster) through strategic indexing of frequently filtered and ordered fields."
+          },
+          {
+            "type": "migration_guide",
+            "title": "Creating Index Migrations",
+            "steps": [
+              {
+                "step": 1,
+                "title": "Generate Migration",
+                "command": "python manage.py makemigrations",
+                "description": "Django automatically detects index changes and creates migration"
+              },
+              {
+                "step": 2,
+                "title": "Review Migration File",
+                "code": "# Generated migration\nclass Migration(migrations.Migration):\n    dependencies = [\n        ('products', '0001_initial'),\n    ]\n    \n    operations = [\n        migrations.AddIndex(\n            model_name='product',\n            index=models.Index(fields=['category', 'is_active'], name='cat_active_idx'),\n        ),\n        migrations.AddField(\n            model_name='product',\n            name='name',\n            field=models.CharField(db_index=True, max_length=200),\n        ),\n    ]",
+                "description": "Review the generated migration to ensure correct indexes"
+              },
+              {
+                "step": 3,
+                "title": "Apply Migration",
+                "command": "python manage.py migrate",
+                "description": "Apply the migration to create indexes in database",
+                "warning": "Index creation can be slow on large tables - consider using CONCURRENT options for PostgreSQL"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You have a Product model where users frequently filter by category AND status together. What's the BEST indexing approach?",
+            "choices": [
+              {
+                "text": "Create separate indexes: category=models.CharField(db_index=True), status=models.CharField(db_index=True)",
+                "is_correct": false
+              },
+              {
+                "text": "Create a composite index: indexes = [models.Index(fields=['category', 'status'])]",
+                "is_correct": true
+              },
+              {
+                "text": "Only index the category field since it's more selective",
+                "is_correct": false
+              },
+              {
+                "text": "Use a unique_together constraint instead of indexes",
+                "is_correct": false
+              }
+            ],
+            "explanation": "When fields are frequently filtered together, a composite index on both fields is more efficient than separate indexes. The database can use the composite index to quickly find rows matching both conditions in a single lookup, whereas separate indexes might require multiple lookups and intersections."
+          }
+        ]
+      },
+      {
+        "title": "Strategic Indexing Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Common Django Indexing Patterns",
+            "content": "Learn proven indexing strategies for the most common Django application patterns. These patterns cover 80% of real-world indexing needs.",
+            "key_points": [
+              "Filter fields: Always index frequently filtered fields",
+              "Ordering fields: Index fields used in order_by()",
+              "Foreign keys: Django indexes these automatically",
+              "Composite patterns: Index field combinations used together"
+            ],
+            "examples": [
+              "User lookup patterns: email, username",
+              "Content filtering: published status + creation date",
+              "E-commerce patterns: category + price range"
+            ]
+          },
+          {
+            "type": "pattern_examples",
+            "title": "Real-World Indexing Patterns",
+            "patterns": [
+              {
+                "name": "User Authentication Pattern",
+                "model": "User",
+                "common_queries": [
+                  "User.objects.get(email='user@example.com')",
+                  "User.objects.filter(username__icontains='john')",
+                  "User.objects.filter(is_active=True, last_login__gte=date)"
+                ],
+                "recommended_indexes": [
+                  "email = models.EmailField(unique=True)  # Unique creates index",
+                  "username = models.CharField(db_index=True)",
+                  "indexes = [models.Index(fields=['is_active', 'last_login'])]"
+                ],
+                "performance_gain": "Login queries: 500ms → 5ms"
+              },
+              {
+                "name": "Content Management Pattern",
+                "model": "BlogPost",
+                "common_queries": [
+                  "BlogPost.objects.filter(published=True).order_by('-created_at')",
+                  "BlogPost.objects.filter(category='tech', published=True)",
+                  "BlogPost.objects.filter(author=user, created_at__gte=date)"
+                ],
+                "recommended_indexes": [
+                  "models.Index(fields=['published', '-created_at'])",
+                  "models.Index(fields=['category', 'published'])",
+                  "models.Index(fields=['author', 'created_at'])"
+                ],
+                "performance_gain": "Article listing: 1200ms → 80ms"
+              },
+              {
+                "name": "E-commerce Product Pattern",
+                "model": "Product",
+                "common_queries": [
+                  "Product.objects.filter(category='electronics', price__lte=1000)",
+                  "Product.objects.filter(brand='Apple').order_by('-created_at')",
+                  "Product.objects.filter(is_active=True, stock__gt=0)"
+                ],
+                "recommended_indexes": [
+                  "models.Index(fields=['category', 'price'])",
+                  "models.Index(fields=['brand', '-created_at'])",
+                  "models.Index(fields=['is_active', 'stock'])"
+                ],
+                "performance_gain": "Product search: 3000ms → 150ms"
+              },
+              {
+                "name": "Analytics/Reporting Pattern",
+                "model": "Order",
+                "common_queries": [
+                  "Order.objects.filter(created_at__gte=start_date, created_at__lte=end_date)",
+                  "Order.objects.filter(status='completed').aggregate(Sum('total'))",
+                  "Order.objects.filter(user=user).order_by('-created_at')"
+                ],
+                "recommended_indexes": [
+                  "models.Index(fields=['created_at'])",
+                  "models.Index(fields=['status', 'total'])",
+                  "models.Index(fields=['user', '-created_at'])"
+                ],
+                "performance_gain": "Report generation: 5000ms → 300ms"
+              }
+            ]
+          },
+          {
+            "type": "advanced_indexing",
+            "title": "Advanced Indexing Techniques",
+            "techniques": [
+              {
+                "name": "Partial Indexes (PostgreSQL)",
+                "description": "Index only rows that match a condition",
+                "example": "CREATE INDEX CONCURRENTLY idx_active_products ON products (category, price) WHERE is_active = true;",
+                "django_implementation": "# Custom migration required\nfrom django.db import migrations\n\nclass Migration(migrations.Migration):\n    operations = [\n        migrations.RunSQL(\n            \"CREATE INDEX CONCURRENTLY idx_active_products ON products (category, price) WHERE is_active = true;\",\n            reverse_sql=\"DROP INDEX idx_active_products;\"\n        )\n    ]",
+                "benefits": "Smaller index size, faster updates for inactive records"
+              },
+              {
+                "name": "Expression Indexes",
+                "description": "Index computed values or functions",
+                "example": "CREATE INDEX idx_email_lower ON users (LOWER(email));",
+                "django_implementation": "# For case-insensitive email lookups\nclass Migration(migrations.Migration):\n    operations = [\n        migrations.RunSQL(\n            \"CREATE INDEX idx_email_lower ON auth_user (LOWER(email));\",\n            reverse_sql=\"DROP INDEX idx_email_lower;\"\n        )\n    ]",
+                "benefits": "Efficient case-insensitive searches"
+              },
+              {
+                "name": "Covering Indexes",
+                "description": "Include additional columns in index for index-only queries",
+                "example": "CREATE INDEX idx_product_covering ON products (category, price) INCLUDE (name, description);",
+                "benefits": "Query can be answered entirely from index without table lookup"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your BlogPost model has queries like 'BlogPost.objects.filter(published=True).order_by(\"-created_at\")'. What index should you create?",
+            "choices": [
+              {
+                "text": "models.Index(fields=['published'])",
+                "is_correct": false
+              },
+              {
+                "text": "models.Index(fields=['-created_at'])",
+                "is_correct": false
+              },
+              {
+                "text": "models.Index(fields=['published', '-created_at'])",
+                "is_correct": true
+              },
+              {
+                "text": "Create separate indexes for published and created_at",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Since the query filters by published AND orders by created_at, a composite index on both fields (with created_at in descending order) allows the database to filter published posts and return them in the correct order without additional sorting. This is much more efficient than separate indexes."
+          }
+        ]
+      },
+      {
+        "title": "Index Performance Analysis",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Measuring Index Effectiveness",
+            "content": "Use database tools and Django features to measure whether your indexes are working effectively and providing the expected performance benefits.",
+            "key_points": [
+              "EXPLAIN ANALYZE shows query execution plans",
+              "Django Debug Toolbar displays query performance",
+              "Monitor index usage with database statistics",
+              "Measure before/after performance improvements"
+            ],
+            "examples": [
+              "PostgreSQL: EXPLAIN ANALYZE for query plans",
+              "MySQL: EXPLAIN FORMAT=JSON for detailed analysis",
+              "Django: connection.queries for query inspection"
+            ]
+          },
+          {
+            "type": "analysis_tools",
+            "title": "Database Query Analysis Tools",
+            "tools": [
+              {
+                "database": "PostgreSQL",
+                "tool": "EXPLAIN ANALYZE",
+                "usage": "SELECT * FROM products WHERE category = 'Electronics' AND price < 1000;",
+                "command": "EXPLAIN ANALYZE SELECT * FROM products WHERE category = 'Electronics' AND price < 1000;",
+                "interpretation": [
+                  "Look for 'Index Scan' vs 'Seq Scan'",
+                  "Check 'actual time' for performance",
+                  "Verify 'rows' estimates are accurate"
+                ]
+              },
+              {
+                "database": "MySQL",
+                "tool": "EXPLAIN",
+                "usage": "Same query as PostgreSQL",
+                "command": "EXPLAIN FORMAT=JSON SELECT * FROM products WHERE category = 'Electronics' AND price < 1000;",
+                "interpretation": [
+                  "Look for 'index' in access_type",
+                  "Check 'rows_examined_per_scan'",
+                  "Verify 'filtered' percentage"
+                ]
+              },
+              {
+                "database": "Django Debug Toolbar",
+                "tool": "SQL Panel",
+                "usage": "Automatic in development",
+                "command": "Enable in settings.py",
+                "interpretation": [
+                  "Look at query execution time",
+                  "Check for 'SIMILAR' queries",
+                  "Monitor total query count"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Analyzing Index Performance in Django",
+            "before_code": "# Before: Slow query without proper analysis\nfrom django.db import connection\n\ndef slow_product_search(request):\n    category = request.GET.get('category')\n    max_price = request.GET.get('max_price', 1000)\n    \n    # This query might be slow, but we don't know why\n    products = Product.objects.filter(\n        category=category,\n        price__lte=max_price,\n        is_active=True\n    )[:20]\n    \n    return render(request, 'products.html', {'products': products})\n    \n# No visibility into query performance",
+            "after_code": "# After: Comprehensive performance analysis\nfrom django.db import connection\nfrom django.conf import settings\nimport time\nimport logging\n\nperformance_logger = logging.getLogger('query_performance')\n\ndef optimized_product_search(request):\n    category = request.GET.get('category')\n    max_price = request.GET.get('max_price', 1000)\n    \n    # Track query performance\n    start_time = time.time()\n    initial_queries = len(connection.queries) if settings.DEBUG else 0\n    \n    # Optimized query with proper indexing\n    products = Product.objects.filter(\n        category=category,\n        price__lte=max_price,\n        is_active=True\n    ).select_related('brand').only(\n        'name', 'price', 'brand__name', 'image_url'\n    )[:20]\n    \n    # Force evaluation for accurate timing\n    product_list = list(products)\n    \n    # Performance analysis\n    query_time = (time.time() - start_time) * 1000\n    query_count = len(connection.queries) - initial_queries if settings.DEBUG else 0\n    \n    # Log performance metrics\n    performance_logger.info(f'Product search: {query_time:.1f}ms, {query_count} queries, {len(product_list)} results')\n    \n    # In development, analyze the actual SQL\n    if settings.DEBUG and connection.queries:\n        last_query = connection.queries[-1]['sql']\n        performance_logger.debug(f'SQL: {last_query}')\n    \n    return render(request, 'products.html', {\n        'products': product_list,\n        'performance': {\n            'query_time': f'{query_time:.1f}ms',\n            'query_count': query_count\n        }\n    })\n\n# Now you have full visibility into query performance\n# and can verify that indexes are being used effectively",
+            "impact": "Provides detailed performance metrics and SQL analysis to verify index effectiveness and identify optimization opportunities."
+          },
+          {
+            "type": "optimization_workflow",
+            "title": "Index Optimization Workflow",
+            "steps": [
+              {
+                "step": 1,
+                "title": "Identify Slow Queries",
+                "actions": [
+                  "Use Django Debug Toolbar in development",
+                  "Monitor slow query logs in production",
+                  "Profile application under realistic load"
+                ]
+              },
+              {
+                "step": 2,
+                "title": "Analyze Query Patterns",
+                "actions": [
+                  "Run EXPLAIN ANALYZE on slow queries",
+                  "Identify missing indexes (Seq Scan in PostgreSQL)",
+                  "Check filter selectivity and ordering patterns"
+                ]
+              },
+              {
+                "step": 3,
+                "title": "Design Index Strategy",
+                "actions": [
+                  "Create composite indexes for multi-field queries",
+                  "Consider column order in composite indexes",
+                  "Balance query performance vs write overhead"
+                ]
+              },
+              {
+                "step": 4,
+                "title": "Implement and Test",
+                "actions": [
+                  "Create indexes via Django migrations",
+                  "Test with realistic data volumes",
+                  "Measure performance improvements"
+                ]
+              },
+              {
+                "step": 5,
+                "title": "Monitor and Refine",
+                "actions": [
+                  "Track index usage statistics",
+                  "Remove unused indexes",
+                  "Adapt to changing query patterns"
+                ]
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You created an index but your query is still slow. What should you check FIRST?",
+            "choices": [
+              {
+                "text": "Add more indexes on other fields",
+                "is_correct": false
+              },
+              {
+                "text": "Use EXPLAIN ANALYZE to verify the index is being used",
+                "is_correct": true
+              },
+              {
+                "text": "Increase database server memory",
+                "is_correct": false
+              },
+              {
+                "text": "Switch to a different database engine",
+                "is_correct": false
+              }
+            ],
+            "explanation": "EXPLAIN ANALYZE shows the actual query execution plan and whether your index is being used. The database might not use your index due to query structure, data distribution, or cost estimation. Understanding why the index isn't being used is crucial before adding more indexes or making other changes."
+          }
+        ]
+      },
+      {
+        "title": "Index Maintenance and Best Practices",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Index Maintenance in Production",
+            "content": "Indexes require ongoing maintenance to remain effective. Understanding maintenance requirements helps ensure long-term performance benefits.",
+            "key_points": [
+              "Indexes slow down INSERT/UPDATE/DELETE operations",
+              "Unused indexes waste storage and maintenance overhead",
+              "Index statistics may need updating for optimal performance",
+              "Monitor index usage to identify candidates for removal"
+            ],
+            "examples": [
+              "PostgreSQL: REINDEX for index maintenance",
+              "MySQL: OPTIMIZE TABLE for index statistics",
+              "Regular monitoring of index usage patterns"
+            ]
+          },
+          {
+            "type": "best_practices",
+            "title": "Django Indexing Best Practices",
+            "practices": [
+              {
+                "category": "Design Guidelines",
+                "items": [
+                  "Index fields used in WHERE clauses and JOIN conditions",
+                  "Create composite indexes for multi-field queries",
+                  "Order composite index fields by selectivity (most selective first)",
+                  "Avoid over-indexing - each index has maintenance overhead",
+                  "Use unique constraints where appropriate (they create indexes)"
+                ]
+              },
+              {
+                "category": "Performance Considerations",
+                "items": [
+                  "Test index performance with production-like data volumes",
+                  "Monitor index usage statistics regularly",
+                  "Remove unused indexes to reduce overhead",
+                  "Consider partial indexes for frequently filtered subsets",
+                  "Use covering indexes for frequently accessed columns"
+                ]
+              },
+              {
+                "category": "Migration Strategy",
+                "items": [
+                  "Create indexes CONCURRENTLY in PostgreSQL for large tables",
+                  "Monitor index creation progress for large datasets",
+                  "Test migrations on staging with production data volumes",
+                  "Consider maintenance windows for large index operations",
+                  "Have rollback plans for index migrations"
+                ]
+              },
+              {
+                "category": "Monitoring and Maintenance",
+                "items": [
+                  "Track query performance over time",
+                  "Monitor index hit ratios and usage statistics",
+                  "Set up alerts for slow query detection",
+                  "Regular review of query patterns and index effectiveness",
+                  "Document indexing decisions and rationale"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Production Index Monitoring",
+            "before_code": "# Before: No index monitoring\nclass Product(models.Model):\n    # ... fields ...\n    \n    class Meta:\n        indexes = [\n            models.Index(fields=['category', 'price']),\n            models.Index(fields=['brand', 'name']),\n            models.Index(fields=['created_at']),\n            # ... more indexes\n        ]\n        \n# No visibility into which indexes are actually used\n# No way to identify unused or ineffective indexes",
+            "after_code": "# After: Comprehensive index monitoring\nfrom django.core.management.base import BaseCommand\nfrom django.db import connection\n\nclass Command(BaseCommand):\n    help = 'Analyze index usage and performance'\n    \n    def handle(self, *args, **options):\n        with connection.cursor() as cursor:\n            # PostgreSQL index usage analysis\n            cursor.execute(\"\"\"\n                SELECT \n                    schemaname,\n                    tablename,\n                    indexname,\n                    idx_scan as index_scans,\n                    idx_tup_read as tuples_read,\n                    idx_tup_fetch as tuples_fetched\n                FROM pg_stat_user_indexes \n                WHERE schemaname = 'public'\n                ORDER BY idx_scan DESC;\n            \"\"\")\n            \n            self.stdout.write('Index Usage Statistics:')\n            for row in cursor.fetchall():\n                schema, table, index, scans, reads, fetches = row\n                if scans == 0:\n                    self.stdout.write(\n                        self.style.WARNING(f'UNUSED INDEX: {table}.{index}')\n                    )\n                else:\n                    self.stdout.write(\n                        f'{table}.{index}: {scans} scans, {reads} reads'\n                    )\n            \n            # Find missing indexes (slow queries)\n            cursor.execute(\"\"\"\n                SELECT query, calls, total_time, mean_time\n                FROM pg_stat_statements \n                WHERE mean_time > 100  -- Queries > 100ms average\n                ORDER BY mean_time DESC \n                LIMIT 10;\n            \"\"\")\n            \n            self.stdout.write('\\nSlow Queries (consider indexing):')\n            for row in cursor.fetchall():\n                query, calls, total_time, mean_time = row\n                self.stdout.write(\n                    f'Mean: {mean_time:.1f}ms, Calls: {calls}'\n                )\n                self.stdout.write(f'Query: {query[:100]}...')\n\n# Run with: python manage.py analyze_indexes\n# Provides actionable insights for index optimization",
+            "impact": "Enables data-driven index optimization by identifying unused indexes and slow queries that need indexing."
+          },
+          {
+            "type": "anti_patterns",
+            "title": "Common Indexing Mistakes to Avoid",
+            "mistakes": [
+              {
+                "mistake": "Over-indexing",
+                "description": "Creating indexes on every field 'just in case'",
+                "problem": "Slows down writes, wastes storage, complicates maintenance",
+                "solution": "Only index fields actually used in WHERE/ORDER BY clauses"
+              },
+              {
+                "mistake": "Wrong composite index order",
+                "description": "Creating Index(['price', 'category']) for queries filtering by category",
+                "problem": "Index cannot be used efficiently for category-only queries",
+                "solution": "Order fields by selectivity: Index(['category', 'price'])"
+              },
+              {
+                "mistake": "Ignoring unique constraints",
+                "description": "Using db_index=True instead of unique=True for unique fields",
+                "problem": "Misses opportunity for constraint enforcement and optimization",
+                "solution": "Use unique=True for truly unique fields (creates index automatically)"
+              },
+              {
+                "mistake": "Not testing with realistic data",
+                "description": "Testing indexes with small development datasets",
+                "problem": "Index benefits may not appear with small data volumes",
+                "solution": "Test with production-like data volumes (10k+ records minimum)"
+              },
+              {
+                "mistake": "Forgetting about write performance",
+                "description": "Adding many indexes without considering INSERT/UPDATE impact",
+                "problem": "Can significantly slow down data modification operations",
+                "solution": "Balance read vs write performance based on application usage patterns"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You have a Django model with 10 indexes, but some queries are still slow and writes are getting slower. What should you do FIRST?",
+            "choices": [
+              {
+                "text": "Add more indexes to speed up the remaining slow queries",
+                "is_correct": false
+              },
+              {
+                "text": "Analyze index usage statistics to identify unused indexes",
+                "is_correct": true
+              },
+              {
+                "text": "Remove all indexes and start over",
+                "is_correct": false
+              },
+              {
+                "text": "Upgrade to a faster database server",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Too many indexes can hurt write performance. Before adding more indexes, analyze which existing indexes are actually being used. Remove unused indexes to improve write performance, then strategically add indexes only for the remaining slow queries. This ensures you get maximum benefit with minimal overhead."
+          }
+        ]
+      }
+    ]
+  }
+}

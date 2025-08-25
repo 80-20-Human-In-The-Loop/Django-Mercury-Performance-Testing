@@ -1,0 +1,188 @@
+{
+  "quiz": {
+    "id": "caching_strategies_beginner",
+    "title": "Django Caching Strategies",
+    "description": "Learn effective caching techniques to boost Django application performance",
+    "difficulty": "beginner",
+    "concept": "caching_strategies",
+    "tags": ["caching", "redis", "memcached", "performance", "optimization"],
+    "passing_score": 0.7,
+    "questions": [
+      {
+        "id": "caching_purpose",
+        "question_type": "multiple_choice",
+        "text": "What is the primary benefit of caching in Django applications?",
+        "answers": [
+          {
+            "text": "Reduce database storage requirements",
+            "is_correct": false,
+            "explanation": "Caching doesn't reduce storage - it temporarily stores frequently accessed data for faster retrieval."
+          },
+          {
+            "text": "Avoid repeating expensive operations by storing results",
+            "is_correct": true,
+            "explanation": "Exactly! Caching stores the results of expensive operations (database queries, API calls, computations) so they can be retrieved quickly without re-executing the expensive operation."
+          },
+          {
+            "text": "Improve database security",
+            "is_correct": false,
+            "explanation": "Caching is about performance, not security. Security is handled by authentication and authorization."
+          },
+          {
+            "text": "Automatically optimize Django code",
+            "is_correct": false,
+            "explanation": "Caching doesn't optimize code - it stores results to avoid re-executing slow operations."
+          }
+        ],
+        "explanation": "Caching follows the principle: store expensive results temporarily so you can serve them quickly later. This trades memory for speed, dramatically reducing response times for frequently accessed data.",
+        "hints": [
+          "What happens when you store expensive results?",
+          "Think about trading memory for speed"
+        ],
+        "difficulty": "beginner",
+        "concept": "caching_strategies",
+        "tags": ["concept", "purpose", "benefits"]
+      },
+      {
+        "id": "cache_levels",
+        "question_type": "multiple_choice",
+        "text": "Your Django view renders the same complex page 1000 times per hour. Which caching level provides the biggest performance gain?",
+        "answers": [
+          {
+            "text": "Database query caching",
+            "is_correct": false,
+            "explanation": "Query caching helps but still requires template rendering and Python processing for each request."
+          },
+          {
+            "text": "Template fragment caching",
+            "is_correct": false,
+            "explanation": "Fragment caching is useful but still requires view logic and multiple template fragments to be assembled."
+          },
+          {
+            "text": "Full page caching",
+            "is_correct": true,
+            "explanation": "Perfect! Full page caching stores the entire rendered HTML response. For identical pages, this skips database queries, view processing, and template rendering - maximum performance gain."
+          },
+          {
+            "text": "Redis memory caching",
+            "is_correct": false,
+            "explanation": "Redis is a cache backend, not a caching level. The question is about what to cache, not where to store it."
+          }
+        ],
+        "explanation": "Caching levels from highest to lowest impact: Full page > Template fragments > Database queries > Individual values. Cache at the highest level possible for maximum performance gains.",
+        "hints": [
+          "Which level avoids the most processing?",
+          "Think about the entire request-response cycle"
+        ],
+        "difficulty": "beginner",
+        "concept": "caching_strategies",
+        "tags": ["levels", "page-caching", "optimization-hierarchy"]
+      },
+      {
+        "id": "cache_invalidation",
+        "question_type": "scenario",
+        "text": "You cache product listings for 1 hour, but when a product goes out of stock, customers still see it as available. What's the problem?",
+        "answers": [
+          {
+            "text": "Cache timeout is too long for dynamic data",
+            "is_correct": true,
+            "explanation": "Correct! Product stock changes frequently, but you're caching for 1 hour. The cache becomes stale quickly. For dynamic data, use shorter timeouts or implement cache invalidation when stock changes."
+          },
+          {
+            "text": "Redis is not fast enough",
+            "is_correct": false,
+            "explanation": "Redis speed isn't the issue - the cached data is simply outdated."
+          },
+          {
+            "text": "Need more memory for caching",
+            "is_correct": false,
+            "explanation": "Memory capacity isn't the problem - the cached data doesn't reflect current reality."
+          },
+          {
+            "text": "Database queries are too complex",
+            "is_correct": false,
+            "explanation": "Query complexity isn't the issue - the cache is serving stale data."
+          }
+        ],
+        "explanation": "Cache invalidation is one of the hardest problems in computing! For frequently-changing data like inventory, use shorter cache timeouts or implement smart invalidation that clears cache when data changes.",
+        "hints": [
+          "What happens when cached data becomes outdated?",
+          "How often does product stock change vs cache refresh?"
+        ],
+        "difficulty": "beginner",
+        "concept": "caching_strategies",
+        "tags": ["invalidation", "stale-data", "cache-timeout"]
+      },
+      {
+        "id": "django_cache_framework",
+        "question_type": "multiple_choice",
+        "text": "Which Django decorator caches an entire view's response?",
+        "answers": [
+          {
+            "text": "@cache_page(60 * 15)",
+            "is_correct": true,
+            "explanation": "Correct! @cache_page(timeout) caches the entire view response for the specified timeout (in seconds). This is Django's simplest way to implement full page caching."
+          },
+          {
+            "text": "@cache_control(max_age=900)",
+            "is_correct": false,
+            "explanation": "@cache_control sets HTTP caching headers for browser caching, not server-side Django caching."
+          },
+          {
+            "text": "@cache_template(timeout=900)",
+            "is_correct": false,
+            "explanation": "This isn't a real Django decorator. Template caching is done with {% cache %} template tags."
+          },
+          {
+            "text": "@redis_cache(expire=900)",
+            "is_correct": false,
+            "explanation": "This isn't a standard Django decorator. Redis is a cache backend, not a caching method."
+          }
+        ],
+        "explanation": "Django provides several caching tools: @cache_page for full views, {% cache %} template tags for fragments, and cache.get/set for manual caching. Choose based on what you need to cache.",
+        "hints": [
+          "Which decorator caches the entire page output?",
+          "Think about Django's built-in caching decorators"
+        ],
+        "difficulty": "beginner",
+        "concept": "caching_strategies",
+        "tags": ["django", "cache-decorator", "page-caching"]
+      },
+      {
+        "id": "cache_backend_choice",
+        "question_type": "scenario",
+        "text": "Your Django app has 10 servers behind a load balancer. Users get inconsistent cached data. What's the solution?",
+        "answers": [
+          {
+            "text": "Use database-based caching",
+            "is_correct": false,
+            "explanation": "Database caching is shared but slower than memory-based solutions."
+          },
+          {
+            "text": "Use Redis or Memcached for shared cache",
+            "is_correct": true,
+            "explanation": "Perfect! With multiple servers, you need a shared cache backend like Redis or Memcached. This ensures all servers see the same cached data, eliminating consistency issues."
+          },
+          {
+            "text": "Increase cache timeout on each server",
+            "is_correct": false,
+            "explanation": "Longer timeouts won't solve the fundamental problem of isolated caches on each server."
+          },
+          {
+            "text": "Disable caching entirely",
+            "is_correct": false,
+            "explanation": "This solves consistency but eliminates performance benefits. Shared caching is the better solution."
+          }
+        ],
+        "explanation": "Local memory caching (like Python's built-in cache) isolates each server's cache. Distributed systems need shared cache backends like Redis or Memcached for consistent behavior across all servers.",
+        "hints": [
+          "What happens when each server has its own cache?",
+          "How can multiple servers share the same cache?"
+        ],
+        "difficulty": "beginner",
+        "concept": "caching_strategies",
+        "tags": ["distributed", "redis", "memcached", "consistency"]
+      }
+    ]
+  }
+}

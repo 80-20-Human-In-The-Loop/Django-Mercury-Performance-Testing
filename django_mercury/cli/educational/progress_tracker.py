@@ -109,7 +109,8 @@ class ProgressTracker:
                 if concept in self.progress_data["concepts_in_progress"]:
                     # Check if concept is mastered (e.g., 3 correct quizzes)
                     quiz_results = [
-                        r for r in self.session_data["quiz_results"]
+                        r
+                        for r in self.session_data["quiz_results"]
                         if r.get("concept") == concept and r.get("correct")
                     ]
                     if len(quiz_results) >= 2:
@@ -128,9 +129,8 @@ class ProgressTracker:
             current_accuracy = self.progress_data["statistics"]["quiz_accuracy"]
             total_sessions = self.progress_data["total_sessions"]
             new_accuracy = (
-                (current_accuracy * (total_sessions - 1) + session_accuracy)
-                / total_sessions
-            )
+                current_accuracy * (total_sessions - 1) + session_accuracy
+            ) / total_sessions
             self.progress_data["statistics"]["quiz_accuracy"] = new_accuracy
 
     def record_concept_learned(self, concept: str) -> None:
@@ -262,6 +262,7 @@ class ProgressTracker:
         # Occasionally re-quiz mastered concepts for reinforcement
         if concept in self.progress_data["concepts_mastered"]:
             import random
+
             return random.random() < 0.1  # 10% chance
 
         return False
@@ -354,8 +355,7 @@ class ProgressTracker:
             "first_optimization": len(self.session_data["optimizations_learned"]) > 0,
             "quiz_master": self.progress_data["statistics"]["quiz_accuracy"] >= 90,
             "speed_demon": any(
-                opt.get("improvement", 0) > 50
-                for opt in self.session_data["optimizations_learned"]
+                opt.get("improvement", 0) > 50 for opt in self.session_data["optimizations_learned"]
             ),
             "persistent_learner": self.progress_data["total_sessions"] >= 10,
             "concept_collector": len(self.progress_data["concepts_mastered"]) >= 5,

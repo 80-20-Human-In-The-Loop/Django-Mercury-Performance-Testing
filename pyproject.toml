@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=75.0", "wheel", "setuptools-scm>=8"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-mercury-performance"
-version = "0.0.7"
+version = "1.0.0"
 description = "A performance testing framework for Django that helps you understand and fix performance issues, not just detect them"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -28,7 +28,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: C",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Testing",
     "Topic :: Software Development :: Testing :: Unit",
@@ -56,6 +55,8 @@ dependencies = [
     "memory-profiler>=0.60.0",
     "colorlog>=6.6.0",
     "jsonschema>=4.0.0",
+    "toml>=0.10.2",
+    "rich>=12.0.0",
 ]
 
 [project.optional-dependencies]
@@ -95,13 +96,12 @@ Changelog = "https://github.com/Django-Mercury/Performance-Testing/blob/main/CHA
 
 [project.scripts]
 mercury-test = "django_mercury.cli.mercury_test:main"
-mercury-analyze = "django_mercury.python_bindings.cli:main"
+
 
 [tool.setuptools]
 packages = [
     "django_mercury", 
     "django_mercury.python_bindings", 
-    "django_mercury.c_core",
     "django_mercury.cli",
     "django_mercury.cli.educational",
     "django_mercury.documentation",
@@ -113,12 +113,6 @@ include-package-data = true
 "django_mercury" = [
     "*.md",
     "py.typed",
-]
-"django_mercury.c_core" = [
-    "*.c",
-    "*.h",
-    "Makefile",
-    "BUILD.md",
 ]
 "django_mercury.python_bindings" = ["*.py"]
 "django_mercury.documentation" = ["*.md"]
@@ -249,16 +243,27 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 addopts = [
     "--verbose",
     "--tb=short",
     "--strict-markers",
+    "-ra",
+    "--color=yes",
 ]
+norecursedirs = [".git", ".tox", "build", "dist", "*.egg", "venv", "test_build"]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
+    "unit: Unit tests",
+    "integration: Integration tests", 
+    "performance: Performance tests",
+    "slow: Slow tests",
+    "django: Tests requiring Django",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
 ]
 
 [tool.ruff]
@@ -271,12 +276,16 @@ select = [
     "I",   # isort
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
+    "C90", # complexity
     "UP",  # pyupgrade
+    "PL",  # too many arguments/locals/statements
+    "PLR", # function/class too long
+    "N",   # naming convention check
+    "SIM", # code simplification checks
 ]
 ignore = [
     "E501",  # line too long (handled by black)
     "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
 ]
 exclude = [
     ".git",
@@ -315,92 +324,4 @@ exclude_lines = [
     "@(abc\\.)?abstractmethod",
 ]
 
-[tool.cibuildwheel]
-# Build for Python 3.10-3.12
-build = "cp310-* cp311-* cp312-*"
-
-# Skip 32-bit builds, PyPy, and musllinux for now
-skip = [
-    "*-win32",        # Skip 32-bit Windows
-    "*-manylinux_i686",  # Skip 32-bit Linux
-    "pp*",            # Skip PyPy
-    "*-musllinux_*",  # Skip musllinux (Alpine)
-]
-
-# Build verbosity
-build-verbosity = 1
-
-# Environment variables - suppress warnings during build
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
-
-# Build settings - try C extensions but fall back to pure Python if needed
-environment-pass = ["DJANGO_MERCURY_PURE_PYTHON"]
-
-# Pre-build: ensure setuptools is installed and check versions
-before-build = [
-    "python -m pip install --upgrade pip 'setuptools>=75.0' wheel",
-    "python -c \"import sys; print(f'Building for Python {sys.version}'); import setuptools; print(f'setuptools: {setuptools.__version__}')\""
-]
-
-# Simple test that doesn't depend on Django configuration - just test basic imports
-test-command = [
-    "python -c \"import django_mercury; print(f'[PASS] django-mercury {django_mercury.__version__} imported successfully')\"",
-    "python -c \"from django_mercury.python_bindings.loader import get_implementation_info; print(f'[INFO] Implementation: {get_implementation_info()}')\""
-]
-
-# Don't test on emulated architectures (too slow)
-test-skip = ["*-macosx_arm64", "*-macosx_universal2:arm64", "*linux_aarch64"]
-
-# Linux-specific configuration
-[tool.cibuildwheel.linux]
-# Use manylinux_2_34 container for GLIBC 2.34+ support
-# This supports Ubuntu 22.04+, RHEL 9+, Debian 12+
-manylinux-x86_64-image = "quay.io/pypa/manylinux_2_34_x86_64:latest"
-manylinux-i686-image = "quay.io/pypa/manylinux_2_34_i686:latest"
-manylinux-aarch64-image = "quay.io/pypa/manylinux_2_34_aarch64:latest"
-
-# Environment variables
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1"}
-
-# Install system dependencies for C compilation in manylinux container
-before-all = [
-    "dnf install -y gcc make",  # Use dnf for RHEL 9+ based containers
-    "python -m pip install --upgrade pip setuptools wheel",
-    "python -c \"import sys; print(f'Python: {sys.version}')\"",
-    # Verify we're in manylinux_2_34 container
-    "cat /etc/redhat-release || echo 'Not in RHEL-based container'",
-    "ldconfig -p | grep 'libc.so.6' | head -1",  # Show GLIBC version
-]
-
-# Pre-build: install build dependencies
-before-build = [
-    "python -m pip install --upgrade pip 'setuptools>=75.0' wheel",
-]
-
-# Use auditwheel to create proper manylinux_2_34 wheels
-# This gives us GLIBC 2.34+ support with proper platform tags
-repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} --plat manylinux_2_34_x86_64 || echo 'Note: auditwheel repair failed, wheel requires GLIBC 2.34+'"
-
-# macOS-specific configuration  
-[tool.cibuildwheel.macos]
-# Build for both Intel and Apple Silicon
-archs = ["x86_64", "arm64", "universal2"]
-
-# Set deployment target for compatibility
-environment = {MACOSX_DEPLOYMENT_TARGET="10.9", DJANGO_MERCURY_SUPPRESS_WARNING="1"}
-
-# Windows-specific configuration
-[tool.cibuildwheel.windows]
-# Only build 64-bit
-archs = ["AMD64"]
-
-# Environment variables for Windows - enable C extensions
-environment = {DJANGO_MERCURY_SUPPRESS_WARNING="1", DJANGO_MERCURY_PURE_PYTHON="0"}
-
-# Build C libraries before Python extension
-# Note: Windows requires 'python -m pip' to upgrade pip itself
-# Using setuptools >=75 with metadata fix script
-before-build = "python -m pip install --upgrade pip \"setuptools>=75.0\" wheel delvewheel && python setup.py build_ext --inplace"
-
-# Repair wheels to include dependencies
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
+# Pure Python package - no cibuildwheel configuration needed

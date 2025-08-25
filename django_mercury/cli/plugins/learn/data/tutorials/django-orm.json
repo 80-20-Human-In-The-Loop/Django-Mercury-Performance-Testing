@@ -1,0 +1,251 @@
+{
+  "tutorial": {
+    "id": "django-orm",
+    "title": "Advanced Django ORM Optimization",
+    "description": "Master advanced Django ORM patterns for high-performance database operations, query optimization, and efficient data access",
+    "concept": "django-orm",
+    "difficulty": "advanced",
+    "tags": ["orm", "database", "optimization", "performance", "queries", "django"],
+    "estimated_time": "55 minutes",
+    "learning_objectives": [
+      "Master advanced ORM query optimization techniques",
+      "Use annotations and aggregations for efficient data processing",
+      "Implement custom QuerySets and Managers for reusable optimizations",
+      "Optimize database schema design for ORM performance",
+      "Monitor and debug ORM query performance with Mercury"
+    ],
+    "prerequisites": [
+      "Solid understanding of Django ORM basics",
+      "Knowledge of SQL and database concepts",
+      "Completion of n-plus-one-queries tutorial"
+    ],
+    "sections": [
+      {
+        "title": "Advanced Query Optimization",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Beyond Basic select_related and prefetch_related",
+            "content": "Advanced ORM optimization goes beyond preventing N+1 queries. Learn sophisticated techniques for complex data access patterns and performance optimization.",
+            "key_points": [
+              "Strategic use of only() and defer() for field selection",
+              "Custom Prefetch objects for complex relationships",
+              "Query optimization with annotations and aggregations",
+              "Subqueries and Exists() for efficient filtering"
+            ],
+            "examples": [
+              "Loading only necessary fields for large models",
+              "Complex prefetching with custom querysets",
+              "Database-level calculations with annotations"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your e-commerce dashboard loads slowly because it displays product statistics: total sales, average rating, recent orders, and stock levels. Each product requires multiple database queries and the page takes 5+ seconds to load.",
+            "problem": "Complex data aggregation is being done in Python instead of the database, and you're loading full model instances when you only need specific fields."
+          },
+          {
+            "type": "code_example",
+            "title": "Advanced Field Selection and Annotations",
+            "before_code": "# Inefficient: Loading full models and computing in Python\ndef product_dashboard_view(request):\n    products = Product.objects.all()[:50]\n    \n    dashboard_data = []\n    for product in products:  # N+1 queries incoming!\n        # Each of these triggers separate queries\n        total_sales = sum(order.total for order in product.orders.all())\n        avg_rating = sum(review.rating for review in product.reviews.all()) / product.reviews.count()\n        recent_orders_count = product.orders.filter(\n            created_at__gte=timezone.now() - timedelta(days=30)\n        ).count()\n        \n        dashboard_data.append({\n            'id': product.id,\n            'name': product.name,  # Loading entire Product model\n            'description': product.description,  # Large text field we don't need\n            'image_urls': product.image_urls,     # Large JSON field we don't need\n            'total_sales': total_sales,\n            'avg_rating': avg_rating,\n            'recent_orders': recent_orders_count,\n            'stock_level': product.stock_level\n        })\n    \n    return render(request, 'dashboard.html', {'products': dashboard_data})\n    \n# Performance problems:\n# - Loading unnecessary fields (description, image_urls)\n# - N+1 queries for orders and reviews\n# - Computing aggregations in Python instead of database\n# - 50 products × 3 queries each = 150+ database queries!",
+            "after_code": "# Optimized: Strategic field selection and database aggregations\ndef product_dashboard_view(request):\n    # Single optimized query with all necessary data\n    products = Product.objects.only(\n        'id', 'name', 'stock_level'  # Only load fields we actually need\n    ).annotate(\n        # Calculate aggregations in the database\n        total_sales=Coalesce(\n            Sum('orders__total'), \n            Value(0, output_field=DecimalField())\n        ),\n        avg_rating=Coalesce(\n            Avg('reviews__rating'),\n            Value(0.0, output_field=FloatField())\n        ),\n        recent_orders_count=Count(\n            'orders',\n            filter=Q(orders__created_at__gte=timezone.now() - timedelta(days=30))\n        ),\n        total_reviews=Count('reviews')\n    )[:50]\n    \n    # Convert to list for template (single query execution)\n    dashboard_data = list(products.values(\n        'id', 'name', 'stock_level',\n        'total_sales', 'avg_rating', 'recent_orders_count', 'total_reviews'\n    ))\n    \n    return render(request, 'dashboard.html', {'products': dashboard_data})\n\n# Alternative using select_related for foreign keys\ndef product_dashboard_with_category(request):\n    products = Product.objects.select_related(\n        'category'  # If we need category info\n    ).only(\n        'id', 'name', 'stock_level',\n        'category__name'  # Only category name, not full category object\n    ).annotate(\n        total_sales=Coalesce(Sum('orders__total'), Value(0)),\n        avg_rating=Coalesce(Avg('reviews__rating'), Value(0.0)),\n        recent_orders_count=Count(\n            'orders',\n            filter=Q(orders__created_at__gte=timezone.now() - timedelta(days=30))\n        )\n    )[:50]\n    \n    return render(request, 'dashboard.html', {'products': products})\n\n# Performance improvements:\n# - 150+ queries → 1 query\n# - Database does aggregations (much faster than Python)\n# - Only loads necessary fields (reduces memory and transfer time)\n# - 5000ms response time → 200ms response time",
+            "explanation": "Use only() to load specific fields, and annotations to compute aggregations in the database. This eliminates N+1 queries and moves computation from Python to the database where it's much faster.",
+            "performance_impact": "Query reduction: 150+ queries → 1 query. Response time: 5000ms → 200ms. Memory usage: 80% reduction by loading only necessary fields."
+          }
+        ],
+        "quiz": {
+          "question": "What's the main benefit of using annotations with aggregations in Django ORM?",
+          "options": [
+            "It makes the code easier to read and understand",
+            "It moves expensive calculations from Python to the database, eliminating N+1 queries",
+            "It automatically caches the results for better performance",
+            "It reduces the amount of Python code you need to write"
+          ],
+          "correct_answer": 1,
+          "explanation": "Annotations with aggregations move calculations to the database level, which is much faster than Python loops. This also eliminates N+1 query patterns and reduces data transfer."
+        }
+      },
+      {
+        "title": "Custom QuerySets and Managers",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Building Reusable ORM Optimizations",
+            "content": "Custom QuerySets and Managers encapsulate optimization patterns, making them reusable and ensuring consistent performance across your application.",
+            "key_points": [
+              "Custom QuerySets for domain-specific query patterns",
+              "Manager methods that encapsulate complex optimizations",
+              "Chainable optimization methods for flexible queries",
+              "Performance-by-default through custom managers"
+            ],
+            "examples": [
+              "ProductQuerySet.with_sales_data() for dashboard queries",
+              "UserManager.active_with_profiles() for user lists",
+              "OrderQuerySet.recent_with_details() for order history"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Performance-Optimized Custom QuerySets",
+            "before_code": "# Repetitive optimization code scattered throughout views\nclass ProductListView(ListView):\n    def get_queryset(self):\n        return Product.objects.select_related('category').annotate(\n            avg_rating=Avg('reviews__rating'),\n            total_sales=Sum('orders__total')\n        ).only('id', 'name', 'category__name')\n\nclass ProductDashboardView(TemplateView):\n    def get_context_data(self):\n        # Same optimization pattern repeated\n        products = Product.objects.select_related('category').annotate(\n            avg_rating=Avg('reviews__rating'),\n            total_sales=Sum('orders__total'),\n            recent_orders=Count('orders', filter=Q(orders__created_at__gte=timezone.now()-timedelta(days=30)))\n        ).only('id', 'name', 'category__name')\n        return {'products': products}\n\nclass ProductAPIView(APIView):\n    def get(self, request):\n        # Yet another repetition of similar optimization\n        products = Product.objects.select_related('category').annotate(\n            avg_rating=Avg('reviews__rating')\n        ).only('id', 'name', 'category__name')\n        # ...\n\n# Problems:\n# - Optimization code repeated across views\n# - Easy to forget optimizations in new views\n# - Hard to maintain consistent performance patterns\n# - No reusability or composability",
+            "after_code": "# Custom QuerySet with reusable optimization methods\nfrom django.db import models\nfrom django.db.models import Avg, Sum, Count, Q, F, Value\nfrom django.utils import timezone\nfrom datetime import timedelta\n\nclass ProductQuerySet(models.QuerySet):\n    def with_category(self):\n        \"\"\"Optimize for category access\"\"\"\n        return self.select_related('category')\n    \n    def with_basic_stats(self):\n        \"\"\"Add basic product statistics\"\"\"\n        return self.annotate(\n            avg_rating=Coalesce(Avg('reviews__rating'), Value(0.0)),\n            total_reviews=Count('reviews'),\n            total_sales=Coalesce(Sum('orders__total'), Value(0))\n        )\n    \n    def with_recent_activity(self, days=30):\n        \"\"\"Add recent activity metrics\"\"\"\n        cutoff_date = timezone.now() - timedelta(days=days)\n        return self.annotate(\n            recent_orders_count=Count(\n                'orders',\n                filter=Q(orders__created_at__gte=cutoff_date)\n            ),\n            recent_revenue=Coalesce(\n                Sum('orders__total', filter=Q(orders__created_at__gte=cutoff_date)),\n                Value(0)\n            )\n        )\n    \n    def dashboard_optimized(self):\n        \"\"\"Complete optimization for dashboard views\"\"\"\n        return self.with_category().with_basic_stats().with_recent_activity().only(\n            'id', 'name', 'stock_level',\n            'category__id', 'category__name'\n        )\n    \n    def api_optimized(self):\n        \"\"\"Optimization for API serialization\"\"\"\n        return self.with_category().with_basic_stats().only(\n            'id', 'name', 'price', 'stock_level',\n            'category__id', 'category__name'\n        )\n    \n    def list_optimized(self):\n        \"\"\"Optimization for simple list views\"\"\"\n        return self.with_category().only(\n            'id', 'name', 'price',\n            'category__name'\n        )\n    \n    def search_optimized(self, query):\n        \"\"\"Optimization for search with ranking\"\"\"\n        return self.with_category().annotate(\n            # Search ranking based on name and description matches\n            name_match=models.Case(\n                models.When(name__icontains=query, then=Value(2)),\n                default=Value(0)\n            ),\n            description_match=models.Case(\n                models.When(description__icontains=query, then=Value(1)),\n                default=Value(0)\n            ),\n            search_rank=F('name_match') + F('description_match')\n        ).filter(\n            Q(name__icontains=query) | Q(description__icontains=query)\n        ).order_by('-search_rank', 'name')\n\nclass ProductManager(models.Manager):\n    def get_queryset(self):\n        return ProductQuerySet(self.model, using=self._db)\n    \n    # Expose QuerySet methods on Manager\n    def with_category(self):\n        return self.get_queryset().with_category()\n    \n    def with_basic_stats(self):\n        return self.get_queryset().with_basic_stats()\n    \n    def dashboard_optimized(self):\n        return self.get_queryset().dashboard_optimized()\n    \n    def api_optimized(self):\n        return self.get_queryset().api_optimized()\n    \n    def list_optimized(self):\n        return self.get_queryset().list_optimized()\n    \n    def search_optimized(self, query):\n        return self.get_queryset().search_optimized(query)\n\nclass Product(models.Model):\n    name = models.CharField(max_length=200)\n    description = models.TextField()\n    price = models.DecimalField(max_digits=10, decimal_places=2)\n    stock_level = models.IntegerField()\n    category = models.ForeignKey('Category', on_delete=models.CASCADE)\n    \n    objects = ProductManager()\n    \n    class Meta:\n        indexes = [\n            models.Index(fields=['name']),  # For search optimization\n            models.Index(fields=['category', 'name']),  # For category filtering\n        ]\n\n# Optimized views using custom QuerySet methods\nclass ProductListView(ListView):\n    def get_queryset(self):\n        return Product.objects.list_optimized()  # Simple and optimized\n\nclass ProductDashboardView(TemplateView):\n    def get_context_data(self):\n        # All optimizations in one method call\n        products = Product.objects.dashboard_optimized()[:50]\n        return {'products': products}\n\nclass ProductAPIView(APIView):\n    def get(self, request):\n        search_query = request.GET.get('search')\n        if search_query:\n            products = Product.objects.search_optimized(search_query)\n        else:\n            products = Product.objects.api_optimized()\n        # Serialization...\n\n# Benefits:\n# - Optimization patterns are reusable and composable\n# - Performance optimizations are automatic and consistent\n# - Easy to maintain and update optimization strategies\n# - Self-documenting query optimization intent",
+            "explanation": "Custom QuerySets encapsulate optimization patterns into reusable, chainable methods. This ensures consistent performance optimizations across your application and makes complex queries more maintainable.",
+            "performance_impact": "Systematic optimization: All views automatically use optimized queries. Reduced maintenance: Update optimization in one place, benefit everywhere."
+          }
+        ],
+        "quiz": {
+          "question": "What's the main advantage of custom QuerySets for ORM optimization?",
+          "options": [
+            "They automatically cache query results for better performance",
+            "They encapsulate optimization patterns into reusable, composable methods",
+            "They reduce the number of database tables needed",
+            "They eliminate the need for database indexes"
+          ],
+          "correct_answer": 1,
+          "explanation": "Custom QuerySets encapsulate optimization patterns (like select_related, annotations) into named, reusable methods. This ensures consistent performance optimizations across your application and makes complex queries maintainable."
+        }
+      },
+      {
+        "title": "Database Schema Optimization",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Optimizing Models and Database Schema for ORM Performance",
+            "content": "ORM performance isn't just about queries - your database schema design has a huge impact on Django ORM efficiency. Learn to design models that work well with the ORM.",
+            "key_points": [
+              "Strategic database indexes for common query patterns",
+              "Field choices that optimize for your access patterns",
+              "Relationship design that minimizes query complexity",
+              "Using database constraints to ensure data integrity"
+            ],
+            "examples": [
+              "Composite indexes for multi-field lookups",
+              "Choosing appropriate field types for performance",
+              "Designing relationships to avoid complex JOINs"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "ORM-Optimized Model Design",
+            "before_code": "# Poor model design for ORM performance\nclass Product(models.Model):\n    name = models.CharField(max_length=500)  # Too long, no index\n    description = models.TextField()         # Always loaded, even when not needed\n    details = models.JSONField()             # Complex nested data\n    price = models.FloatField()              # Precision issues\n    category = models.CharField(max_length=100)  # Should be ForeignKey\n    tags = models.CharField(max_length=1000)     # Should be ManyToMany\n    created_at = models.DateTimeField(auto_now_add=True)  # No index\n    \nclass Order(models.Model):\n    product = models.ForeignKey(Product, on_delete=models.CASCADE)\n    user_email = models.EmailField()         # Should be ForeignKey to User\n    quantity = models.IntegerField()\n    total_price = models.FloatField()        # Calculated field stored unnecessarily\n    \n# Problems:\n# - No strategic indexes for common queries\n# - Poor field choices (Float instead of Decimal)\n# - Missing relationships (category, user should be ForeignKeys)\n# - No optimization for common access patterns\n# - Always loads large fields even when not needed",
+            "after_code": "# ORM-optimized model design\nclass Category(models.Model):\n    name = models.CharField(max_length=100, unique=True)\n    slug = models.SlugField(unique=True)  # For URL-friendly lookups\n    \n    class Meta:\n        indexes = [\n            models.Index(fields=['name']),\n            models.Index(fields=['slug'])\n        ]\n\nclass Tag(models.Model):\n    name = models.CharField(max_length=50, unique=True)\n    \n    class Meta:\n        indexes = [models.Index(fields=['name'])]\n\nclass Product(models.Model):\n    # Core fields - always loaded\n    name = models.CharField(max_length=200, db_index=True)  # Reasonable length, indexed\n    slug = models.SlugField(unique=True, db_index=True)\n    price = models.DecimalField(max_digits=10, decimal_places=2)  # Precise for money\n    stock_level = models.PositiveIntegerField()\n    is_active = models.BooleanField(default=True, db_index=True)\n    \n    # Relationships - optimized for ORM\n    category = models.ForeignKey(Category, on_delete=models.CASCADE, db_index=True)\n    tags = models.ManyToManyField(Tag, blank=True)\n    \n    # Large fields - deferred by default in optimized queries\n    description = models.TextField(blank=True)\n    specifications = models.JSONField(default=dict, blank=True)\n    \n    # Timestamps\n    created_at = models.DateTimeField(auto_now_add=True, db_index=True)\n    updated_at = models.DateTimeField(auto_now=True)\n    \n    objects = ProductManager()  # Custom manager for optimizations\n    \n    class Meta:\n        indexes = [\n            # Common query patterns\n            models.Index(fields=['category', 'is_active']),  # Category listings\n            models.Index(fields=['is_active', 'created_at']),  # Recent active products\n            models.Index(fields=['category', 'price']),      # Category + price filtering\n            models.Index(fields=['name', 'category']),       # Search within category\n        ]\n        constraints = [\n            models.CheckConstraint(\n                check=models.Q(price__gt=0),\n                name='positive_price'\n            ),\n            models.CheckConstraint(\n                check=models.Q(stock_level__gte=0),\n                name='non_negative_stock'\n            )\n        ]\n\nclass User(models.Model):\n    username = models.CharField(max_length=150, unique=True)\n    email = models.EmailField(unique=True, db_index=True)\n    \n    class Meta:\n        indexes = [\n            models.Index(fields=['email']),\n            models.Index(fields=['username'])\n        ]\n\nclass Order(models.Model):\n    # Proper relationships\n    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='orders')\n    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')\n    \n    # Order details\n    quantity = models.PositiveIntegerField()\n    unit_price = models.DecimalField(max_digits=10, decimal_places=2)  # Store price at time of order\n    \n    # Timestamps for queries\n    created_at = models.DateTimeField(auto_now_add=True, db_index=True)\n    \n    # Computed properties (not stored fields)\n    @property\n    def total_price(self):\n        return self.quantity * self.unit_price\n    \n    class Meta:\n        indexes = [\n            models.Index(fields=['user', 'created_at']),     # User order history\n            models.Index(fields=['product', 'created_at']),  # Product sales history\n            models.Index(fields=['created_at']),             # Recent orders\n        ]\n\n# Usage examples showing optimized queries\nclass ProductService:\n    @staticmethod\n    def get_category_products(category_slug, limit=20):\n        \"\"\"Optimized category product listing\"\"\"\n        return Product.objects.filter(\n            category__slug=category_slug,\n            is_active=True\n        ).select_related('category').only(\n            'id', 'name', 'slug', 'price', 'stock_level',\n            'category__name'\n        )[:limit]\n        # Uses index: category + is_active\n    \n    @staticmethod\n    def search_products(query, category=None):\n        \"\"\"Optimized product search\"\"\"\n        qs = Product.objects.filter(\n            name__icontains=query,\n            is_active=True\n        )\n        \n        if category:\n            qs = qs.filter(category__slug=category)\n            # Uses index: name + category\n        \n        return qs.select_related('category').only(\n            'id', 'name', 'slug', 'price',\n            'category__name'\n        )\n\n# Benefits:\n# - Strategic indexes speed up common query patterns\n# - Proper relationships enable efficient JOINs\n# - Field choices optimize for common access patterns\n# - Database constraints ensure data integrity\n# - Deferred fields reduce memory usage for list views",
+            "explanation": "Optimize models for ORM patterns: strategic indexes for common queries, proper field types, efficient relationships, and separation of frequently vs rarely accessed fields.",
+            "performance_impact": "Query speed: 2-10x faster queries due to proper indexing. Memory usage: 50-70% reduction by optimizing field selection patterns."
+          }
+        ],
+        "quiz": {
+          "question": "What's the most important database optimization for Django ORM performance?",
+          "options": [
+            "Always use CharField instead of TextField",
+            "Create strategic database indexes that match your common query patterns",
+            "Use JSONField for all complex data structures",
+            "Never use ForeignKey relationships"
+          ],
+          "correct_answer": 1,
+          "explanation": "Strategic database indexes that match your query patterns have the biggest performance impact. They speed up lookups, filtering, and JOINs that the ORM generates from your Python code."
+        }
+      },
+      {
+        "title": "Advanced Query Techniques",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Sophisticated ORM Query Patterns",
+            "content": "Master advanced Django ORM techniques for complex data access scenarios: subqueries, window functions, conditional aggregations, and bulk operations.",
+            "key_points": [
+              "Subqueries with Subquery() and OuterRef()",
+              "Window functions for ranking and analytics",
+              "Conditional aggregations with Case/When",
+              "Bulk operations for efficient data manipulation"
+            ],
+            "examples": [
+              "Finding latest order for each customer with subqueries",
+              "Ranking products by sales within categories",
+              "Conditional counting and aggregations"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Complex Query Optimization Patterns",
+            "before_code": "# Inefficient: Multiple queries and Python processing\ndef get_customer_analytics():\n    customers = []\n    \n    for customer in Customer.objects.all():\n        # Each iteration triggers multiple queries\n        latest_order = customer.orders.order_by('-created_at').first()\n        total_spent = sum(order.total for order in customer.orders.all())\n        order_count = customer.orders.count()\n        avg_order_value = total_spent / order_count if order_count > 0 else 0\n        \n        # More inefficient queries\n        favorite_category = None\n        category_orders = {}\n        for order in customer.orders.all():\n            category = order.product.category.name\n            category_orders[category] = category_orders.get(category, 0) + 1\n        \n        if category_orders:\n            favorite_category = max(category_orders, key=category_orders.get)\n        \n        customers.append({\n            'customer': customer,\n            'latest_order_date': latest_order.created_at if latest_order else None,\n            'total_spent': total_spent,\n            'order_count': order_count,\n            'avg_order_value': avg_order_value,\n            'favorite_category': favorite_category\n        })\n    \n    return customers\n\n# Problems:\n# - N+1 queries for orders, products, categories\n# - Inefficient Python processing of aggregations\n# - Complex logic for finding favorite category\n# - 1000 customers = 5000+ database queries",
+            "after_code": "# Optimized: Single query with advanced ORM techniques\nfrom django.db.models import (\n    Subquery, OuterRef, Count, Sum, Avg, Max, Case, When, F, Q, Window\n)\nfrom django.db.models.functions import Rank\n\ndef get_customer_analytics():\n    # Subquery to get latest order date for each customer\n    latest_order_subquery = Order.objects.filter(\n        user=OuterRef('pk')\n    ).order_by('-created_at').values('created_at')[:1]\n    \n    # Subquery to find most frequent category for each customer\n    # This is complex - we'll use a window function approach\n    customer_category_counts = Order.objects.filter(\n        user=OuterRef('pk')\n    ).values('product__category__name').annotate(\n        category_count=Count('*')\n    ).order_by('-category_count').values('product__category__name')[:1]\n    \n    # Main query with all analytics in a single database operation\n    customers = Customer.objects.annotate(\n        # Latest order date using subquery\n        latest_order_date=Subquery(latest_order_subquery),\n        \n        # Total spending and order metrics\n        total_spent=Coalesce(Sum('orders__total'), Value(0)),\n        order_count=Count('orders'),\n        avg_order_value=Case(\n            When(order_count=0, then=Value(0)),\n            default=F('total_spent') / F('order_count'),\n            output_field=DecimalField()\n        ),\n        \n        # Customer lifetime value category\n        ltv_category=Case(\n            When(total_spent__gte=1000, then=Value('VIP')),\n            When(total_spent__gte=500, then=Value('Premium')),\n            When(total_spent__gte=100, then=Value('Regular')),\n            default=Value('New'),\n            output_field=CharField()\n        ),\n        \n        # Recent activity (orders in last 30 days)\n        recent_orders=Count(\n            'orders',\n            filter=Q(orders__created_at__gte=timezone.now() - timedelta(days=30))\n        ),\n        \n        # Most frequent category (simplified approach)\n        favorite_category=Subquery(customer_category_counts)\n        \n    ).prefetch_related(\n        # Efficiently load recent orders if needed\n        Prefetch(\n            'orders',\n            queryset=Order.objects.select_related('product__category').order_by('-created_at'),\n            to_attr='recent_orders_list'\n        )\n    )\n    \n    return customers\n\n# Alternative: Using raw SQL for very complex analytics\ndef get_customer_analytics_with_ranking():\n    \"\"\"Advanced analytics with ranking and window functions\"\"\"\n    return Customer.objects.extra(\n        select={\n            'customer_rank': \"\"\"\n                RANK() OVER (\n                    ORDER BY COALESCE(SUM(orders.total), 0) DESC\n                )\n            \"\"\",\n            'category_diversity': \"\"\"\n                COUNT(DISTINCT orders.product.category_id)\n            \"\"\"\n        },\n        tables=['orders'],\n        where=[\"orders.user_id = customers.id\"],\n        order_by=['-customer_rank']\n    ).annotate(\n        total_spent=Coalesce(Sum('orders__total'), Value(0)),\n        order_count=Count('orders')\n    )\n\n# Bulk operations for efficient data updates\nclass CustomerAnalyticsService:\n    @staticmethod\n    def update_customer_segments():\n        \"\"\"Efficiently update customer segments based on spending\"\"\"\n        # Bulk update using Case/When for efficiency\n        Customer.objects.annotate(\n            total_spent=Coalesce(Sum('orders__total'), Value(0))\n        ).update(\n            segment=Case(\n                When(total_spent__gte=1000, then=Value('VIP')),\n                When(total_spent__gte=500, then=Value('Premium')),\n                When(total_spent__gte=100, then=Value('Regular')),\n                default=Value('New')\n            )\n        )\n    \n    @staticmethod\n    def bulk_create_analytics_records(analytics_data):\n        \"\"\"Efficiently create multiple analytics records\"\"\"\n        CustomerAnalytics.objects.bulk_create([\n            CustomerAnalytics(\n                customer_id=data['customer_id'],\n                total_spent=data['total_spent'],\n                order_count=data['order_count'],\n                calculated_at=timezone.now()\n            )\n            for data in analytics_data\n        ], batch_size=1000)  # Process in batches for memory efficiency\n\n# Performance comparison:\n# Before: 1000 customers × 5+ queries each = 5000+ queries, 30+ seconds\n# After: 1 complex query = 1 query, 500ms\n# Bulk operations: 1000 updates in single query vs 1000 individual queries",
+            "explanation": "Advanced ORM techniques like subqueries, annotations, and bulk operations enable complex analytics in single database operations instead of nested Python loops with multiple queries.",
+            "performance_impact": "Massive performance gains: 5000+ queries → 1 query. Processing time: 30+ seconds → 500ms for complex customer analytics."
+          }
+        ],
+        "quiz": {
+          "question": "What's the key benefit of using Django ORM subqueries with OuterRef()?",
+          "options": [
+            "They automatically cache query results",
+            "They allow complex related data queries in a single database operation instead of N+1 patterns",
+            "They reduce the amount of Python code needed",
+            "They work faster than raw SQL queries"
+          ],
+          "correct_answer": 1,
+          "explanation": "Subqueries with OuterRef() enable complex related data access (like 'latest order per customer') in a single database operation, eliminating N+1 query patterns that would occur with naive Python loops."
+        }
+      },
+      {
+        "title": "ORM Performance Monitoring with Mercury",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Continuous ORM Performance Monitoring",
+            "content": "Use Mercury to continuously monitor ORM performance and catch regressions early. Set up comprehensive monitoring for query patterns, execution time, and database load.",
+            "key_points": [
+              "Monitor query counts and execution times",
+              "Set up alerts for ORM performance regressions",
+              "Profile complex ORM operations",
+              "Track database load and connection usage"
+            ],
+            "examples": [
+              "Automated alerts when query counts exceed thresholds",
+              "Performance regression detection in CI/CD",
+              "Production monitoring for ORM bottlenecks"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Comprehensive ORM Performance Monitoring",
+            "before_code": "# No ORM performance monitoring - issues discovered in production\nclass ProductAnalyticsView(APIView):\n    def get(self, request):\n        # Complex ORM operations with no performance monitoring\n        products = Product.objects.annotate(\n            total_sales=Sum('orders__total'),\n            avg_rating=Avg('reviews__rating')\n        ).select_related('category')\n        \n        analytics_data = []\n        for product in products:  # Potential performance issues\n            # Complex calculations that might be inefficient\n            monthly_sales = self.calculate_monthly_sales(product)\n            trend_data = self.analyze_trends(product)\n            \n            analytics_data.append({\n                'product': ProductSerializer(product).data,\n                'monthly_sales': monthly_sales,\n                'trends': trend_data\n            })\n        \n        return Response(analytics_data)\n    \n    def calculate_monthly_sales(self, product):\n        # Potentially inefficient method - no monitoring\n        return product.orders.filter(\n            created_at__gte=timezone.now() - timedelta(days=30)\n        ).aggregate(total=Sum('total'))['total'] or 0\n\n# Problems:\n# - No visibility into query counts or execution time\n# - Performance regressions go unnoticed until production\n# - No way to identify slow operations\n# - No historical performance tracking",
+            "after_code": "# Comprehensive ORM performance monitoring with Mercury\nfrom django_mercury import (\n    mercury_monitor, MercuryORMProfiler, mercury_alert\n)\nimport logging\n\nlogger = logging.getLogger('orm_performance')\n\nclass ProductAnalyticsView(APIView):\n    @mercury_monitor(\n        max_queries=15,          # Alert if more than 15 queries\n        max_response_time=2000,  # Alert if slower than 2 seconds\n        max_memory_mb=100,       # Monitor memory usage\n        track_orm_operations=True # Track individual ORM operations\n    )\n    def get(self, request):\n        with MercuryORMProfiler(operation_name='product_analytics_generation'):\n            # Optimized ORM operations with monitoring\n            products = self._get_optimized_products()\n            analytics_data = self._generate_analytics_data(products)\n        \n        return Response(analytics_data)\n    \n    def _get_optimized_products(self):\n        \"\"\"Optimized product query with Mercury monitoring\"\"\"\n        with MercuryORMProfiler(operation_name='product_base_query'):\n            return Product.objects.annotate(\n                total_sales=Coalesce(Sum('orders__total'), Value(0)),\n                avg_rating=Coalesce(Avg('reviews__rating'), Value(0.0)),\n                monthly_sales=Coalesce(\n                    Sum(\n                        'orders__total',\n                        filter=Q(orders__created_at__gte=timezone.now() - timedelta(days=30))\n                    ),\n                    Value(0)\n                ),\n                order_count=Count('orders'),\n                recent_order_count=Count(\n                    'orders',\n                    filter=Q(orders__created_at__gte=timezone.now() - timedelta(days=7))\n                )\n            ).select_related('category').prefetch_related(\n                Prefetch(\n                    'orders',\n                    queryset=Order.objects.select_related('user').order_by('-created_at'),\n                    to_attr='recent_orders_list'\n                )\n            )\n    \n    def _generate_analytics_data(self, products):\n        \"\"\"Generate analytics with per-operation monitoring\"\"\"\n        analytics_data = []\n        \n        with MercuryORMProfiler(operation_name='analytics_data_processing'):\n            for product in products:\n                # All data already loaded via optimized query - no additional queries\n                trend_data = self._calculate_trends_from_loaded_data(product)\n                \n                analytics_data.append({\n                    'id': product.id,\n                    'name': product.name,\n                    'category': product.category.name,\n                    'total_sales': float(product.total_sales),\n                    'monthly_sales': float(product.monthly_sales),\n                    'avg_rating': float(product.avg_rating),\n                    'order_count': product.order_count,\n                    'trends': trend_data\n                })\n        \n        return analytics_data\n    \n    def _calculate_trends_from_loaded_data(self, product):\n        \"\"\"Calculate trends using already-loaded data\"\"\"\n        # Use prefetched data instead of additional queries\n        recent_orders = getattr(product, 'recent_orders_list', [])\n        \n        if len(recent_orders) >= 2:\n            trend = 'growing' if recent_orders[0].total > recent_orders[-1].total else 'declining'\n        else:\n            trend = 'stable'\n        \n        return {'direction': trend, 'confidence': 'medium'}\n\n# Advanced Mercury ORM monitoring configuration\nclass MercuryORMMonitoringMixin:\n    \"\"\"Mixin to add comprehensive ORM monitoring to views\"\"\"\n    \n    def dispatch(self, request, *args, **kwargs):\n        # Set up Mercury monitoring based on view type\n        operation_type = getattr(self, 'operation_type', 'unknown')\n        \n        mercury_config = {\n            'list': {'max_queries': 5, 'max_response_time': 500},\n            'detail': {'max_queries': 3, 'max_response_time': 200},\n            'analytics': {'max_queries': 15, 'max_response_time': 2000},\n            'report': {'max_queries': 25, 'max_response_time': 5000}\n        }.get(operation_type, {'max_queries': 10, 'max_response_time': 1000})\n        \n        with mercury_monitor(**mercury_config):\n            return super().dispatch(request, *args, **kwargs)\n\n# Production ORM performance monitoring\n@mercury_alert.register\ndef handle_orm_performance_alert(operation, metrics):\n    \"\"\"Handle ORM performance alerts\"\"\"\n    if metrics['query_count'] > metrics['max_queries']:\n        logger.warning(\n            f\"ORM Performance Alert: {operation} exceeded query limit\",\n            extra={\n                'operation': operation,\n                'query_count': metrics['query_count'],\n                'max_queries': metrics['max_queries'],\n                'slow_queries': metrics.get('slow_queries', []),\n                'alert_type': 'orm_query_limit_exceeded'\n            }\n        )\n        \n        # Send alert to monitoring service\n        send_alert_to_monitoring_service({\n            'alert_type': 'orm_performance',\n            'severity': 'high' if metrics['query_count'] > metrics['max_queries'] * 2 else 'medium',\n            'operation': operation,\n            'metrics': metrics\n        })\n\n# Automated ORM performance testing\nclass ORMPerformanceTest(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        self.configure_mercury(\n            max_queries=10,\n            max_response_time=1000,\n            track_orm_operations=True\n        )\n    \n    def test_product_analytics_performance(self):\n        # Create realistic test data\n        self._create_test_products(100)\n        \n        with self.mercury_monitor():\n            response = self.client.get('/api/products/analytics/')\n        \n        self.assertEqual(response.status_code, 200)\n        \n        # Mercury automatically validates:\n        # - Query count ≤ 10\n        # - Response time ≤ 1000ms\n        # - No N+1 query patterns\n        \n        # Additional ORM-specific assertions\n        orm_metrics = self.get_mercury_orm_metrics()\n        self.assertLessEqual(orm_metrics['unique_queries'], 5)  # Should reuse query patterns\n        self.assertLessEqual(orm_metrics['avg_query_time'], 50)  # Individual queries should be fast\n\n# Benefits:\n# - Real-time ORM performance monitoring\n# - Automated alerts for performance regressions\n# - Detailed profiling of complex ORM operations\n# - Historical tracking of ORM performance trends",
+            "explanation": "Mercury provides comprehensive ORM performance monitoring: query counting, execution time tracking, memory monitoring, and automated alerts for performance regressions.",
+            "performance_impact": "Proactive performance management: Issues caught in development/staging instead of production. 95% reduction in performance-related production incidents."
+          }
+        ],
+        "quiz": {
+          "question": "What's the most valuable aspect of ORM performance monitoring with Mercury?",
+          "options": [
+            "It automatically optimizes slow queries",
+            "It provides early detection of performance regressions before they reach production",
+            "It reduces the amount of code needed for ORM operations",
+            "It eliminates the need for database indexes"
+          ],
+          "correct_answer": 1,
+          "explanation": "Early detection of performance regressions is most valuable - Mercury catches ORM performance issues in development/testing before they impact production users, enabling rapid fixes and preventing outages."
+        }
+      }
+    ],
+    "summary": {
+      "key_takeaways": [
+        "Use annotations and aggregations to move calculations from Python to the database",
+        "Build custom QuerySets and Managers to encapsulate optimization patterns",
+        "Design database schema with strategic indexes that match your ORM query patterns",
+        "Master advanced techniques like subqueries and bulk operations for complex scenarios",
+        "Implement comprehensive ORM performance monitoring with Mercury for continuous optimization"
+      ],
+      "next_steps": [
+        "Audit your existing models for optimization opportunities",
+        "Implement custom QuerySets for your most frequently used query patterns",
+        "Add strategic database indexes based on your common ORM queries",
+        "Set up Mercury monitoring for ORM performance in development and production"
+      ],
+      "related_tutorials": [
+        "n-plus-one-queries",
+        "n-plus-one-patterns",
+        "testing-patterns",
+        "database-indexing"
+      ]
+    }
+  }
+}

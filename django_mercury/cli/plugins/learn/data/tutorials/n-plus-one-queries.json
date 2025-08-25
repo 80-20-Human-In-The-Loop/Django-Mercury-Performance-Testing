@@ -1,0 +1,514 @@
+{
+  "tutorial": {
+    "id": "n-plus-one-queries",
+    "title": "Django N+1 Query Optimization",
+    "description": "Master N+1 query detection and optimization techniques for high-performance Django applications",
+    "concept": "n-plus-one-queries",
+    "difficulty": "intermediate",
+    "tags": ["n+1", "queries", "performance", "optimization", "orm", "database"],
+    "estimated_time": "45 minutes",
+    "learning_objectives": [
+      "Identify N+1 query problems in Django applications",
+      "Use select_related() to optimize ForeignKey relationships", 
+      "Apply prefetch_related() for ManyToMany and reverse relationships",
+      "Implement advanced optimization with Prefetch objects",
+      "Write tests to prevent N+1 query regressions"
+    ],
+    "prerequisites": [
+      "Basic Django ORM knowledge",
+      "Understanding of database relationships",
+      "Familiarity with Django models"
+    ],
+    "sections": [
+      {
+        "title": "Understanding N+1 Queries",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "What Are N+1 Queries?",
+            "content": "N+1 queries occur when your code makes one query to fetch a list of objects, then makes N additional queries to access related data for each object in the list.",
+            "key_points": [
+              "Pattern: 1 query for the main list + N queries for related data",
+              "Common cause of performance bottlenecks in Django applications",
+              "Often hidden until you check query counts with Django Debug Toolbar",
+              "Can turn fast endpoints into timeout failures under load"
+            ],
+            "examples": [
+              "Loading 100 blog posts, then 100 separate queries for each author",
+              "Fetching 50 orders, then 50 queries for customer information",
+              "Getting 200 products, then 200 queries for category details"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your Django e-commerce site displays a product listing page with 20 products. Each product shows its name, price, and category name.",
+            "problem": "Django Debug Toolbar shows 21 database queries and the page takes 800ms to load. Production users are complaining about slow performance."
+          },
+          {
+            "type": "code_example",
+            "title": "The Classic N+1 Problem",
+            "before_code": "# This innocent-looking code creates N+1 queries\ndef product_list_view(request):\n    products = Product.objects.all()[:20]  # Query 1: Get 20 products\n    \n    for product in products:\n        # Each access to product.category triggers a new query\n        print(f\"{product.name} - {product.category.name}\")  # Queries 2-21\n    \n    return render(request, 'products.html', {'products': products})",
+            "after_code": "# Optimized version using select_related()\ndef product_list_view(request):\n    # Single query with JOIN to fetch products and categories\n    products = Product.objects.select_related('category').all()[:20]\n    \n    for product in products:\n        # No additional queries - category data already loaded\n        print(f\"{product.name} - {product.category.name}\")\n    \n    return render(request, 'products.html', {'products': products})",
+            "impact": "Reduced from 21 queries to 1 query (95% reduction). Page load time: 800ms → 120ms"
+          }
+        ],
+        "questions": [
+          {
+            "text": "You have a Django view that displays 50 blog posts with author names. Django Debug Toolbar shows 51 SQL queries. What is the most likely cause?",
+            "choices": [
+              {
+                "text": "N+1 query problem: 1 query for posts + 50 queries for authors",
+                "is_correct": true
+              },
+              {
+                "text": "Database needs indexing on the title field",
+                "is_correct": false
+              },
+              {
+                "text": "Django ORM is inherently slow for this operation",
+                "is_correct": false
+              },
+              {
+                "text": "Too many blog posts in the database",
+                "is_correct": false
+              }
+            ],
+            "explanation": "This is a classic N+1 pattern: one query retrieves the blog posts, then Django makes a separate query each time you access post.author in your template or view code. The solution is to use select_related('author') to fetch authors in the initial query."
+          }
+        ]
+      },
+      {
+        "title": "Detection and Debugging Techniques",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Tools for Identifying N+1 Queries",
+            "content": "Use Django's built-in debugging tools and monitoring solutions to identify N+1 queries before they impact production performance.",
+            "key_points": [
+              "Django Debug Toolbar: Shows all SQL queries with timing",
+              "Django Mercury: Automatic performance analysis and grading",
+              "assertNumQueries(): Test query counts in unit tests",
+              "django.db connection queries: Programmatic query inspection"
+            ],
+            "examples": [
+              "DEBUG = True + django-debug-toolbar for development",
+              "Production monitoring with APM tools like New Relic",
+              "Custom middleware to log query counts per request"
+            ]
+          },
+          {
+            "type": "debugging_guide",
+            "title": "Step-by-Step N+1 Detection Process",
+            "steps": [
+              {
+                "step": 1,
+                "action": "Enable Django Debug Toolbar",
+                "details": "Add 'debug_toolbar' to INSTALLED_APPS and configure middleware"
+              },
+              {
+                "step": 2,
+                "action": "Load your page and check SQL panel", 
+                "details": "Look for the total query count and execution time"
+              },
+              {
+                "step": 3,
+                "action": "Identify duplicate query patterns",
+                "details": "Look for similar SELECT statements with only WHERE clause differences"
+              },
+              {
+                "step": 4,
+                "action": "Count queries vs records",
+                "details": "If you have N records but N+1 queries, you likely have the problem"
+              },
+              {
+                "step": 5,
+                "action": "Trace back to model relationship access",
+                "details": "Find where your code accesses related fields in loops"
+              }
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Using Django's Query Inspection",
+            "before_code": "# Method 1: Using Django Debug Toolbar (in development)\n# Just load your page and check the SQL panel\n\n# Method 2: Programmatic query counting\nfrom django.db import connection\nfrom django.test.utils import override_settings\n\n@override_settings(DEBUG=True)\ndef test_query_count():\n    initial_queries = len(connection.queries)\n    \n    # Your code here\n    products = Product.objects.all()[:10]\n    for product in products:\n        _ = product.category.name\n    \n    query_count = len(connection.queries) - initial_queries\n    print(f\"Total queries: {query_count}\")  # Will show 11",
+            "after_code": "# Method 3: Using assertNumQueries in tests\nfrom django.test import TestCase\nfrom django.test.utils import override_settings\n\nclass ProductQueryTest(TestCase):\n    def test_optimized_product_list(self):\n        # Create test data\n        category = Category.objects.create(name='Electronics')\n        for i in range(10):\n            Product.objects.create(\n                name=f'Product {i}', \n                category=category\n            )\n        \n        # Test that optimized query uses only 1 query\n        with self.assertNumQueries(1):\n            products = Product.objects.select_related('category').all()\n            list(products)  # Force evaluation\n            for product in products:\n                _ = product.category.name  # Should not trigger queries",
+            "impact": "Automated testing prevents N+1 query regressions in your codebase"
+          }
+        ],
+        "questions": [
+          {
+            "text": "Which Django debugging tool is MOST effective for identifying N+1 queries in development?",
+            "choices": [
+              {
+                "text": "Django Admin interface",
+                "is_correct": false
+              },
+              {
+                "text": "Django Debug Toolbar SQL panel",
+                "is_correct": true
+              },
+              {
+                "text": "Django shell with Model.objects.all()",
+                "is_correct": false
+              },
+              {
+                "text": "Django logging framework",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Django Debug Toolbar's SQL panel shows all queries executed during a request, their execution time, and highlights duplicate queries. This makes it the most effective tool for spotting N+1 patterns where you see many similar queries differing only in their WHERE clauses."
+          }
+        ]
+      },
+      {
+        "title": "Solution 1: select_related() for Forward Relationships",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Understanding select_related()",
+            "content": "select_related() performs a SQL JOIN to fetch related objects in a single database query. It works with ForeignKey and OneToOne relationships.",
+            "key_points": [
+              "Uses SQL JOINs to fetch related data in one query",
+              "Works with ForeignKey and OneToOne fields",
+              "Best for 'forward' relationships (e.g., post.author)",
+              "Loads related data into memory, enabling offline access"
+            ],
+            "examples": [
+              "BlogPost.objects.select_related('author')",
+              "Order.objects.select_related('customer', 'shipping_address')",
+              "Comment.objects.select_related('post__author')  # Chained relationships"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Basic select_related() Usage",
+            "before_code": "# Problematic code causing N+1 queries\ndef order_list_view(request):\n    orders = Order.objects.all()[:25]  # 1 query\n    \n    for order in orders:\n        # Each line below triggers a separate query\n        customer_name = order.customer.name        # Query 2-26\n        shipping_city = order.shipping_address.city # Query 27-51\n        \n    return render(request, 'orders.html', {'orders': orders})\n\n# Total: 51 queries for 25 orders",
+            "after_code": "# Optimized with select_related()\ndef order_list_view(request):\n    # Single query with JOINs to fetch orders, customers, and addresses\n    orders = Order.objects.select_related(\n        'customer', \n        'shipping_address'\n    ).all()[:25]\n    \n    for order in orders:\n        # No additional queries - data already loaded\n        customer_name = order.customer.name\n        shipping_city = order.shipping_address.city\n        \n    return render(request, 'orders.html', {'orders': orders})\n\n# Total: 1 query for 25 orders",
+            "impact": "Performance improvement: 51 queries → 1 query. Load time: 1.2s → 180ms"
+          },
+          {
+            "type": "advanced_example",
+            "title": "Chained select_related() Relationships",
+            "code": "# Deep relationship optimization\n# Models: Comment -> Post -> Author -> Profile\n\n# Bad: Creates multiple N+1 problems\ncomments = Comment.objects.all()[:20]\nfor comment in comments:\n    author_name = comment.post.author.name           # N+1 on posts\n    author_bio = comment.post.author.profile.bio     # N+1 on authors, N+1 on profiles\n\n# Good: Single query with chained select_related\ncomments = Comment.objects.select_related(\n    'post__author__profile'\n).all()[:20]\n\nfor comment in comments:\n    author_name = comment.post.author.name           # No additional queries\n    author_bio = comment.post.author.profile.bio     # No additional queries",
+            "explanation": "Chained select_related() traverses multiple relationships in a single query using double underscores (__). This is more efficient than multiple separate select_related() calls."
+          }
+        ],
+        "questions": [
+          {
+            "text": "When should you use select_related() instead of prefetch_related()?",
+            "choices": [
+              {
+                "text": "For ManyToMany relationships",
+                "is_correct": false
+              },
+              {
+                "text": "For ForeignKey and OneToOne relationships",
+                "is_correct": true
+              },
+              {
+                "text": "For reverse ForeignKey relationships",
+                "is_correct": false
+              },
+              {
+                "text": "When you need to filter the related objects",
+                "is_correct": false
+              }
+            ],
+            "explanation": "select_related() is designed for ForeignKey and OneToOne relationships where a SQL JOIN makes sense. It's perfect for 'forward' relationships like order.customer or post.author. For ManyToMany or reverse ForeignKey relationships, use prefetch_related() instead."
+          }
+        ]
+      },
+      {
+        "title": "Solution 2: prefetch_related() for Reverse and Many-to-Many",
+        "content_slides": [
+          {
+            "type": "concept", 
+            "title": "Understanding prefetch_related()",
+            "content": "prefetch_related() performs separate queries for related objects, then joins the data in Python. It's designed for ManyToMany and reverse ForeignKey relationships.",
+            "key_points": [
+              "Uses separate queries, then joins data in Python",
+              "Works with ManyToMany and reverse ForeignKey fields",
+              "Better than JOINs for one-to-many relationships",
+              "Prevents N+1 while avoiding huge JOIN result sets"
+            ],
+            "examples": [
+              "Author.objects.prefetch_related('books')",
+              "BlogPost.objects.prefetch_related('comments')",
+              "Course.objects.prefetch_related('students')",
+              "Category.objects.prefetch_related('products')"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Basic prefetch_related() Usage",
+            "before_code": "# Problematic: N+1 queries for reverse relationship\ndef author_books_view(request):\n    authors = Author.objects.all()[:10]  # 1 query\n    \n    for author in authors:\n        books = author.books.all()  # 10 additional queries (N+1)\n        print(f\"{author.name}: {books.count()} books\")\n    \n    return render(request, 'authors.html', {'authors': authors})\n\n# Total: 11 queries",
+            "after_code": "# Optimized with prefetch_related()\ndef author_books_view(request):\n    # 2 queries: 1 for authors, 1 for all related books\n    authors = Author.objects.prefetch_related('books').all()[:10]\n    \n    for author in authors:\n        books = author.books.all()  # No additional queries\n        print(f\"{author.name}: {books.count()} books\")\n    \n    return render(request, 'authors.html', {'authors': authors})\n\n# Total: 2 queries",
+            "impact": "Queries reduced from 11 to 2. Performance scales with dataset size."
+          },
+          {
+            "type": "comparison",
+            "title": "select_related() vs prefetch_related()",
+            "comparison_table": [
+              {
+                "aspect": "Relationship Type",
+                "select_related": "ForeignKey, OneToOne",
+                "prefetch_related": "ManyToMany, Reverse ForeignKey"
+              },
+              {
+                "aspect": "Query Strategy", 
+                "select_related": "Single query with JOIN",
+                "prefetch_related": "Separate queries, join in Python"
+              },
+              {
+                "aspect": "Memory Usage",
+                "select_related": "Can create large result sets",
+                "prefetch_related": "More memory efficient for large datasets"
+              },
+              {
+                "aspect": "Use Case",
+                "select_related": "post.author, order.customer",
+                "prefetch_related": "author.books, post.comments"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You need to display authors and all their books. Each author has 5-20 books. Which optimization approach is most appropriate?",
+            "choices": [
+              {
+                "text": "Author.objects.select_related('books')",
+                "is_correct": false
+              },
+              {
+                "text": "Author.objects.prefetch_related('books')", 
+                "is_correct": true
+              },
+              {
+                "text": "Load authors and books separately in the template",
+                "is_correct": false
+              },
+              {
+                "text": "Use only() to limit fields",
+                "is_correct": false
+              }
+            ],
+            "explanation": "This is a reverse ForeignKey relationship (author → books), which requires prefetch_related(). select_related() doesn't work with reverse relationships or ManyToMany fields. prefetch_related() will use 2 queries total instead of N+1."
+          }
+        ]
+      },
+      {
+        "title": "Advanced Optimization with Prefetch Objects",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Custom Prefetch Objects for Fine-Grained Control",
+            "content": "Prefetch objects allow you to customize the queryset used for prefetching, enabling filtering, ordering, and nested optimizations.",
+            "key_points": [
+              "Filter prefetched objects (e.g., only active comments)",
+              "Order prefetched data (e.g., most recent first)",
+              "Combine with select_related() for nested optimization",
+              "Use to_attr to store results in custom attributes"
+            ],
+            "examples": [
+              "Prefetch('comments', queryset=Comment.objects.filter(is_active=True))",
+              "Prefetch('orders', queryset=Order.objects.order_by('-created_at')[:5])",
+              "Prefetch('books__reviews', queryset=Review.objects.select_related('reviewer'))"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Advanced Prefetch with Filtering and Ordering",
+            "before_code": "# Basic prefetch - gets ALL comments\ndef blog_post_view(request):\n    posts = BlogPost.objects.prefetch_related('comments').all()\n    \n    for post in posts:\n        # Gets all comments, including inactive ones\n        comments = post.comments.all()\n        \n        # Have to filter and order in Python - inefficient\n        active_comments = [c for c in comments if c.is_active]\n        recent_comments = sorted(active_comments, key=lambda x: x.created_at, reverse=True)[:5]",
+            "after_code": "# Advanced prefetch with filtering and ordering in database\nfrom django.db.models import Prefetch\n\ndef blog_post_view(request):\n    # Custom prefetch: only active comments, ordered by date, limit 5\n    recent_active_comments = Prefetch(\n        'comments',\n        queryset=Comment.objects.filter(\n            is_active=True\n        ).select_related('author').order_by('-created_at')[:5],\n        to_attr='recent_comments'\n    )\n    \n    posts = BlogPost.objects.prefetch_related(recent_active_comments).all()\n    \n    for post in posts:\n        # Access pre-filtered, pre-ordered comments\n        comments = post.recent_comments  # Only active, recent comments",
+            "impact": "Reduces data transfer and memory usage. Filtering/ordering done in database, not Python."
+          },
+          {
+            "type": "advanced_example",
+            "title": "Complex Multi-Level Prefetch",
+            "code": "# Scenario: E-commerce dashboard showing orders with items and product details\nfrom django.db.models import Prefetch\n\n# Optimize multiple levels of relationships\noptimized_orders = Order.objects.select_related(\n    'customer',              # ForeignKey - use select_related\n    'shipping_address'       # ForeignKey - use select_related\n).prefetch_related(\n    # Reverse FK with nested optimization\n    Prefetch(\n        'items',\n        queryset=OrderItem.objects.select_related(\n            'product__category'  # Nested select_related in prefetch\n        ).order_by('product__name')\n    ),\n    # Recent reviews for customer\n    Prefetch(\n        'customer__reviews',\n        queryset=Review.objects.filter(\n            created_at__gte=timezone.now() - timedelta(days=30)\n        ).order_by('-created_at')[:10],\n        to_attr='recent_reviews'\n    )\n)\n\n# Result: Highly optimized query for complex dashboard",
+            "explanation": "This combines select_related() for forward relationships with complex Prefetch objects for reverse relationships, including nested optimizations and custom filtering."
+          }
+        ],
+        "questions": [
+          {
+            "text": "When would you use a Prefetch object instead of simple prefetch_related()?",
+            "choices": [
+              {
+                "text": "When you want to fetch all related objects",
+                "is_correct": false
+              },
+              {
+                "text": "When you need to filter, order, or limit the prefetched queryset",
+                "is_correct": true
+              },
+              {
+                "text": "Only for ManyToMany relationships",
+                "is_correct": false
+              },
+              {
+                "text": "When working with ForeignKey relationships",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Prefetch objects are useful when you need more control over the prefetched queryset - such as filtering (only active items), ordering (most recent first), limiting (top 10), or applying select_related() to the prefetched objects themselves."
+          }
+        ]
+      },
+      {
+        "title": "Real-World Application Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Common N+1 Scenarios in Production Applications",
+            "content": "Learn to recognize and optimize the most frequent N+1 patterns found in real Django applications.",
+            "key_points": [
+              "API serializers accessing related fields",
+              "Template loops displaying related data",
+              "Admin interfaces with foreign key displays",
+              "Dashboard aggregations across relationships"
+            ],
+            "examples": [
+              "User profiles with recent posts and comments",
+              "E-commerce product listings with categories and reviews",
+              "Educational platforms with courses, students, and assignments"
+            ]
+          },
+          {
+            "type": "real_world_example",
+            "title": "Django REST Framework Optimization",
+            "scenario": "API endpoint returning user profiles with recent activity",
+            "before_code": "# Problematic serializer causing N+1 queries\nclass UserProfileSerializer(serializers.ModelSerializer):\n    recent_posts = serializers.SerializerMethodField()\n    comment_count = serializers.SerializerMethodField()\n    \n    class Meta:\n        model = User\n        fields = ['username', 'email', 'recent_posts', 'comment_count']\n    \n    def get_recent_posts(self, obj):\n        # This creates N queries for N users\n        posts = obj.posts.all()[:5]\n        return [{'title': p.title, 'created': p.created_at} for p in posts]\n    \n    def get_comment_count(self, obj):\n        # Another N queries\n        return obj.comments.count()\n\n# ViewSet without optimization\nclass UserProfileViewSet(viewsets.ReadOnlyModelViewSet):\n    queryset = User.objects.all()\n    serializer_class = UserProfileSerializer",
+            "after_code": "# Optimized serializer with proper prefetching\nclass UserProfileSerializer(serializers.ModelSerializer):\n    recent_posts = serializers.SerializerMethodField()\n    comment_count = serializers.IntegerField(read_only=True)\n    \n    class Meta:\n        model = User\n        fields = ['username', 'email', 'recent_posts', 'comment_count']\n    \n    def get_recent_posts(self, obj):\n        # Access pre-fetched data - no additional queries\n        posts = obj.recent_posts_prefetch\n        return [{'title': p.title, 'created': p.created_at} for p in posts]\n\n# Optimized ViewSet with proper queryset\nclass UserProfileViewSet(viewsets.ReadOnlyModelViewSet):\n    serializer_class = UserProfileSerializer\n    \n    def get_queryset(self):\n        return User.objects.annotate(\n            comment_count=Count('comments')\n        ).prefetch_related(\n            Prefetch(\n                'posts',\n                queryset=Post.objects.order_by('-created_at')[:5],\n                to_attr='recent_posts_prefetch'\n            )\n        )",
+            "impact": "API response time: 2.5s → 150ms for 50 users. Scales linearly instead of exponentially."
+          },
+          {
+            "type": "pattern_catalog",
+            "title": "Common Optimization Patterns",
+            "patterns": [
+              {
+                "name": "E-commerce Product Listing",
+                "problem": "Products with categories, brands, and review counts",
+                "solution": "Product.objects.select_related('category', 'brand').annotate(review_count=Count('reviews'))",
+                "when_to_use": "Forward relationships + aggregation needs"
+              },
+              {
+                "name": "Blog Dashboard",
+                "problem": "Authors with recent posts and comment activity",
+                "solution": "Author.objects.prefetch_related(Prefetch('posts', queryset=Post.objects.order_by('-created_at')[:10])).annotate(total_comments=Count('posts__comments'))",
+                "when_to_use": "Reverse relationships + limited recent data"
+              },
+              {
+                "name": "Educational Course Listing",
+                "problem": "Courses with instructors, enrolled students, and recent assignments",
+                "solution": "Course.objects.select_related('instructor').prefetch_related('students', Prefetch('assignments', queryset=Assignment.objects.order_by('-due_date')[:5]))",
+                "when_to_use": "Mixed relationship types in single view"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "In a Django REST Framework API, where should you optimize N+1 queries?",
+            "choices": [
+              {
+                "text": "In the serializer's __init__ method",
+                "is_correct": false
+              },
+              {
+                "text": "In the viewset's get_queryset() method",
+                "is_correct": true
+              },
+              {
+                "text": "In the model's __str__ method",
+                "is_correct": false
+              },
+              {
+                "text": "In the URL configuration",
+                "is_correct": false
+              }
+            ],
+            "explanation": "The viewset's get_queryset() method is the correct place to optimize queries with select_related() and prefetch_related(). This ensures the optimized queryset is used before serialization begins, preventing N+1 queries when the serializer accesses related fields."
+          }
+        ]
+      },
+      {
+        "title": "Testing and Prevention Strategies",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Preventing N+1 Queries with Automated Testing",
+            "content": "Implement testing strategies to catch N+1 queries before they reach production and ensure optimizations don't regress.",
+            "key_points": [
+              "Use assertNumQueries() to enforce query count limits",
+              "Test with realistic data volumes, not just minimal test data",
+              "Set up continuous integration to catch performance regressions",
+              "Monitor query patterns in production with APM tools"
+            ],
+            "examples": [
+              "Unit tests that fail if query count exceeds expectations",
+              "Integration tests with realistic dataset sizes", 
+              "Performance benchmarks in CI/CD pipeline"
+            ]
+          },
+          {
+            "type": "testing_guide",
+            "title": "Writing Effective N+1 Prevention Tests",
+            "code": "class QueryOptimizationTests(TestCase):\n    def setUp(self):\n        \"\"\"Create realistic test data\"\"\"\n        # Create categories\n        self.electronics = Category.objects.create(name='Electronics')\n        self.books = Category.objects.create(name='Books')\n        \n        # Create products with relationships\n        for i in range(20):\n            Product.objects.create(\n                name=f'Product {i}',\n                category=self.electronics if i % 2 == 0 else self.books,\n                price=10.00 + i\n            )\n    \n    def test_product_list_optimized(self):\n        \"\"\"Test that product listing doesn't cause N+1 queries\"\"\"\n        with self.assertNumQueries(1):  # Should be exactly 1 query\n            products = Product.objects.select_related('category').all()\n            # Force evaluation and access related data\n            result = [\n                f\"{p.name} - {p.category.name}\" \n                for p in products\n            ]\n        \n        self.assertEqual(len(result), 20)\n    \n    def test_unoptimized_queries_fail(self):\n        \"\"\"Ensure unoptimized code would fail the test\"\"\"\n        with self.assertRaises(AssertionError):  # Should exceed query limit\n            with self.assertNumQueries(1):\n                products = Product.objects.all()  # No select_related\n                result = [\n                    f\"{p.name} - {p.category.name}\"  # Triggers N+1\n                    for p in products\n                ]\n    \n    def test_api_endpoint_performance(self):\n        \"\"\"Test API endpoint query performance\"\"\"\n        from django.test import Client\n        \n        client = Client()\n        \n        # Should use optimized queryset from viewset\n        with self.assertNumQueries(1):\n            response = client.get('/api/products/')\n            self.assertEqual(response.status_code, 200)\n            data = response.json()\n            self.assertEqual(len(data), 20)",
+            "explanation": "These tests ensure that optimizations work correctly and catch regressions when code changes break query optimizations."
+          },
+          {
+            "type": "monitoring_guide",
+            "title": "Production Monitoring Best Practices",
+            "strategies": [
+              {
+                "tool": "Django Mercury",
+                "purpose": "Automatic performance grading and N+1 detection",
+                "implementation": "Enable in test suite and production monitoring"
+              },
+              {
+                "tool": "APM Tools (New Relic, Datadog)",
+                "purpose": "Track query counts and slow queries in production",
+                "implementation": "Set alerts for endpoints with >10 queries or >500ms response time"
+              },
+              {
+                "tool": "Custom Middleware",
+                "purpose": "Log query counts for specific views",
+                "implementation": "Track query patterns and identify optimization opportunities"
+              },
+              {
+                "tool": "Database Query Logs",
+                "purpose": "Identify frequent duplicate queries",
+                "implementation": "Analyze logs for patterns indicating N+1 problems"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "What is the most effective way to prevent N+1 query regressions in a Django codebase?",
+            "choices": [
+              {
+                "text": "Code reviews only",
+                "is_correct": false
+              },
+              {
+                "text": "Automated tests with assertNumQueries() and realistic data",
+                "is_correct": true
+              },
+              {
+                "text": "Production monitoring alone",
+                "is_correct": false
+              },
+              {
+                "text": "Developer training sessions",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Automated tests with assertNumQueries() catch N+1 problems before code reaches production. Using realistic test data volumes (not just 1-2 records) ensures tests reflect real-world scenarios. Combined with CI/CD, this prevents regressions and enforces performance standards."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,251 @@
+{
+  "tutorial": {
+    "id": "n-plus-one-patterns",
+    "title": "Advanced N+1 Query Detection Patterns",
+    "description": "Master advanced techniques for identifying, preventing, and monitoring N+1 query patterns in complex Django applications",
+    "concept": "n-plus-one-patterns",
+    "difficulty": "advanced",
+    "tags": ["n+1", "advanced", "patterns", "detection", "monitoring", "performance"],
+    "estimated_time": "40 minutes",
+    "learning_objectives": [
+      "Recognize subtle N+1 patterns in complex Django code",
+      "Use Mercury to automatically detect N+1 queries",
+      "Implement monitoring to prevent N+1 regressions",
+      "Handle N+1 in serializers, templates, and API responses",
+      "Build N+1-proof architectural patterns"
+    ],
+    "prerequisites": [
+      "Completion of n-plus-one-queries tutorial",
+      "Understanding of Django ORM optimization",
+      "Familiarity with Django serializers and templates"
+    ],
+    "sections": [
+      {
+        "title": "Hidden N+1 Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Subtle N+1 Query Patterns",
+            "content": "N+1 queries often hide in plain sight, especially in serializers, templates, and API responses. These patterns are harder to spot but just as dangerous.",
+            "key_points": [
+              "Serializer field access triggers hidden queries",
+              "Template loops with model relationships",
+              "Property methods that access the database",
+              "Nested API responses with related data"
+            ],
+            "examples": [
+              "DRF serializer accessing user.profile for each object",
+              "Django template checking post.author.is_active for each post",
+              "API endpoint returning nested category data for products"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your API endpoint `/api/posts/` returns blog posts with author information. The endpoint is fast in development (5 posts) but times out in production (500+ posts).",
+            "problem": "Each post in the JSON response triggers a separate query to get author details, creating a classic N+1 pattern that's invisible until you scale."
+          },
+          {
+            "type": "code_example",
+            "title": "Hidden N+1 in Django REST Framework",
+            "before_code": "# Serializer that looks innocent but creates N+1\nclass PostSerializer(serializers.ModelSerializer):\n    author_name = serializers.CharField(source='author.name', read_only=True)\n    author_email = serializers.CharField(source='author.email', read_only=True)\n    category_name = serializers.CharField(source='category.name', read_only=True)\n    \n    class Meta:\n        model = Post\n        fields = ['id', 'title', 'content', 'author_name', 'author_email', 'category_name']\n\n# View that triggers the N+1\nclass PostListView(generics.ListAPIView):\n    serializer_class = PostSerializer\n    \n    def get_queryset(self):\n        # This looks fine but creates N+1 queries\n        return Post.objects.all()\n        \n# Result: 1 query for posts + N queries for authors + N queries for categories\n# With 100 posts: 201 database queries!",
+            "after_code": "# N+1-proof serializer with optimized queryset\nclass PostSerializer(serializers.ModelSerializer):\n    author_name = serializers.CharField(source='author.name', read_only=True)\n    author_email = serializers.CharField(source='author.email', read_only=True) \n    category_name = serializers.CharField(source='category.name', read_only=True)\n    \n    class Meta:\n        model = Post\n        fields = ['id', 'title', 'content', 'author_name', 'author_email', 'category_name']\n\nclass PostListView(generics.ListAPIView):\n    serializer_class = PostSerializer\n    \n    def get_queryset(self):\n        # Optimized queryset prevents N+1\n        return Post.objects.select_related(\n            'author',     # ForeignKey to User\n            'category'    # ForeignKey to Category  \n        )\n        \n# Result: Just 1 query with JOINs\n# With 100 posts: 1 database query!",
+            "explanation": "DRF serializers access related fields during serialization. Without select_related(), each access triggers a new query. The fix is optimizing the queryset, not the serializer.",
+            "performance_impact": "Query reduction: 201 queries → 1 query. Response time: 2000ms → 50ms for 100 posts."
+          }
+        ],
+        "quiz": {
+          "question": "Where should you fix N+1 queries in Django REST Framework serializers?",
+          "options": [
+            "In the serializer class by changing the field definitions",
+            "In the view's get_queryset() method using select_related()/prefetch_related()",
+            "In the model's Meta class",
+            "In the URL configuration"
+          ],
+          "correct_answer": 1,
+          "explanation": "Fix N+1 in DRF by optimizing the queryset in get_queryset() with select_related() or prefetch_related(). The serializer fields themselves are fine - the issue is that the queryset doesn't include related data."
+        }
+      },
+      {
+        "title": "Template N+1 Detection",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "N+1 Queries in Django Templates",
+            "content": "Django templates can trigger N+1 queries when looping over objects that access related fields. These are especially tricky because they happen during rendering.",
+            "key_points": [
+              "Template loops with {{ object.related_field }}",
+              "Conditional checks on related objects",
+              "Custom template tags that access the database",
+              "Template inheritance with database-dependent content"
+            ],
+            "examples": [
+              "{% for post in posts %} {{ post.author.name }} {% endfor %}",
+              "{% if user.profile.is_premium %} in template loops",
+              "Custom template tags that check permissions"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Template N+1 Pattern",
+            "before_code": "<!-- Template that creates N+1 queries -->\n<!-- posts/list.html -->\n{% for post in posts %}\n    <div class=\"post\">\n        <h3>{{ post.title }}</h3>\n        <p>By: {{ post.author.name }}</p>  <!-- Query 1, 2, 3... N -->\n        <p>Category: {{ post.category.name }}</p>  <!-- More queries -->\n        \n        {% if post.author.profile.is_verified %}  <!-- Even more queries -->\n            <span class=\"verified\">✓ Verified Author</span>\n        {% endif %}\n        \n        <p>{{ post.content|truncatewords:50 }}</p>\n    </div>\n{% endfor %}\n\n# View that feeds this template\ndef post_list_view(request):\n    posts = Post.objects.all()[:20]  # 1 query\n    return render(request, 'posts/list.html', {'posts': posts})\n    \n# Result with 20 posts:\n# 1 query for posts\n# 20 queries for post.author.name\n# 20 queries for post.category.name  \n# 20 queries for post.author.profile.is_verified\n# Total: 61 queries!",
+            "after_code": "<!-- Same template - no changes needed -->\n<!-- posts/list.html -->\n{% for post in posts %}\n    <div class=\"post\">\n        <h3>{{ post.title }}</h3>\n        <p>By: {{ post.author.name }}</p>\n        <p>Category: {{ post.category.name }}</p>\n        \n        {% if post.author.profile.is_verified %}\n            <span class=\"verified\">✓ Verified Author</span>\n        {% endif %}\n        \n        <p>{{ post.content|truncatewords:50 }}</p>\n    </div>\n{% endfor %}\n\n# Optimized view prevents template N+1\ndef post_list_view(request):\n    posts = Post.objects.select_related(\n        'author',           # For post.author.name\n        'category',         # For post.category.name\n        'author__profile'   # For post.author.profile.is_verified\n    )[:20]\n    \n    return render(request, 'posts/list.html', {'posts': posts})\n    \n# Result with 20 posts: Just 1 query with JOINs!\n# 61 queries → 1 query",
+            "explanation": "Template N+1 is fixed in the view, not the template. Use select_related() for ForeignKey relationships that templates will access. Follow the relationship path like 'author__profile'.",
+            "performance_impact": "Template rendering: 500ms → 15ms. Page load time dramatically improved with complex templates."
+          }
+        ],
+        "quiz": {
+          "question": "How do you fix N+1 queries in Django templates?",
+          "options": [
+            "Add {% load cache %} tags around database access in templates",
+            "Optimize the queryset in the view with select_related() for all relationships the template uses",
+            "Use {% with %} tags to cache template variables",
+            "Replace template loops with JavaScript AJAX calls"
+          ],
+          "correct_answer": 1,
+          "explanation": "Fix template N+1 by optimizing the view's queryset with select_related() or prefetch_related() for all relationships the template accesses. The template itself doesn't need changes."
+        }
+      },
+      {
+        "title": "Mercury N+1 Detection",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Automated N+1 Detection with Mercury",
+            "content": "Mercury can automatically detect N+1 patterns and alert you before they become production problems. Learn to configure Mercury for different N+1 scenarios.",
+            "key_points": [
+              "Set query count thresholds based on expected data",
+              "Use Mercury monitoring in tests to catch regressions",
+              "Configure different limits for different operation types",
+              "Get detailed query analysis for N+1 debugging"
+            ],
+            "examples": [
+              "API endpoint that should never exceed 5 queries",
+              "Report generation with acceptable query limits",
+              "Admin interfaces with different performance requirements"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Mercury N+1 Detection Setup",
+            "before_code": "# Test without N+1 detection - problem goes unnoticed\nclass PostAPITest(TestCase):\n    def test_post_list_endpoint(self):\n        # Create test data\n        for i in range(10):\n            user = User.objects.create(username=f'user{i}')\n            Post.objects.create(\n                title=f'Post {i}',\n                author=user,\n                content='Test content'\n            )\n        \n        # Test the endpoint\n        response = self.client.get('/api/posts/')\n        \n        # Only checks functionality\n        self.assertEqual(response.status_code, 200)\n        self.assertEqual(len(response.json()), 10)\n        \n        # N+1 queries go completely undetected!",
+            "after_code": "# Mercury-powered N+1 detection\nfrom django_mercury import DjangoMercuryAPITestCase\n\nclass PostAPITest(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        # Configure Mercury for N+1 detection\n        self.configure_mercury(\n            max_queries=5,           # Should be ≤ 5 queries regardless of post count\n            max_response_time=200,   # Keep responses fast\n            fail_on_exceed=True      # Fail test if limits exceeded\n        )\n    \n    def test_post_list_performance(self):\n        # Create realistic test data\n        for i in range(50):  # Test with more realistic data\n            user = User.objects.create(username=f'user{i}')\n            category = Category.objects.create(name=f'Category {i}')\n            Post.objects.create(\n                title=f'Post {i}',\n                author=user,\n                category=category,\n                content='Test content'\n            )\n        \n        # Test with Mercury monitoring\n        with self.mercury_monitor():\n            response = self.client.get('/api/posts/')\n        \n        # Verify functionality\n        self.assertEqual(response.status_code, 200)\n        self.assertEqual(len(response.json()), 50)\n        \n        # Mercury automatically fails if:\n        # - More than 5 queries executed\n        # - Response time > 200ms\n        # \n        # This catches N+1 patterns immediately!\n        \n    def test_specific_post_detail(self):\n        # Different limits for different endpoints\n        self.configure_mercury(max_queries=3)  # Post detail should be very efficient\n        \n        user = User.objects.create(username='author')\n        post = Post.objects.create(title='Test Post', author=user)\n        \n        with self.mercury_monitor():\n            response = self.client.get(f'/api/posts/{post.id}/')\n        \n        self.assertEqual(response.status_code, 200)",
+            "explanation": "Mercury testing automatically detects N+1 patterns by monitoring query counts. Set appropriate limits based on what each endpoint should need, and tests will fail if N+1 queries are introduced.",
+            "performance_impact": "Catches N+1 regressions immediately in development instead of discovering them in production under load."
+          }
+        ],
+        "quiz": {
+          "question": "What's the best Mercury configuration for detecting N+1 queries in a list endpoint?",
+          "options": [
+            "Set max_queries to 1 to ensure only one query is used",
+            "Set max_queries based on the expected number of objects being returned",
+            "Set max_queries to a small fixed number (3-10) regardless of object count",
+            "Don't set max_queries limits for list endpoints"
+          ],
+          "correct_answer": 2,
+          "explanation": "Set max_queries to a small fixed number (3-10) based on the number of relationships, not the number of objects. A well-optimized list endpoint should use the same number of queries whether returning 10 or 1000 objects."
+        }
+      },
+      {
+        "title": "Advanced N+1 Prevention Patterns",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Architectural Patterns to Prevent N+1",
+            "content": "Build applications that are N+1-resistant by design. Use queryset managers, custom properties, and API design patterns that naturally avoid N+1 queries.",
+            "key_points": [
+              "Custom queryset managers with built-in optimizations",
+              "Property methods that are N+1-aware", 
+              "API design that encourages efficient queries",
+              "Caching strategies for expensive relationship access"
+            ],
+            "examples": [
+              "Post.objects.with_authors() manager method",
+              "@cached_property for expensive calculations",
+              "API endpoints designed for single queries"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "N+1-Proof Model Managers",
+            "before_code": "# Standard approach - N+1 potential everywhere\nclass Post(models.Model):\n    title = models.CharField(max_length=200)\n    author = models.ForeignKey(User, on_delete=models.CASCADE)\n    category = models.ForeignKey(Category, on_delete=models.CASCADE)\n    created_at = models.DateTimeField(auto_now_add=True)\n    \n    @property\n    def author_display_name(self):\n        # This property will cause N+1 if accessed in loops\n        return f\"{self.author.first_name} {self.author.last_name}\"\n    \n    def get_related_posts(self):\n        # This method will cause N+1 if used in templates/serializers\n        return Post.objects.filter(category=self.category).exclude(id=self.id)[:5]\n\n# Usage that creates N+1\nposts = Post.objects.all()\nfor post in posts:\n    print(post.author_display_name)  # N+1 query pattern\n    print(post.get_related_posts())  # More N+1 queries",
+            "after_code": "# N+1-resistant model with optimized managers\nclass PostQuerySet(models.QuerySet):\n    def with_authors(self):\n        \"\"\"Optimize for author access\"\"\"\n        return self.select_related('author')\n    \n    def with_categories(self):\n        \"\"\"Optimize for category access\"\"\"\n        return self.select_related('category')\n    \n    def fully_optimized(self):\n        \"\"\"Optimize for all common access patterns\"\"\"\n        return self.select_related('author', 'category')\n    \n    def for_api(self):\n        \"\"\"Optimized specifically for API serialization\"\"\"\n        return self.select_related(\n            'author', 'category'\n        ).only(\n            'id', 'title', 'created_at',\n            'author__first_name', 'author__last_name', 'author__username',\n            'category__name'\n        )\n\nclass PostManager(models.Manager):\n    def get_queryset(self):\n        return PostQuerySet(self.model, using=self._db)\n    \n    def with_authors(self):\n        return self.get_queryset().with_authors()\n    \n    def with_categories(self):\n        return self.get_queryset().with_categories()\n    \n    def fully_optimized(self):\n        return self.get_queryset().fully_optimized()\n    \n    def for_api(self):\n        return self.get_queryset().for_api()\n\nclass Post(models.Model):\n    title = models.CharField(max_length=200)\n    author = models.ForeignKey(User, on_delete=models.CASCADE)\n    category = models.ForeignKey(Category, on_delete=models.CASCADE)\n    created_at = models.DateTimeField(auto_now_add=True)\n    \n    objects = PostManager()\n    \n    @cached_property\n    def author_display_name(self):\n        \"\"\"Cached property prevents repeated queries\"\"\"\n        return f\"{self.author.first_name} {self.author.last_name}\"\n    \n    @classmethod\n    def get_related_posts_for_posts(cls, posts):\n        \"\"\"Bulk method to avoid N+1 when getting related posts\"\"\"\n        category_ids = {post.category_id for post in posts}\n        related_posts = cls.objects.filter(\n            category_id__in=category_ids\n        ).select_related('category')\n        \n        # Group by category for efficient lookup\n        by_category = {}\n        for post in related_posts:\n            if post.category_id not in by_category:\n                by_category[post.category_id] = []\n            by_category[post.category_id].append(post)\n        \n        return by_category\n\n# N+1-free usage\nposts = Post.objects.with_authors()  # Optimized queryset\nfor post in posts:\n    print(post.author_display_name)  # No additional queries\n\n# For API views\napi_posts = Post.objects.for_api()   # Perfectly optimized for serialization",
+            "explanation": "Custom managers and querysets make N+1 prevention automatic. Instead of remembering to optimize each query, the optimization is built into the model interface.",
+            "performance_impact": "Systematic N+1 prevention: All queries use optimized patterns by default, preventing performance regressions across the entire application."
+          }
+        ],
+        "quiz": {
+          "question": "What's the main benefit of custom queryset managers for N+1 prevention?",
+          "options": [
+            "They automatically cache all database queries",
+            "They make N+1 optimization automatic and systematic rather than manual",
+            "They reduce the amount of code needed in views",
+            "They eliminate the need for database indexes"
+          ],
+          "correct_answer": 1,
+          "explanation": "Custom managers make N+1 optimization systematic by building optimized querysets into the model interface. Instead of manually adding select_related() everywhere, optimized queries become the default pattern."
+        }
+      },
+      {
+        "title": "Production N+1 Monitoring",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Monitoring N+1 Queries in Production",
+            "content": "Set up monitoring to detect N+1 patterns in production before they impact users. Use Mercury metrics and alerts to catch performance regressions early.",
+            "key_points": [
+              "Production query count monitoring with thresholds",
+              "Automated alerts for N+1 pattern detection", 
+              "Performance regression tracking over time",
+              "Integration with monitoring tools like Datadog, New Relic"
+            ],
+            "examples": [
+              "Alert when API endpoint exceeds expected query count",
+              "Weekly reports on query pattern changes",
+              "Automatic rollback triggers for performance regressions"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Production N+1 Monitoring Setup",
+            "before_code": "# No production monitoring - N+1 issues discovered by users\n@api_view(['GET'])\ndef post_list_api(request):\n    posts = Post.objects.all()[:50]\n    serializer = PostSerializer(posts, many=True)\n    return Response(serializer.data)\n    \n# Problems:\n# - No visibility into query counts in production\n# - N+1 issues only discovered when users complain\n# - No data to identify which endpoints have problems\n# - No alerts when performance degrades",
+            "after_code": "# Production N+1 monitoring with Mercury\nfrom django_mercury import mercury_monitor, mercury_alert\nimport logging\n\nlogger = logging.getLogger('performance')\n\n@api_view(['GET'])\n@mercury_monitor(\n    max_queries=5,\n    max_response_time=300,\n    alert_on_exceed=True,\n    track_metrics=True\n)\ndef post_list_api(request):\n    posts = Post.objects.for_api()[:50]  # Use optimized queryset\n    serializer = PostSerializer(posts, many=True)\n    return Response(serializer.data)\n\n# Mercury configuration for production\nMERCURY_SETTINGS = {\n    'PRODUCTION_MONITORING': True,\n    'ALERT_THRESHOLDS': {\n        'query_count': 10,      # Alert if any endpoint > 10 queries\n        'response_time': 1000,  # Alert if response > 1 second\n        'memory_usage': 200,    # Alert on high memory usage\n    },\n    'ALERT_HANDLERS': [\n        'mercury.alerts.slack_webhook',\n        'mercury.alerts.email_admin',\n        'mercury.alerts.datadog_metric'\n    ],\n    'METRICS_STORAGE': 'redis',  # Store metrics for analysis\n    'RETENTION_DAYS': 30\n}\n\n# Custom alert handler for N+1 detection\n@mercury_alert.register\ndef handle_n_plus_one_alert(endpoint, metrics):\n    if metrics['query_count'] > metrics['expected_queries'] * 3:\n        logger.error(\n            f\"Potential N+1 detected: {endpoint} used {metrics['query_count']} queries\",\n            extra={\n                'endpoint': endpoint,\n                'query_count': metrics['query_count'],\n                'response_time': metrics['response_time'],\n                'alert_type': 'n_plus_one_suspected'\n            }\n        )\n        \n        # Integration with monitoring tools\n        datadog.increment('mercury.n_plus_one_alert', tags=[\n            f'endpoint:{endpoint}',\n            f'severity:high'\n        ])",
+            "explanation": "Production monitoring with Mercury provides real-time N+1 detection and alerting. This catches performance regressions immediately instead of waiting for user complaints.",
+            "performance_impact": "Proactive issue detection: N+1 regressions caught and fixed within minutes instead of days or weeks."
+          }
+        ],
+        "quiz": {
+          "question": "What's the most important benefit of production N+1 monitoring?",
+          "options": [
+            "It automatically fixes N+1 queries when they're detected",
+            "It provides real-time detection and alerting for performance regressions before users are impacted",
+            "It reduces server costs by optimizing queries automatically",
+            "It eliminates the need for performance testing in development"
+          ],
+          "correct_answer": 1,
+          "explanation": "Production monitoring's key benefit is early detection - catching N+1 regressions immediately when they're deployed, before they impact users. This enables rapid response and rollback if needed."
+        }
+      }
+    ],
+    "summary": {
+      "key_takeaways": [
+        "N+1 queries often hide in serializers, templates, and property access",
+        "Mercury testing automatically detects N+1 patterns with query count limits",
+        "Fix template N+1 in views with select_related(), not in templates",
+        "Custom managers make N+1 prevention systematic and automatic",
+        "Production monitoring catches N+1 regressions before users are impacted"
+      ],
+      "next_steps": [
+        "Audit your existing code for hidden N+1 patterns",
+        "Implement Mercury testing with appropriate query limits",
+        "Build custom managers for your most-used models",
+        "Set up production monitoring and alerting"
+      ],
+      "related_tutorials": [
+        "n-plus-one-queries",
+        "testing-patterns",
+        "django-orm",
+        "response-time"
+      ]
+    }
+  }
+}

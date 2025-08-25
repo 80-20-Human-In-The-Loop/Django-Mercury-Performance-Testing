@@ -1,0 +1,188 @@
+{
+  "quiz": {
+    "id": "memory_optimization_beginner",
+    "title": "Django Memory Optimization",
+    "description": "Learn to identify and fix memory issues in Django applications",
+    "difficulty": "beginner",
+    "concept": "memory_optimization",
+    "tags": ["memory", "optimization", "queryset", "gc", "performance"],
+    "passing_score": 0.7,
+    "questions": [
+      {
+        "id": "memory_leak_symptoms",
+        "question_type": "multiple_choice",
+        "text": "Your Django app's memory usage grows from 100MB to 2GB over 24 hours and never decreases. What is this?",
+        "answers": [
+          {
+            "text": "Normal Django behavior",
+            "is_correct": false,
+            "explanation": "This is not normal. Django should have stable memory usage over time."
+          },
+          {
+            "text": "Memory leak - objects not being garbage collected",
+            "is_correct": true,
+            "explanation": "Correct! Growing memory that never decreases is a classic memory leak. Objects are being created but not properly released, causing memory to accumulate."
+          },
+          {
+            "text": "High traffic requiring more memory",
+            "is_correct": false,
+            "explanation": "High traffic would cause spikes but memory should decrease during low traffic periods."
+          },
+          {
+            "text": "Database connection pooling",
+            "is_correct": false,
+            "explanation": "Connection pools use fixed memory and don't grow continuously over time."
+          }
+        ],
+        "explanation": "Memory leaks in Django occur when objects hold references preventing garbage collection. Common causes: circular references, cached QuerySets, unclosed resources, or global variables accumulating data.",
+        "hints": [
+          "What happens when memory only goes up, never down?",
+          "Think about garbage collection and object cleanup"
+        ],
+        "difficulty": "beginner",
+        "concept": "memory_optimization",
+        "tags": ["memory-leak", "symptoms", "diagnosis"]
+      },
+      {
+        "id": "queryset_memory_issue",
+        "question_type": "scenario",
+        "text": "Your view loads 50,000 Product objects into memory at once: `products = Product.objects.all()`. What's the main problem?",
+        "answers": [
+          {
+            "text": "Too many database queries",
+            "is_correct": false,
+            "explanation": "This is actually just one database query, but loads everything into memory."
+          },
+          {
+            "text": "Loads entire result set into memory unnecessarily",
+            "is_correct": true,
+            "explanation": "Exactly! Product.objects.all() loads ALL objects into memory at once. For 50k products, this could be hundreds of MB. Use pagination, iterator(), or only() to reduce memory usage."
+          },
+          {
+            "text": "Slow database connection",
+            "is_correct": false,
+            "explanation": "The issue is memory consumption, not database speed."
+          },
+          {
+            "text": "Missing database indexes",
+            "is_correct": false,
+            "explanation": "Indexes help query speed but don't solve the memory problem of loading 50k objects."
+          }
+        ],
+        "explanation": "QuerySets like .all() load entire result sets into memory. For large datasets, use .iterator() for memory-efficient processing, .only() to load fewer fields, or pagination to limit results.",
+        "hints": [
+          "What happens when you load 50,000 objects at once?",
+          "Think about memory vs database efficiency"
+        ],
+        "difficulty": "beginner",
+        "concept": "memory_optimization",
+        "tags": ["queryset", "memory-usage", "bulk-data"]
+      },
+      {
+        "id": "memory_efficient_queryset",
+        "question_type": "multiple_choice",
+        "text": "You need to process 100,000 User objects. Which approach uses the least memory?",
+        "answers": [
+          {
+            "text": "users = User.objects.all(); for user in users: process(user)",
+            "is_correct": false,
+            "explanation": "This loads all 100k users into memory at once - very memory inefficient."
+          },
+          {
+            "text": "for user in User.objects.all().iterator(): process(user)",
+            "is_correct": true,
+            "explanation": "Perfect! iterator() fetches objects in small batches, keeping memory usage low. It processes one batch at a time instead of loading everything."
+          },
+          {
+            "text": "users = User.objects.all()[:10000]; for user in users: process(user)",
+            "is_correct": false,
+            "explanation": "Better than loading all, but still loads 10k objects. iterator() is more memory efficient."
+          },
+          {
+            "text": "User.objects.filter(pk__in=range(100000))",
+            "is_correct": false,
+            "explanation": "This still loads all matching objects into memory, same as .all()."
+          }
+        ],
+        "explanation": "iterator() is designed for memory-efficient processing of large datasets. It fetches objects in chunks (default 2000), processes them, then releases memory before fetching the next chunk.",
+        "hints": [
+          "Which method fetches objects in small batches?",
+          "Think about processing vs loading everything at once"
+        ],
+        "difficulty": "beginner",
+        "concept": "memory_optimization",
+        "tags": ["iterator", "queryset", "batch-processing"]
+      },
+      {
+        "id": "field_optimization",
+        "question_type": "multiple_choice",
+        "text": "Your User model has 20 fields but you only need 'name' and 'email'. How can you reduce memory usage?",
+        "answers": [
+          {
+            "text": "User.objects.all()",
+            "is_correct": false,
+            "explanation": "This loads all 20 fields for every user - wastes memory on unused data."
+          },
+          {
+            "text": "User.objects.only('name', 'email')",
+            "is_correct": true,
+            "explanation": "Correct! only() loads only the specified fields, reducing memory usage. For 100k users, this could save megabytes by skipping the other 18 fields."
+          },
+          {
+            "text": "User.objects.filter(name__isnull=False)",
+            "is_correct": false,
+            "explanation": "filter() affects which records are returned, not which fields are loaded."
+          },
+          {
+            "text": "User.objects.select_related('profile')",
+            "is_correct": false,
+            "explanation": "select_related() actually increases memory by loading related objects too."
+          }
+        ],
+        "explanation": "only() and defer() optimize field loading: only() loads just specified fields, defer() loads everything except specified fields. Use only() when you need few fields from large models.",
+        "hints": [
+          "How can you load fewer fields per object?",
+          "Think about selective field loading"
+        ],
+        "difficulty": "beginner",
+        "concept": "memory_optimization",
+        "tags": ["only", "defer", "field-optimization"]
+      },
+      {
+        "id": "cache_memory_problem",
+        "question_type": "scenario",
+        "text": "You cache QuerySets in Django's cache: `cache.set('all_products', Product.objects.all(), 3600)`. What's wrong with this?",
+        "answers": [
+          {
+            "text": "Cache timeout is too long",
+            "is_correct": false,
+            "explanation": "1 hour timeout isn't the main issue here."
+          },
+          {
+            "text": "Caching QuerySets stores all objects in memory permanently",
+            "is_correct": true,
+            "explanation": "Exactly! Caching QuerySets stores the entire result set in cache memory. For large datasets, this doubles memory usage - once in cache, once when retrieved. Cache IDs or small data instead."
+          },
+          {
+            "text": "Products data becomes stale",
+            "is_correct": false,
+            "explanation": "Stale data is a concern but not the primary memory issue."
+          },
+          {
+            "text": "Cache key name is too generic",
+            "is_correct": false,
+            "explanation": "Key naming doesn't affect memory usage."
+          }
+        ],
+        "explanation": "Never cache large QuerySets! Cache lightweight data like IDs, counts, or computed values. For Product.objects.all(), cache the IDs list and fetch objects as needed, or cache specific product data.",
+        "hints": [
+          "What happens when you store large objects in cache?",
+          "Think about memory duplication"
+        ],
+        "difficulty": "beginner",
+        "concept": "memory_optimization",
+        "tags": ["caching", "queryset-caching", "memory-usage"]
+      }
+    ]
+  }
+}

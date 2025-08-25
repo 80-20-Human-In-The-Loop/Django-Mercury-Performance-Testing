@@ -1,0 +1,436 @@
+{
+  "tutorial": {
+    "id": "memory-optimization",
+    "title": "Django Memory Optimization",
+    "description": "Master memory management in Django applications to prevent memory leaks and optimize resource usage",
+    "concept": "memory-optimization",
+    "difficulty": "intermediate",
+    "tags": ["memory", "optimization", "performance", "django", "orm", "gc"],
+    "estimated_time": "45 minutes",
+    "learning_objectives": [
+      "Understand Django's baseline memory usage patterns",
+      "Identify memory-intensive operations and optimize them",
+      "Implement efficient data loading strategies",
+      "Prevent memory leaks in Django applications",
+      "Monitor and measure memory usage effectively",
+      "Optimize Django ORM for memory efficiency"
+    ],
+    "prerequisites": [
+      "Basic Django ORM knowledge",
+      "Understanding of Python memory management",
+      "Familiarity with Django request/response cycle"
+    ],
+    "sections": [
+      {
+        "title": "Understanding Django Memory Baseline",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Django's Memory Foundation",
+            "content": "Django, Python, and the test framework have significant baseline memory usage. Understanding this baseline is crucial for realistic optimization targets.",
+            "key_points": [
+              "Python interpreter: ~15-25MB baseline memory",
+              "Django framework: ~20-40MB for basic setup",
+              "Django REST Framework: Additional ~15-30MB",
+              "Test framework + database: ~10-20MB overhead"
+            ],
+            "examples": [
+              "Basic Django app: 60-85MB baseline (like your 83.8MB example)",
+              "DRF API app: 80-120MB baseline memory usage",
+              "Complex apps with many dependencies: 150-300MB baseline"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your Django test shows 83.8MB memory usage for a simple API endpoint. Your manager is concerned about 'high memory usage' and wants it reduced to under 50MB.",
+            "problem": "The manager doesn't understand that 83.8MB is actually normal for Django + DRF + test framework. You need to educate on realistic baselines and focus on optimizing incremental usage."
+          },
+          {
+            "type": "baseline_analysis",
+            "title": "Typical Django Memory Breakdown",
+            "breakdown": [
+              {
+                "component": "Python Interpreter",
+                "memory_range": "15-25MB",
+                "description": "Core Python runtime and standard library",
+                "optimization": "Cannot be reduced - this is required overhead"
+              },
+              {
+                "component": "Django Core",
+                "memory_range": "20-40MB", 
+                "description": "Django framework, ORM, middleware, settings",
+                "optimization": "Minimal - can disable unused apps/middleware"
+              },
+              {
+                "component": "Django REST Framework",
+                "memory_range": "15-30MB",
+                "description": "DRF serializers, views, permissions",
+                "optimization": "Use lighter alternatives for simple APIs"
+              },
+              {
+                "component": "Database Connections",
+                "memory_range": "5-15MB",
+                "description": "Database drivers and connection pools",
+                "optimization": "Optimize connection pool size"
+              },
+              {
+                "component": "Your Application Code",
+                "memory_range": "Variable",
+                "description": "Models, views, business logic, data loading",
+                "optimization": "THIS is where you optimize!"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your Django + DRF application shows 85MB memory usage in tests. What should be your FIRST response?",
+            "choices": [
+              {
+                "text": "Panic - this is way too much memory for a web application",
+                "is_correct": false
+              },
+              {
+                "text": "Recognize this as normal baseline and focus on optimizing incremental usage",
+                "is_correct": true
+              },
+              {
+                "text": "Remove Django REST Framework to reduce memory",
+                "is_correct": false
+              },
+              {
+                "text": "Switch to a lighter framework like FastAPI",
+                "is_correct": false
+              }
+            ],
+            "explanation": "85MB is completely normal for Django + DRF + test framework. The baseline memory usage of these components is significant but necessary. Focus optimization efforts on your application code and data loading patterns, not the framework overhead."
+          }
+        ]
+      },
+      {
+        "title": "Memory-Efficient Data Loading",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Optimizing Django ORM Memory Usage",
+            "content": "The biggest memory wins come from optimizing how you load and process data. Small changes in ORM usage can dramatically reduce memory consumption.",
+            "key_points": [
+              "Use iterator() for large datasets to avoid caching",
+              "Apply only() and defer() to load minimal field data",
+              "Implement proper pagination to limit data volume",
+              "Use values() and values_list() for lightweight data access"
+            ],
+            "examples": [
+              "Processing 10,000 records: 500MB → 50MB with iterator()",
+              "User profiles: 200MB → 80MB with only('name', 'email')",
+              "API responses: 150MB → 60MB with values() instead of models"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Memory-Heavy vs Memory-Efficient Data Loading",
+            "before_code": "# Memory-intensive approach\ndef export_users(request):\n    # Problem 1: Loads ALL users into memory at once\n    users = User.objects.all()  # Could be 100,000+ users\n    \n    # Problem 2: Creates full model instances with all fields\n    user_data = []\n    for user in users:  # Each user ~2KB in memory\n        user_data.append({\n            'id': user.id,\n            'username': user.username,\n            'email': user.email,\n            'first_name': user.first_name,\n            'last_name': user.last_name,\n            # Note: Also loads bio, description, preferences, etc.\n        })\n    \n    return JsonResponse({'users': user_data})\n    \n# Memory usage: ~200MB for 100,000 users",
+            "after_code": "# Memory-efficient approach\ndef export_users(request):\n    # Solution 1: Use iterator() to process in chunks\n    # Solution 2: Use only() to load minimal fields\n    users = User.objects.only(\n        'id', 'username', 'email', 'first_name', 'last_name'\n    ).iterator(chunk_size=2000)\n    \n    # Solution 3: Use values() for lightweight data\n    user_data = []\n    for user in users:  # Processes 2000 at a time\n        user_data.append({\n            'id': user.id,\n            'username': user.username,\n            'email': user.email,\n            'first_name': user.first_name,\n            'last_name': user.last_name,\n        })\n        \n        # Solution 4: Optional - yield data in chunks for streaming\n        if len(user_data) >= 1000:\n            # Process/yield chunk and clear memory\n            yield user_data\n            user_data = []\n    \n    if user_data:  # Handle remaining data\n        yield user_data\n    \n# Memory usage: ~20MB peak (10x improvement)",
+            "impact": "Reduced memory usage from 200MB to 20MB (90% reduction) while maintaining functionality. Can now handle millions of records without memory issues."
+          },
+          {
+            "type": "technique_comparison",
+            "title": "Data Loading Techniques Memory Impact",
+            "techniques": [
+              {
+                "method": "Model.objects.all()",
+                "memory_per_record": "~2-5KB",
+                "use_case": "Small datasets (<1000 records)",
+                "pros": "Full model functionality, easy to use",
+                "cons": "High memory usage, caches all results"
+              },
+              {
+                "method": "Model.objects.iterator()",
+                "memory_per_record": "~2-5KB",
+                "use_case": "Large datasets, sequential processing",
+                "pros": "Constant memory usage regardless of dataset size",
+                "cons": "Cannot iterate multiple times, no random access"
+              },
+              {
+                "method": "Model.objects.only('field1', 'field2')",
+                "memory_per_record": "~0.5-1KB",
+                "use_case": "When you need specific fields only",
+                "pros": "Reduced per-record memory, still model instances",
+                "cons": "Additional queries if you access other fields"
+              },
+              {
+                "method": "Model.objects.values('field1', 'field2')",
+                "memory_per_record": "~0.2-0.5KB",
+                "use_case": "API responses, data export",
+                "pros": "Minimal memory usage, fast serialization",
+                "cons": "No model methods, returns dictionaries"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You need to process 50,000 user records for a data export. Each User model is ~3KB. What's the most memory-efficient approach?",
+            "choices": [
+              {
+                "text": "User.objects.all() - load all users at once",
+                "is_correct": false
+              },
+              {
+                "text": "User.objects.iterator(chunk_size=1000) with only() for needed fields",
+                "is_correct": true
+              },
+              {
+                "text": "Use raw SQL to bypass the ORM entirely",
+                "is_correct": false
+              },
+              {
+                "text": "Process users in 10 separate queries of 5,000 each",
+                "is_correct": false
+              }
+            ],
+            "explanation": "iterator() with chunk_size processes records in batches without caching them all in memory. Combined with only() to load just the needed fields, this approach uses constant memory (~3MB) regardless of total record count, vs ~150MB for loading all records at once."
+          }
+        ]
+      },
+      {
+        "title": "Preventing Memory Leaks",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Common Django Memory Leak Patterns",
+            "content": "Memory leaks in Django typically occur when objects accumulate over time and aren't garbage collected. Understanding these patterns helps prevent production memory issues.",
+            "key_points": [
+              "Module-level variables that accumulate data",
+              "Circular references preventing garbage collection",
+              "Unclosed database connections or file handles",
+              "Large objects stored in cache without expiration"
+            ],
+            "examples": [
+              "Global lists that grow with each request",
+              "Signal handlers that store references",
+              "Cache entries that never expire"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Memory Leak: Module-Level Data Accumulation",
+            "before_code": "# BAD: Module-level variable creates memory leak\n# This data persists across ALL requests and keeps growing\nREQUEST_LOGS = []  # Global variable - DANGEROUS!\nUSER_SESSIONS = {}  # Another leak waiting to happen\n\ndef track_user_activity(request):\n    # Problem: This list grows indefinitely\n    REQUEST_LOGS.append({\n        'user': request.user.id,\n        'timestamp': timezone.now(),\n        'path': request.path,\n        'data': request.POST.dict()  # Could be large!\n    })\n    \n    # Problem: Dictionary never gets cleaned up\n    USER_SESSIONS[request.session.session_key] = {\n        'user_data': User.objects.get(pk=request.user.id),  # Full model!\n        'last_seen': timezone.now(),\n    }\n    \n    return HttpResponse('Logged')\n    \n# Result: Memory grows by ~5-50KB per request\n# After 100,000 requests: 500MB - 5GB memory leak!",
+            "after_code": "# GOOD: Proper memory management\nfrom django.core.cache import cache\nfrom collections import deque\nimport logging\n\n# Use proper logging instead of global lists\nactivity_logger = logging.getLogger('user_activity')\n\n# If you must use module-level storage, use bounded collections\nRECENT_ERRORS = deque(maxlen=100)  # Only keeps last 100 items\n\ndef track_user_activity(request):\n    # Solution 1: Use proper logging (external storage)\n    activity_logger.info({\n        'user': request.user.id,\n        'timestamp': timezone.now().isoformat(),\n        'path': request.path,\n        # Don't log large POST data - summarize instead\n        'post_size': len(str(request.POST))\n    })\n    \n    # Solution 2: Use cache with expiration instead of global dict\n    cache_key = f'user_session_{request.session.session_key}'\n    cache.set(cache_key, {\n        'user_id': request.user.id,  # Store ID, not full model\n        'last_seen': timezone.now().isoformat(),\n    }, timeout=3600)  # Expires after 1 hour\n    \n    return HttpResponse('Logged')\n    \n# Result: Constant memory usage regardless of request count",
+            "impact": "Eliminated potential memory leak of 500MB-5GB after 100,000 requests. Memory usage remains constant over time."
+          },
+          {
+            "type": "leak_detection_guide",
+            "title": "Detecting Memory Leaks in Django",
+            "techniques": [
+              {
+                "method": "Memory Profiling with memory_profiler",
+                "code": "@profile\ndef memory_intensive_view(request):\n    # Your view code here\n    pass\n\n# Run with: python -m memory_profiler manage.py runserver",
+                "what_to_look_for": "Memory usage that increases over time"
+              },
+              {
+                "method": "Django Debug Toolbar Memory Panel",
+                "code": "# Enable in settings.py\nDEBUG_TOOLBAR_PANELS = [\n    'debug_toolbar.panels.memory.MemoryPanel',\n    # ... other panels\n]",
+                "what_to_look_for": "Increasing memory usage across requests"
+              },
+              {
+                "method": "Manual Garbage Collection Analysis",
+                "code": "import gc\nimport sys\n\ndef check_memory_usage():\n    print(f'Objects in memory: {len(gc.get_objects())}')\n    print(f'Memory usage: {sys.getsizeof(gc.get_objects())} bytes')\n    \n    # Force garbage collection\n    collected = gc.collect()\n    print(f'Garbage collected: {collected} objects')",
+                "what_to_look_for": "Objects that aren't being garbage collected"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "You notice your Django app's memory usage grows from 100MB to 2GB over a day. What's the MOST LIKELY cause?",
+            "choices": [
+              {
+                "text": "Django framework has memory leaks",
+                "is_correct": false
+              },
+              {
+                "text": "Module-level variables accumulating data across requests",
+                "is_correct": true
+              },
+              {
+                "text": "Database connections aren't being closed",
+                "is_correct": false
+              },
+              {
+                "text": "Python garbage collector is broken",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Growing memory usage over time typically indicates module-level variables (global lists, dictionaries, etc.) that accumulate data across requests. Django and Python's garbage collector work correctly - the issue is usually application code storing references that prevent cleanup."
+          }
+        ]
+      },
+      {
+        "title": "Efficient Serialization and Data Transfer",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Memory-Efficient Data Serialization",
+            "content": "Serialization can consume significant memory when done inefficiently. Optimize serialization to reduce memory usage during API responses and data processing.",
+            "key_points": [
+              "Avoid loading full models just for serialization",
+              "Use direct database values when possible",
+              "Implement streaming serialization for large datasets",
+              "Choose appropriate serialization formats"
+            ],
+            "examples": [
+              "API endpoint: 200MB → 50MB with values() serialization",
+              "File export: 1GB → 100MB with streaming JSON",
+              "Bulk operations: 500MB → 80MB with direct field access"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Memory-Efficient Django REST Framework Serialization",
+            "before_code": "# Memory-heavy DRF serialization\nclass UserSerializer(serializers.ModelSerializer):\n    profile_data = serializers.SerializerMethodField()\n    recent_orders = serializers.SerializerMethodField()\n    \n    class Meta:\n        model = User\n        fields = ['id', 'username', 'email', 'profile_data', 'recent_orders']\n    \n    def get_profile_data(self, obj):\n        # Problem: Loads full profile model for each user\n        return {\n            'bio': obj.profile.bio,\n            'location': obj.profile.location,\n            'avatar': obj.profile.avatar.url if obj.profile.avatar else None\n        }\n    \n    def get_recent_orders(self, obj):\n        # Problem: N+1 queries + loads full order models\n        orders = obj.orders.all()[:5]\n        return [{\n            'id': order.id,\n            'total': str(order.total),\n            'status': order.status\n        } for order in orders]\n\nclass UserListView(ListAPIView):\n    serializer_class = UserSerializer\n    queryset = User.objects.all()  # No optimization\n    \n# Memory: ~500MB for 1000 users with orders",
+            "after_code": "# Memory-efficient DRF serialization\nclass UserSerializer(serializers.ModelSerializer):\n    profile_bio = serializers.CharField(source='profile.bio', read_only=True)\n    profile_location = serializers.CharField(source='profile.location', read_only=True)\n    recent_orders_count = serializers.IntegerField(read_only=True)\n    \n    class Meta:\n        model = User\n        fields = ['id', 'username', 'email', 'profile_bio', 'profile_location', 'recent_orders_count']\n\nclass UserListView(ListAPIView):\n    serializer_class = UserSerializer\n    \n    def get_queryset(self):\n        # Solution: Optimize with select_related and annotate\n        return User.objects.select_related('profile').annotate(\n            recent_orders_count=Count('orders', filter=Q(\n                orders__created_at__gte=timezone.now() - timedelta(days=30)\n            ))\n        ).only(\n            'id', 'username', 'email',\n            'profile__bio', 'profile__location'\n        )\n\n# Alternative: Use values() for maximum efficiency\nclass UserListViewLightweight(APIView):\n    def get(self, request):\n        users = User.objects.select_related('profile').values(\n            'id', 'username', 'email',\n            'profile__bio', 'profile__location'\n        ).annotate(\n            recent_orders_count=Count('orders', filter=Q(\n                orders__created_at__gte=timezone.now() - timedelta(days=30)\n            ))\n        )\n        \n        return Response({'users': list(users)})\n    \n# Memory: ~80MB for 1000 users (6x improvement)",
+            "impact": "Reduced memory usage from 500MB to 80MB (84% reduction) through optimized queries and avoiding unnecessary model instantiation."
+          },
+          {
+            "type": "streaming_guide",
+            "title": "Streaming Large Datasets",
+            "example_code": "from django.http import StreamingHttpResponse\nimport json\n\ndef stream_users_export(request):\n    \"\"\"Stream user data without loading everything into memory\"\"\"\n    \n    def generate_user_data():\n        # Start JSON array\n        yield '['\n        \n        users = User.objects.only('id', 'username', 'email').iterator(chunk_size=1000)\n        first = True\n        \n        for user in users:\n            if not first:\n                yield ','\n            first = False\n            \n            # Serialize one user at a time\n            user_data = {\n                'id': user.id,\n                'username': user.username,\n                'email': user.email\n            }\n            yield json.dumps(user_data)\n        \n        # Close JSON array\n        yield ']'\n    \n    response = StreamingHttpResponse(\n        generate_user_data(),\n        content_type='application/json'\n    )\n    response['Content-Disposition'] = 'attachment; filename=\"users.json\"'\n    return response\n\n# Memory usage: Constant ~5MB regardless of user count\n# Can export millions of records without memory issues",
+            "benefits": [
+              "Constant memory usage regardless of dataset size",
+              "Start sending data immediately (better user experience)",
+              "Can handle datasets larger than available RAM",
+              "Reduces server memory pressure under load"
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your DRF API endpoint uses 300MB of memory to serialize 2000 user objects. What's the BEST optimization approach?",
+            "choices": [
+              {
+                "text": "Add more server RAM to handle the memory usage",
+                "is_correct": false
+              },
+              {
+                "text": "Use optimized querysets with select_related() and only() in the ViewSet",
+                "is_correct": true
+              },
+              {
+                "text": "Split the response into multiple smaller API calls",
+                "is_correct": false
+              },
+              {
+                "text": "Cache the serialized response to avoid repeated serialization",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Optimizing the queryset with select_related() and only() prevents loading unnecessary data and reduces object creation overhead. This addresses the root cause of high memory usage rather than working around it. The goal is to load and process only the data you actually need."
+          }
+        ]
+      },
+      {
+        "title": "Memory Monitoring and Optimization Tools",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Production Memory Monitoring",
+            "content": "Implement comprehensive memory monitoring to detect issues early and maintain optimal performance in production environments.",
+            "key_points": [
+              "Monitor both peak and sustained memory usage",
+              "Set up alerts for memory growth patterns",
+              "Track memory usage per endpoint/operation",
+              "Use profiling tools to identify optimization opportunities"
+            ],
+            "examples": [
+              "APM tools showing memory usage per request",
+              "Custom middleware tracking memory growth",
+              "Automated alerts for memory leak detection"
+            ]
+          },
+          {
+            "type": "monitoring_setup",
+            "title": "Django Memory Monitoring Implementation",
+            "code": "# Custom memory monitoring middleware\nimport psutil\nimport time\nimport logging\nfrom django.conf import settings\nfrom django.utils.deprecation import MiddlewareMixin\n\nmemory_logger = logging.getLogger('memory_monitoring')\n\nclass MemoryMonitoringMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        if settings.DEBUG or settings.MEMORY_MONITORING:\n            request._memory_start = psutil.Process().memory_info().rss / 1024 / 1024  # MB\n            request._time_start = time.time()\n    \n    def process_response(self, request, response):\n        if hasattr(request, '_memory_start'):\n            memory_end = psutil.Process().memory_info().rss / 1024 / 1024  # MB\n            memory_delta = memory_end - request._memory_start\n            time_delta = (time.time() - request._time_start) * 1000  # ms\n            \n            # Log if memory usage is significant\n            if memory_delta > 10:  # More than 10MB increase\n                memory_logger.warning(\n                    f'High memory usage: {request.path} - '\n                    f'Used {memory_delta:.1f}MB in {time_delta:.1f}ms'\n                )\n            \n            # Add memory info to response headers (debug only)\n            if settings.DEBUG:\n                response['X-Memory-Usage'] = f'{memory_delta:.1f}MB'\n                response['X-Response-Time'] = f'{time_delta:.1f}ms'\n        \n        return response\n\n# Usage in settings.py\nMIDDLEWARE = [\n    'myapp.middleware.MemoryMonitoringMiddleware',\n    # ... other middleware\n]\n\nMEMORY_MONITORING = True  # Enable in production",
+            "benefits": [
+              "Track memory usage per request",
+              "Identify memory-intensive endpoints",
+              "Monitor for gradual memory increases",
+              "Automatic logging of high-usage requests"
+            ]
+          },
+          {
+            "type": "optimization_checklist",
+            "title": "Production Memory Optimization Checklist",
+            "categories": [
+              {
+                "category": "Database Optimization",
+                "items": [
+                  "Use select_related() for forward relationships",
+                  "Use prefetch_related() for reverse/M2M relationships",
+                  "Apply only() and defer() for specific field loading",
+                  "Implement iterator() for large dataset processing",
+                  "Use values() for API responses and exports"
+                ]
+              },
+              {
+                "category": "Application Code",
+                "items": [
+                  "Avoid module-level variables that accumulate data",
+                  "Use bounded collections (deque with maxlen)",
+                  "Implement proper cache expiration policies",
+                  "Stream large responses instead of loading in memory",
+                  "Use generators for large data processing"
+                ]
+              },
+              {
+                "category": "Serialization",
+                "items": [
+                  "Optimize DRF queryset in ViewSet.get_queryset()",
+                  "Use SerializerMethodField sparingly",
+                  "Implement custom serialization for performance-critical endpoints",
+                  "Consider using values() for lightweight API responses",
+                  "Implement pagination for large result sets"
+                ]
+              },
+              {
+                "category": "Monitoring",
+                "items": [
+                  "Set up memory usage monitoring and alerting",
+                  "Use profiling tools to identify memory hotspots",
+                  "Track memory usage trends over time",
+                  "Monitor garbage collection patterns",
+                  "Test memory usage under load"
+                ]
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "text": "Your Django application shows gradually increasing memory usage over weeks in production. What's the BEST debugging approach?",
+            "choices": [
+              {
+                "text": "Restart the server weekly to reset memory usage",
+                "is_correct": false
+              },
+              {
+                "text": "Implement memory monitoring middleware and analyze usage patterns",
+                "is_correct": true
+              },
+              {
+                "text": "Increase server RAM to accommodate the growth",
+                "is_correct": false
+              },
+              {
+                "text": "Switch to a different web server like Nginx",
+                "is_correct": false
+              }
+            ],
+            "explanation": "Gradual memory growth indicates a memory leak that needs investigation. Memory monitoring middleware will help identify which endpoints or operations cause memory increases, allowing you to focus optimization efforts. Restarting servers or adding RAM are temporary workarounds that don't fix the underlying issue."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,35 +1,31 @@
-# backend/performance_testing/python_bindings/django_hooks.py - Django-specific performance monitoring hooks
-# Contains trackers for database queries and cache operations, along with a context manager for performance analysis.
+"""
+Django-specific performance monitoring hooks for Django Mercury.
+Tracks database queries and cache operations with performance analysis.
+"""
 
 # --- Standard Library Imports ---
-import time
-import re
 import ctypes
-import threading
-from pathlib import Path
+import logging
+import re
+import time
 from collections import defaultdict
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Tuple, Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # --- Third-Party Imports ---
-try:
-    from django.db import connections, connection
-    from django.core.cache import cache
-    from django.db.backends.utils import CursorWrapper
-    from django.test.utils import override_settings
-    import django.db.backends.utils
+from django.db import connection
+from django.db.backends.utils import CursorWrapper
+import django.db.backends.utils
 
-    DJANGO_AVAILABLE = True
-except ImportError:
-    DJANGO_AVAILABLE = False
+# Django availability flag for tests
+DJANGO_AVAILABLE = True
+
 
 # --- C Extension Integration ---
-try:
-    from .c_bindings import c_extensions
-
-    C_EXTENSIONS_AVAILABLE = c_extensions.query_analyzer is not None
-except ImportError:
-    C_EXTENSIONS_AVAILABLE = False
+# Pure Python mode - C extensions permanently removed
+C_EXTENSIONS_AVAILABLE = False
+c_extensions = None
 
 # --- Data Classes ---
 
@@ -70,8 +66,48 @@ class DjangoQueryTracker:
         self.query_count: int = 0
         self.total_time: float = 0.0
         self.is_active: bool = False
-        self._original_execute: Optional[callable] = None
-        self._original_executemany: Optional[callable] = None
+        self._original_execute: Optional[Any] = None
+        self._original_executemany: Optional[Any] = None
+        self.logger = logging.getLogger(__name__)
+
+    def _initialize_tracking(self) -> None:
+        """Initialize tracking state."""
+        self.is_active = True
+        self.queries.clear()
+        self.query_count = 0
+        self.total_time = 0.0
+
+    def _store_initial_query_count(self) -> None:
+        """Store the initial Django query count."""
+        try:
+            # After reset, this should be 0, but we store it just in case
+            self._start_query_count = (
+                len(connection.queries) if hasattr(connection, "queries") else 0
+            )
+            if self._start_query_count > 0:
+                # Log warning if queries weren't properly reset
+                self.logger.warning(
+                    f"DjangoQueryTracker started with {self._start_query_count} existing queries. "
+                    "Consider calling reset_queries() before monitoring."
+                )
+        except Exception as e:
+            self._start_query_count = 0
+            self.logger.debug(f"Could not get initial query count: {e}")
+
+    def _reset_c_extensions(self) -> None:
+        """Reset C extension query analyzer if available."""
+        # Pure Python mode - no C extensions to reset
+        pass
+
+    def _should_patch_cursor(self) -> bool:
+        """Determine if cursor patching is needed."""
+        try:
+            from django.conf import settings
+
+            return not settings.DEBUG
+        except Exception as e:
+            self.logger.debug(f"Could not determine DEBUG mode: {e}")
+            return True  # Default to patching if we can't determine DEBUG mode
 
     def start(self) -> None:
         """
@@ -79,44 +115,30 @@ class DjangoQueryTracker:
 
         This method primarily uses Django's connection.queries when DEBUG=True,
         with a fallback to cursor patching for production environments.
-
-        Raises:
-            RuntimeError: If Django is not available.
         """
+        # Check if Django is available
         if not DJANGO_AVAILABLE:
             return
 
-        self.is_active = True
-        self.queries.clear()
-        self.query_count = 0
-        self.total_time = 0.0
-        
-        # Store the starting point for Django's query log
-        try:
-            self._start_query_count = len(connection.queries) if hasattr(connection, 'queries') else 0
-        except Exception:
-            self._start_query_count = 0
+        # Initialize tracking state
+        self._initialize_tracking()
 
-        # Reset C extension query analyzer for fresh test state
-        if C_EXTENSIONS_AVAILABLE:
-            try:
-                c_extensions.query_analyzer.reset_query_analyzer()
-            except Exception:
-                pass  # Ignore reset errors
+        # Store initial query count for isolation
+        self._store_initial_query_count()
 
-        # Only patch cursor if Django's DEBUG mode is off
-        # (when DEBUG=True, Django tracks queries automatically)
-        try:
-            from django.conf import settings
-            should_patch = not settings.DEBUG
-        except Exception:
-            should_patch = True  # Default to patching if we can't determine DEBUG mode
-        
-        if should_patch and not hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
-            setattr(django.db.backends.utils.CursorWrapper, '_original_execute',
+        # Reset C extensions if available
+        self._reset_c_extensions()
+
+        # Setup cursor patching if needed
+        if self._should_patch_cursor() and not hasattr(
+            django.db.backends.utils.CursorWrapper, "_original_execute"
+        ):
+            # Dynamic attribute setting is required for monkey-patching
+            # Store original methods for restoration later
+            django.db.backends.utils.CursorWrapper._original_execute = (
                 django.db.backends.utils.CursorWrapper.execute
             )
-            setattr(django.db.backends.utils.CursorWrapper, '_original_executemany',
+            django.db.backends.utils.CursorWrapper._original_executemany = (
                 django.db.backends.utils.CursorWrapper.executemany
             )
 
@@ -134,9 +156,11 @@ class DjangoQueryTracker:
                     execution_time = time.time() - start_time
                     tracker.record_query(sql, params, execution_time, self_cursor.db.alias)
                     return result
-                except Exception as e:
+                except Exception:
                     execution_time = time.time() - start_time
-                    tracker.record_query(f"FAILED: {sql}", params, execution_time, self_cursor.db.alias)
+                    tracker.record_query(
+                        f"FAILED: {sql}", params, execution_time, self_cursor.db.alias
+                    )
                     raise
 
             def tracked_executemany(
@@ -151,45 +175,63 @@ class DjangoQueryTracker:
                     execution_time = time.time() - start_time
                     tracker.record_query(f"MANY: {sql}", None, execution_time, self_cursor.db.alias)
                     return result
-                except Exception as e:
+                except Exception:
                     execution_time = time.time() - start_time
                     tracker.record_query(
                         f"FAILED MANY: {sql}", None, execution_time, self_cursor.db.alias
                     )
                     raise
 
-            setattr(django.db.backends.utils.CursorWrapper, 'execute', tracked_execute)
-            setattr(django.db.backends.utils.CursorWrapper, 'executemany', tracked_executemany)
+            # Apply monkey patches to track query execution
+            django.db.backends.utils.CursorWrapper.execute = tracked_execute
+            django.db.backends.utils.CursorWrapper.executemany = tracked_executemany
 
     def stop(self) -> None:
         """
         Stops tracking queries and syncs with Django's built-in query log.
         """
-        if not DJANGO_AVAILABLE or not self.is_active:
+        if not self.is_active:
             return
 
         self.is_active = False
-        
+
         # Sync with Django's built-in query tracking if available
         try:
-            if hasattr(connection, 'queries'):
-                current_queries = connection.queries[self._start_query_count:]
+            if hasattr(connection, "queries"):
+                current_queries = connection.queries[self._start_query_count :]
+
+                # Debug logging to verify isolation
+                import logging
+
+                logger = logging.getLogger(__name__)
+                total_queries_in_log = len(connection.queries)
+                queries_during_monitoring = len(current_queries)
+                logger.debug(
+                    f"Query tracking stopped: {queries_during_monitoring} queries captured "
+                    f"(from index {self._start_query_count} to {total_queries_in_log})"
+                )
+
                 for query in current_queries:
                     # Convert Django's query format to our QueryInfo format
-                    sql = query.get('sql', '')
-                    time_str = query.get('time', '0')
+                    sql = query.get("sql", "")
+                    time_str = query.get("time", "0")
                     try:
                         exec_time = float(time_str)
                     except (ValueError, TypeError):
                         exec_time = 0.0
-                    
+
                     # Only add if not already tracked (avoid duplicates)
-                    if not any(q.sql == sql for q in self.queries[-10:]):  # Check last 10 to avoid O(n)
+                    # Check last 10 to avoid O(n) complexity
+                    if not any(q.sql == sql for q in self.queries[-10:]):
                         self.queries.append(QueryInfo(sql=sql, time=exec_time))
                         self.query_count += 1
                         self.total_time += exec_time
-        except Exception:
-            pass  # Ignore sync errors, we still have our tracked queries
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            # Ignore sync errors, we still have our tracked queries
+            logger.debug(f"Query sync error: {e}")
 
         if hasattr(django.db.backends.utils.CursorWrapper, "_original_execute"):
             django.db.backends.utils.CursorWrapper.execute = (
@@ -214,19 +256,8 @@ class DjangoQueryTracker:
         if not self.is_active:
             return
 
-        # Use C extension for high-performance query analysis if available
-        if C_EXTENSIONS_AVAILABLE:
-            try:
-                # Send query to C extension for analysis (time in seconds)
-                c_extensions.query_analyzer.analyze_query(sql.encode("utf-8"), time)
-                # Increment the metrics engine counter
-                if c_extensions.metrics_engine:
-                    c_extensions.metrics_engine.increment_query_count()
-            except Exception as e:
-                # Log error but continue with Python fallback
-                import logging
-
-                logging.getLogger(__name__).debug(f"C extension query analysis failed: {e}")
+        # Pure Python mode - C extensions removed
+        # Query analysis handled by pure Python implementation
         else:
             # Legacy C library support (for backward compatibility)
             try:
@@ -235,8 +266,11 @@ class DjangoQueryTracker:
                 if lib_path.exists():
                     lib = ctypes.CDLL(str(lib_path))
                     lib.increment_query_count()
-            except Exception:
-                pass  # Silently fail if C library is not available
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug(f"C library error: {e}")
 
         # Python fallback (always maintain for compatibility and debugging)
         query_info = QueryInfo(sql=sql, time=time, params=params, alias=alias)
@@ -284,27 +318,7 @@ class DjangoQueryTracker:
             List[str]: A list of strings describing potential N+1 patterns found.
         """
         # Use C extension for enhanced N+1 detection if available
-        if C_EXTENSIONS_AVAILABLE:
-            try:
-                # Check if N+1 patterns detected by C extension
-                has_n_plus_one = c_extensions.query_analyzer.detect_n_plus_one_patterns()
-                if has_n_plus_one:
-                    severity = c_extensions.query_analyzer.get_n_plus_one_severity()
-                    cause = c_extensions.query_analyzer.get_n_plus_one_cause()
-                    suggestion = c_extensions.query_analyzer.get_optimization_suggestion().decode(
-                        "utf-8"
-                    )
-
-                    severity_levels = ["NONE", "MILD", "MODERATE", "HIGH", "SEVERE", "CRITICAL"]
-                    severity_text = severity_levels[min(severity, 5)]
-
-                    return [f"N+1 Pattern Detected: {severity_text} severity - {suggestion}"]
-            except Exception as e:
-                import logging
-
-                logging.getLogger(__name__).debug(f"C extension N+1 detection failed: {e}")
-
-        # Python fallback
+        # Pure Python N+1 detection - C extensions removed
         duplicates = self.get_duplicate_queries()
         n_plus_one_patterns = []
         for normalized_sql, query_list in duplicates.items():
@@ -380,8 +394,10 @@ class DjangoCacheTracker:
 
     def start(self) -> None:
         """Starts tracking cache operations."""
+        # Check if Django is available
         if not DJANGO_AVAILABLE:
             return
+
         self.is_active = True
         self.operations.clear()
         self.hits = 0
@@ -391,7 +407,7 @@ class DjangoCacheTracker:
 
     def stop(self) -> None:
         """Stops tracking cache operations."""
-        if not DJANGO_AVAILABLE or not self.is_active:
+        if not self.is_active:
             return
         self.is_active = False
 
@@ -428,8 +444,11 @@ class DjangoCacheTracker:
             if lib_path.exists():
                 lib = ctypes.CDLL(str(lib_path))
                 getattr(lib, function_name)()
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.debug(f"C library update failed: {e}")
 
     def get_cache_summary(self) -> Dict[str, Any]:
         """

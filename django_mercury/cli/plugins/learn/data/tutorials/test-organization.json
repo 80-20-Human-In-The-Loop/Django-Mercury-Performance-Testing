@@ -1,0 +1,251 @@
+{
+  "tutorial": {
+    "id": "test-organization",
+    "title": "Django Test Suite Organization & Performance",
+    "description": "Structure Django test suites for maintainability, speed, and comprehensive coverage with Mercury performance integration",
+    "concept": "test-organization",
+    "difficulty": "intermediate",
+    "tags": ["testing", "organization", "structure", "performance", "pytest", "django"],
+    "estimated_time": "35 minutes",
+    "learning_objectives": [
+      "Organize Django tests for maximum maintainability and speed",
+      "Implement test categories and marking strategies",
+      "Optimize test database usage and fixture management",
+      "Structure performance tests alongside functional tests",
+      "Build CI-friendly test suites that scale with your codebase"
+    ],
+    "prerequisites": [
+      "Basic Django testing knowledge",
+      "Understanding of pytest and Django TestCase",
+      "Familiarity with CI/CD concepts"
+    ],
+    "sections": [
+      {
+        "title": "Test Suite Architecture",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Structuring Tests for Scale",
+            "content": "Well-organized test suites enable rapid development and reliable CI/CD. Learn to structure tests by purpose, speed, and integration level.",
+            "key_points": [
+              "Separate unit, integration, and e2e tests",
+              "Group tests by feature domain, not just by app",
+              "Use consistent naming conventions across the codebase",
+              "Balance test speed with comprehensive coverage"
+            ],
+            "examples": [
+              "tests/unit/ for fast, isolated tests",
+              "tests/integration/ for database and API tests", 
+              "tests/performance/ for Mercury-powered performance tests"
+            ]
+          },
+          {
+            "type": "scenario",
+            "scenario": "Your Django project has 500+ tests spread across app directories. Developers complain that running tests takes 10+ minutes, and it's hard to find specific tests when debugging failures.",
+            "problem": "Poor test organization makes development slow and debugging difficult. You need a structure that supports fast iteration and easy navigation."
+          },
+          {
+            "type": "code_example",
+            "title": "Optimal Test Directory Structure",
+            "before_code": "# Poor organization - tests scattered across apps\nmyproject/\n├── blog/\n│   ├── tests.py                 # Mix of unit, integration, slow tests\n│   └── models.py\n├── users/\n│   ├── test_models.py           # Different naming convention\n│   ├── test_views.py\n│   └── tests_integration.py     # Inconsistent structure\n└── products/\n    ├── tests/\n    │   ├── test_api.py          # Yet another structure\n    │   └── test_models.py\n    └── models.py\n\n# Problems:\n# - Inconsistent structure across apps\n# - No clear separation of test types\n# - Hard to run specific test categories\n# - No performance test organization",
+            "after_code": "# Well-organized test structure\nmyproject/\n├── tests/                       # Centralized test organization\n│   ├── conftest.py             # Shared pytest fixtures\n│   ├── settings.py             # Test-specific Django settings\n│   ├── factories.py            # Global test data factories\n│   │\n│   ├── unit/                   # Fast, isolated tests (no DB)\n│   │   ├── __init__.py\n│   │   ├── test_blog_models.py\n│   │   ├── test_user_models.py\n│   │   └── test_product_models.py\n│   │\n│   ├── integration/            # Database and service integration\n│   │   ├── __init__.py\n│   │   ├── test_blog_api.py\n│   │   ├── test_user_auth.py\n│   │   └── test_product_workflows.py\n│   │\n│   ├── performance/            # Mercury performance tests\n│   │   ├── __init__.py\n│   │   ├── test_api_performance.py\n│   │   ├── test_database_performance.py\n│   │   └── test_load_scenarios.py\n│   │\n│   ├── e2e/                    # End-to-end browser tests\n│   │   ├── __init__.py\n│   │   └── test_user_journeys.py\n│   │\n│   └── fixtures/               # Test data and files\n│       ├── sample_data.json\n│       └── test_images/\n│\n├── pytest.ini                  # Pytest configuration\n└── pyproject.toml              # Test markers and settings\n\n# Benefits:\n# - Clear separation by test type and speed\n# - Consistent structure across all features\n# - Easy to run specific test categories\n# - Performance tests are first-class citizens",
+            "explanation": "Centralized test organization by type (unit/integration/performance) rather than by app makes it easy to run specific test categories and understand the codebase structure.",
+            "performance_impact": "Faster development: Developers can run fast unit tests during development, full integration tests before commits, and performance tests in CI."
+          }
+        ],
+        "quiz": {
+          "question": "What's the main benefit of organizing tests by type (unit/integration/performance) rather than by Django app?",
+          "options": [
+            "It reduces the total number of test files",
+            "It makes it easy to run specific test categories based on speed and purpose",
+            "It eliminates the need for test fixtures",
+            "It automatically improves test performance"
+          ],
+          "correct_answer": 1,
+          "explanation": "Organizing by type lets you run specific test categories - fast unit tests during development, integration tests before commits, and performance tests in CI. This supports efficient development workflows."
+        }
+      },
+      {
+        "title": "Test Marking and Configuration",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Strategic Test Marking with Pytest",
+            "content": "Use pytest markers to categorize tests by speed, dependencies, and purpose. This enables flexible test execution strategies for different development scenarios.",
+            "key_points": [
+              "Mark tests by speed: @pytest.mark.fast, @pytest.mark.slow",
+              "Mark by dependencies: @pytest.mark.database, @pytest.mark.external",
+              "Mark by purpose: @pytest.mark.performance, @pytest.mark.regression",
+              "Configure marker-based test selection in CI/CD"
+            ],
+            "examples": [
+              "Run only fast tests during development",
+              "Skip external API tests in offline environments",
+              "Run performance tests only in staging/production pipelines"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Comprehensive Test Marking Strategy",
+            "before_code": "# Poor marking - no test categorization\nclass TestUserModel(TestCase):\n    def test_user_creation(self):\n        user = User.objects.create(username='test')\n        self.assertTrue(user.is_active)\n    \n    def test_user_api_endpoint(self):\n        # This test hits the database AND makes HTTP requests\n        user = User.objects.create(username='test')\n        response = self.client.get(f'/api/users/{user.id}/')\n        self.assertEqual(response.status_code, 200)\n    \n    def test_bulk_user_processing(self):\n        # This test is slow - creates 1000 users\n        users = [User(username=f'user{i}') for i in range(1000)]\n        User.objects.bulk_create(users)\n        # ... expensive processing logic\n\n# Problems:\n# - Can't run fast tests separately\n# - No way to skip slow tests during development\n# - No distinction between unit and integration tests",
+            "after_code": "# Strategic test marking\nimport pytest\nfrom django_mercury import DjangoMercuryAPITestCase\n\n# Fast unit test - no database\n@pytest.mark.fast\n@pytest.mark.unit\nclass TestUserModelLogic(TestCase):\n    def test_user_display_name(self):\n        # Test pure logic without database\n        user = User(first_name='John', last_name='Doe')\n        self.assertEqual(user.display_name, 'John Doe')\n\n# Integration test with database\n@pytest.mark.integration\n@pytest.mark.database\nclass TestUserModel(TestCase):\n    def test_user_creation(self):\n        user = User.objects.create(username='test')\n        self.assertTrue(user.is_active)\n    \n    def test_user_api_endpoint(self):\n        user = User.objects.create(username='test')\n        response = self.client.get(f'/api/users/{user.id}/')\n        self.assertEqual(response.status_code, 200)\n\n# Performance test with Mercury\n@pytest.mark.performance\n@pytest.mark.slow\n@pytest.mark.database\nclass TestUserPerformance(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        self.configure_mercury(\n            max_queries=5,\n            max_response_time=200\n        )\n    \n    def test_bulk_user_processing_performance(self):\n        # Create realistic test data\n        users = [User(username=f'user{i}') for i in range(100)]\n        User.objects.bulk_create(users)\n        \n        with self.mercury_monitor():\n            # Test the bulk processing performance\n            result = UserService.process_bulk_update(users)\n        \n        self.assertTrue(result.success)\n        # Mercury validates performance automatically\n\n# External dependency test\n@pytest.mark.external\n@pytest.mark.slow\n@pytest.mark.skipif(not settings.ENABLE_EXTERNAL_TESTS, reason=\"External tests disabled\")\nclass TestExternalAPIIntegration(TestCase):\n    def test_third_party_service(self):\n        # Test that requires external API access\n        response = ThirdPartyService.fetch_data()\n        self.assertIsNotNone(response)\n\n# pytest.ini configuration\n[tool:pytest]\naddopts = --strict-markers --strict-config\nmarkers =\n    fast: Fast tests that run in < 100ms\n    slow: Slow tests that take > 1 second\n    unit: Unit tests with no external dependencies\n    integration: Integration tests with database/services\n    performance: Performance tests with Mercury monitoring\n    database: Tests that require database access\n    external: Tests that require external services\n    regression: Tests for specific bug fixes",
+            "explanation": "Strategic marking enables flexible test execution. Developers can run 'pytest -m fast' during development, 'pytest -m \"integration and not external\"' for local testing, and all tests in CI.",
+            "performance_impact": "Development speed: Fast unit tests run in 2-5 seconds, integration tests in 30-60 seconds, full suite including performance tests in 5-10 minutes."
+          }
+        ],
+        "quiz": {
+          "question": "What's the best strategy for marking Django tests?",
+          "options": [
+            "Mark only the slowest tests to avoid running them",
+            "Use multiple orthogonal markers (speed, dependencies, purpose) for flexible test selection",
+            "Mark tests by the Django app they belong to",
+            "Only mark tests that use external services"
+          ],
+          "correct_answer": 1,
+          "explanation": "Use multiple orthogonal markers like @pytest.mark.fast, @pytest.mark.database, @pytest.mark.performance to enable flexible test selection. This allows running different test combinations for different scenarios."
+        }
+      },
+      {
+        "title": "Database and Fixture Optimization",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Optimizing Test Database Usage",
+            "content": "Database operations are often the bottleneck in Django test suites. Learn strategies to minimize database usage while maintaining test quality.",
+            "key_points": [
+              "Use TestCase for database rollback, not cleanup",
+              "Leverage pytest-django database fixtures",
+              "Share expensive setup across multiple tests",
+              "Use factory_boy for efficient test data creation"
+            ],
+            "examples": [
+              "Class-level setUpClass for shared expensive data",
+              "pytest fixtures with different scopes",
+              "Mock external services to focus on database testing"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Efficient Database Test Patterns",
+            "before_code": "# Inefficient database usage\nclass TestProductAPI(TestCase):\n    def test_product_list(self):\n        # Creates fresh data for each test - slow!\n        category = Category.objects.create(name='Electronics')\n        brand = Brand.objects.create(name='Apple')\n        \n        for i in range(20):\n            Product.objects.create(\n                name=f'Product {i}',\n                category=category,\n                brand=brand,\n                price=100.00\n            )\n        \n        response = self.client.get('/api/products/')\n        self.assertEqual(response.status_code, 200)\n    \n    def test_product_detail(self):\n        # Recreates the same data - very slow!\n        category = Category.objects.create(name='Electronics')\n        brand = Brand.objects.create(name='Apple')\n        product = Product.objects.create(\n            name='iPhone',\n            category=category,\n            brand=brand,\n            price=999.00\n        )\n        \n        response = self.client.get(f'/api/products/{product.id}/')\n        self.assertEqual(response.status_code, 200)\n    \n    def test_product_search(self):\n        # Yet again recreating data!\n        category = Category.objects.create(name='Electronics')\n        # ... same setup repeated",
+            "after_code": "# Optimized database usage with shared fixtures\nimport pytest\nfrom django.test import TestCase, TransactionTestCase\nfrom django_mercury import DjangoMercuryAPITestCase\n\n# Efficient factory setup\nclass CategoryFactory(factory.django.DjangoModelFactory):\n    class Meta:\n        model = Category\n    name = factory.Sequence(lambda n: f'Category {n}')\n\nclass BrandFactory(factory.django.DjangoModelFactory):\n    class Meta:\n        model = Brand\n    name = factory.Sequence(lambda n: f'Brand {n}')\n\nclass ProductFactory(factory.django.DjangoModelFactory):\n    class Meta:\n        model = Product\n    \n    name = factory.Sequence(lambda n: f'Product {n}')\n    category = factory.SubFactory(CategoryFactory)\n    brand = factory.SubFactory(BrandFactory)\n    price = factory.Faker('pydecimal', left_digits=3, right_digits=2, positive=True)\n\n# Test class with shared expensive setup\nclass TestProductAPI(TestCase):\n    @classmethod\n    def setUpClass(cls):\n        super().setUpClass()\n        # Create shared test data once for all tests\n        cls.category = CategoryFactory()\n        cls.brand = BrandFactory()\n        \n        # Bulk create products for better performance\n        products = [\n            Product(\n                name=f'Product {i}',\n                category=cls.category,\n                brand=cls.brand,\n                price=100.00 + i\n            ) for i in range(20)\n        ]\n        cls.products = Product.objects.bulk_create(products)\n    \n    def test_product_list(self):\n        # Uses existing test data - fast!\n        response = self.client.get('/api/products/')\n        self.assertEqual(response.status_code, 200)\n        self.assertEqual(len(response.json()['results']), 20)\n    \n    def test_product_detail(self):\n        # Uses existing product - fast!\n        product = self.products[0]\n        response = self.client.get(f'/api/products/{product.id}/')\n        self.assertEqual(response.status_code, 200)\n    \n    def test_product_search(self):\n        # Uses existing data for search testing\n        response = self.client.get('/api/products/?search=Product%201')\n        self.assertEqual(response.status_code, 200)\n\n# pytest fixture approach for even more flexibility\n@pytest.fixture(scope='class')\ndef product_test_data(django_db_setup, django_db_blocker):\n    \"\"\"Create shared test data for product tests\"\"\"\n    with django_db_blocker.unblock():\n        category = CategoryFactory()\n        brand = BrandFactory()\n        products = ProductFactory.create_batch(20, category=category, brand=brand)\n        return {\n            'category': category,\n            'brand': brand,\n            'products': products\n        }\n\n@pytest.mark.usefixtures('product_test_data')\nclass TestProductAPIWithFixtures(TestCase):\n    def test_product_operations(self, product_test_data):\n        # Access shared data via fixture\n        products = product_test_data['products']\n        self.assertEqual(len(products), 20)",
+            "explanation": "Share expensive test data setup using setUpClass or pytest fixtures. This reduces database operations from N per test to 1 per test class, dramatically improving test suite speed.",
+            "performance_impact": "Test suite speed: 300 seconds → 45 seconds for database-heavy test suites. Individual test execution: 2-3 seconds → 50-100ms."
+          }
+        ],
+        "quiz": {
+          "question": "What's the most effective way to speed up database-heavy Django test suites?",
+          "options": [
+            "Use SQLite in memory instead of PostgreSQL",
+            "Share expensive test data setup across multiple tests using setUpClass or fixtures",
+            "Skip database tests entirely and use mocks",
+            "Run tests in parallel across multiple processes"
+          ],
+          "correct_answer": 1,
+          "explanation": "Sharing expensive setup using setUpClass or pytest fixtures eliminates redundant database operations. This has the biggest impact on test speed while maintaining test quality and isolation."
+        }
+      },
+      {
+        "title": "Performance Test Integration",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Integrating Performance Tests into Development Workflow",
+            "content": "Performance tests should be part of your regular development workflow, not an afterthought. Learn to structure performance tests alongside functional tests.",
+            "key_points": [
+              "Co-locate performance tests with functional tests",
+              "Use Mercury to add performance assertions to existing tests",
+              "Create performance test templates for new features",
+              "Balance performance coverage with test suite speed"
+            ],
+            "examples": [
+              "API tests that verify both functionality and performance",
+              "Database migration tests with performance constraints",
+              "Background task performance validation"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Integrated Performance Testing Pattern",
+            "before_code": "# Traditional approach - separate performance tests\n# tests/functional/test_blog_api.py\nclass TestBlogAPI(TestCase):\n    def test_post_list_functionality(self):\n        # Only tests functionality\n        Post.objects.create(title='Test', content='Content')\n        response = self.client.get('/api/posts/')\n        self.assertEqual(response.status_code, 200)\n        self.assertContains(response, 'Test')\n\n# tests/performance/test_blog_performance.py (separate file)\nclass TestBlogPerformance(DjangoMercuryAPITestCase):\n    def test_post_list_performance(self):\n        # Duplicate setup for performance testing\n        for i in range(50):\n            Post.objects.create(title=f'Post {i}', content='Content')\n        \n        with self.mercury_monitor():\n            response = self.client.get('/api/posts/')\n        \n        # Only tests performance\n        self.assertEqual(response.status_code, 200)\n\n# Problems:\n# - Duplicate test setup and logic\n# - Performance tests often forgotten or skipped\n# - No guarantee that functional and performance tests stay in sync",
+            "after_code": "# Integrated approach - performance-aware functional tests\nfrom django_mercury import DjangoMercuryAPITestCase\n\nclass TestBlogAPI(DjangoMercuryAPITestCase):\n    def setUp(self):\n        super().setUp()\n        # Configure Mercury for all tests in this class\n        self.configure_mercury(\n            max_queries=5,           # Catch N+1 issues\n            max_response_time=300,   # Keep responses fast\n            fail_on_exceed=False     # Warning only by default\n        )\n    \n    def test_post_list_comprehensive(self):\n        \"\"\"Test both functionality and performance\"\"\"\n        # Create realistic test data\n        posts = []\n        for i in range(30):\n            posts.append(Post(\n                title=f'Post {i}',\n                content=f'Content for post {i}',\n                author_id=1  # Assume test user exists\n            ))\n        Post.objects.bulk_create(posts)\n        \n        # Test with Mercury monitoring\n        with self.mercury_monitor():\n            response = self.client.get('/api/posts/')\n        \n        # Verify functionality\n        self.assertEqual(response.status_code, 200)\n        data = response.json()\n        self.assertEqual(len(data['results']), 30)\n        self.assertIn('Post 0', str(data))\n        \n        # Performance is automatically validated by Mercury\n        # Test passes if both functionality AND performance are good\n    \n    @pytest.mark.performance\n    def test_post_list_strict_performance(self):\n        \"\"\"Strict performance test for critical endpoints\"\"\"\n        # Override Mercury config for strict performance testing\n        self.configure_mercury(\n            max_queries=3,           # Very strict query limit\n            max_response_time=100,   # Very strict timing\n            fail_on_exceed=True      # Fail if limits exceeded\n        )\n        \n        # Create more realistic production-like data\n        User.objects.bulk_create([\n            User(username=f'user{i}', email=f'user{i}@example.com')\n            for i in range(10)\n        ])\n        \n        posts = []\n        for i in range(100):  # Production-scale data\n            posts.append(Post(\n                title=f'Post {i}',\n                content=f'Content for post {i}',\n                author_id=(i % 10) + 1  # Distribute across users\n            ))\n        Post.objects.bulk_create(posts)\n        \n        with self.mercury_monitor():\n            response = self.client.get('/api/posts/')\n        \n        self.assertEqual(response.status_code, 200)\n        # Strict performance limits enforced by Mercury\n    \n    def test_post_creation_with_validation(self):\n        \"\"\"Test creation with both validation and performance\"\"\"\n        post_data = {\n            'title': 'New Post',\n            'content': 'This is a new post content',\n            'author': 1\n        }\n        \n        with self.mercury_monitor():\n            response = self.client.post('/api/posts/', post_data)\n        \n        # Verify functionality\n        self.assertEqual(response.status_code, 201)\n        created_post = Post.objects.get(title='New Post')\n        self.assertEqual(created_post.content, post_data['content'])\n        \n        # Performance automatically validated:\n        # - Should be ≤ 5 queries (creation + validation)\n        # - Should complete in ≤ 300ms",
+            "explanation": "Integrate performance testing into functional tests using Mercury. This ensures performance considerations are part of every feature test, not an afterthought.",
+            "performance_impact": "Comprehensive coverage: Every feature is tested for both functionality and performance, preventing regressions in either dimension."
+          }
+        ],
+        "quiz": {
+          "question": "What's the main advantage of integrating performance tests with functional tests?",
+          "options": [
+            "It reduces the total number of tests you need to write",
+            "It ensures performance considerations are included in every feature test, preventing regressions",
+            "It makes tests run faster overall",
+            "It eliminates the need for separate performance testing tools"
+          ],
+          "correct_answer": 1,
+          "explanation": "Integrating performance testing ensures that every feature is tested for both functionality and performance. This prevents performance regressions from being introduced when adding new functionality."
+        }
+      },
+      {
+        "title": "CI/CD Test Execution Strategy",
+        "content_slides": [
+          {
+            "type": "concept",
+            "title": "Optimizing Tests for Continuous Integration",
+            "content": "Design your test execution strategy for different CI/CD stages. Balance speed, coverage, and reliability across development, staging, and production pipelines.",
+            "key_points": [
+              "Fast feedback loop: Run critical tests on every commit",
+              "Comprehensive validation: Full test suite on pull requests",
+              "Performance gates: Mercury tests in staging deployments",
+              "Parallel execution and smart test selection"
+            ],
+            "examples": [
+              "Pre-commit hooks with fast unit tests",
+              "PR validation with integration tests",
+              "Deployment gates with performance tests"
+            ]
+          },
+          {
+            "type": "code_example",
+            "title": "Multi-Stage CI Test Strategy",
+            "before_code": "# Poor CI strategy - all tests always run\n# .github/workflows/test.yml\nname: Test\non: [push, pull_request]\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v2\n      - name: Run all tests\n        run: pytest  # Runs everything - slow!\n        \n# Problems:\n# - Slow feedback (10+ minutes for simple changes)\n# - Same tests run for every change\n# - No distinction between critical and comprehensive testing\n# - Performance tests slow down every PR",
+            "after_code": "# Optimized multi-stage CI strategy\n# .github/workflows/test.yml\nname: Test Suite\non:\n  push:\n    branches: [main, develop]\n  pull_request:\n    branches: [main, develop]\n\njobs:\n  # Stage 1: Fast feedback for every commit\n  quick-validation:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v2\n      - name: Setup Python\n        uses: actions/setup-python@v2\n        with:\n          python-version: '3.11'\n      \n      - name: Install dependencies\n        run: |\n          pip install -r requirements.txt\n          pip install pytest-xdist  # For parallel execution\n      \n      - name: Run fast tests\n        run: |\n          # Only fast unit tests - complete in 2-3 minutes\n          pytest -m \"fast and unit\" -n auto --maxfail=5\n      \n      - name: Run linting\n        run: |\n          ruff check .\n          black --check .\n          mypy django_mercury/\n  \n  # Stage 2: Comprehensive testing for PRs\n  full-validation:\n    runs-on: ubuntu-latest\n    needs: quick-validation\n    if: github.event_name == 'pull_request'\n    services:\n      postgres:\n        image: postgres:13\n        env:\n          POSTGRES_PASSWORD: postgres\n        options: >-\n          --health-cmd pg_isready\n          --health-interval 10s\n          --health-timeout 5s\n          --health-retries 5\n    \n    steps:\n      - uses: actions/checkout@v2\n      - name: Setup Python\n        uses: actions/setup-python@v2\n        with:\n          python-version: '3.11'\n      \n      - name: Install dependencies\n        run: pip install -r requirements.txt\n      \n      - name: Run integration tests\n        run: |\n          # Integration tests with database\n          pytest -m \"integration and not slow\" -n auto\n        env:\n          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test\n      \n      - name: Run performance tests\n        run: |\n          # Mercury performance tests\n          pytest -m \"performance\" --tb=short\n        env:\n          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test\n          MERCURY_CI_MODE: true\n  \n  # Stage 3: Full test suite for main branch\n  complete-validation:\n    runs-on: ubuntu-latest\n    needs: quick-validation\n    if: github.ref == 'refs/heads/main'\n    services:\n      postgres:\n        image: postgres:13\n        env:\n          POSTGRES_PASSWORD: postgres\n    \n    steps:\n      - uses: actions/checkout@v2\n      - name: Setup Python\n        uses: actions/setup-python@v2\n      \n      - name: Run complete test suite\n        run: |\n          # All tests including slow ones\n          pytest --cov=django_mercury --cov-report=xml -n auto\n      \n      - name: Upload coverage\n        uses: codecov/codecov-action@v1\n        with:\n          file: ./coverage.xml\n\n# pytest.ini - Configure test selection\n[tool:pytest]\naddopts = \n    --strict-markers \n    --strict-config\n    --reuse-db  # Speed up database tests\nmarkers =\n    fast: Tests that complete in < 100ms\n    unit: Unit tests with no external dependencies\n    integration: Integration tests requiring database\n    performance: Performance tests with Mercury\n    slow: Tests that take > 1 second\n    external: Tests requiring external services\n\n# Smart test selection based on changed files\n# scripts/smart_test_selection.py\nimport subprocess\nimport sys\n\ndef get_changed_files():\n    \"\"\"Get list of changed files in current branch\"\"\"\n    result = subprocess.run(\n        ['git', 'diff', '--name-only', 'origin/main...HEAD'],\n        capture_output=True, text=True\n    )\n    return result.stdout.strip().split('\\n')\n\ndef select_tests_for_changes(changed_files):\n    \"\"\"Select relevant tests based on changed files\"\"\"\n    test_patterns = []\n    \n    for file in changed_files:\n        if file.startswith('django_mercury/api/'):\n            test_patterns.append('tests/integration/test_api*')\n        elif file.startswith('django_mercury/models/'):\n            test_patterns.append('tests/unit/test_*models*')\n            test_patterns.append('tests/integration/test_*models*')\n        elif file.startswith('django_mercury/performance/'):\n            test_patterns.append('tests/performance/')\n    \n    return test_patterns\n\nif __name__ == '__main__':\n    changed_files = get_changed_files()\n    test_patterns = select_tests_for_changes(changed_files)\n    \n    if test_patterns:\n        cmd = ['pytest'] + test_patterns\n        subprocess.run(cmd)\n    else:\n        # No relevant changes, run fast tests\n        subprocess.run(['pytest', '-m', 'fast'])",
+            "explanation": "Multi-stage CI provides fast feedback (2-3 min) for commits, comprehensive validation (10-15 min) for PRs, and complete testing (20-30 min) for main branch. Smart test selection runs only relevant tests.",
+            "performance_impact": "Developer productivity: Fast feedback enables rapid iteration. Comprehensive validation prevents regressions. Resource efficiency: CI costs reduced by 60-70%."
+          }
+        ],
+        "quiz": {
+          "question": "What's the optimal CI/CD test strategy for a Django project with comprehensive test coverage?",
+          "options": [
+            "Run all tests on every commit to catch issues early",
+            "Use multi-stage testing: fast tests on commits, integration tests on PRs, full suite on main branch",
+            "Only run tests on pull requests to save CI resources",
+            "Run tests manually before deployments"
+          ],
+          "correct_answer": 1,
+          "explanation": "Multi-stage testing balances speed and coverage: fast feedback for rapid development, comprehensive validation for quality gates, and complete testing for deployment confidence."
+        }
+      }
+    ],
+    "summary": {
+      "key_takeaways": [
+        "Organize tests by type (unit/integration/performance) rather than by Django app",
+        "Use pytest markers for flexible test selection based on speed and dependencies",
+        "Share expensive test setup using setUpClass or fixtures to improve test suite speed",
+        "Integrate performance testing into functional tests with Mercury for comprehensive coverage",
+        "Implement multi-stage CI testing for fast feedback and comprehensive validation"
+      ],
+      "next_steps": [
+        "Reorganize your existing test suite using the recommended structure",
+        "Implement pytest markers and configure CI for selective test execution",
+        "Add Mercury performance testing to critical functionality tests",
+        "Set up multi-stage CI pipeline with appropriate test selection for each stage"
+      ],
+      "related_tutorials": [
+        "testing-patterns",
+        "n-plus-one-patterns",
+        "django-orm",
+        "response-time"
+      ]
+    }
+  }
+}

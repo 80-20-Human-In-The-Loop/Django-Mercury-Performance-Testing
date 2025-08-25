@@ -14,24 +14,20 @@ try:
     from .metrics import PerformanceMetrics, PerformanceStatus
     from .django_hooks import DjangoQueryTracker, DjangoCacheTracker
     from .colors import colors, get_status_icon, EduLiteColorScheme
-    from .c_bindings import c_extensions
-
-    C_EXTENSIONS_AVAILABLE = True
 except ImportError:
     # Direct execution fallback
     from metrics import PerformanceMetrics, PerformanceStatus  # type: ignore[import,no-redef]
 
-    C_EXTENSIONS_AVAILABLE = False
     try:
         from django_hooks import DjangoQueryTracker, DjangoCacheTracker  # type: ignore[import,no-redef]
         from colors import colors, get_status_icon, EduLiteColorScheme  # type: ignore[import,no-redef]
-        from c_bindings import c_extensions  # type: ignore[import,no-redef]
-
-        C_EXTENSIONS_AVAILABLE = True  # Enable c_extensions for performance monitoring
     except ImportError:
         DjangoQueryTracker = None  # type: ignore[assignment]
         DjangoCacheTracker = None  # type: ignore[assignment]
-        c_extensions = None
+
+# Pure Python mode - C extensions permanently removed
+C_EXTENSIONS_AVAILABLE = False
+c_extensions = None
 
 # Type checking imports
 if TYPE_CHECKING:
@@ -53,43 +49,25 @@ logger = logging.getLogger(__name__)
 _lib = None
 _lib_initialized = False
 
+
 def _get_lib():
     """Get the C library handle with lazy initialization."""
     global _lib, _lib_initialized
-    
+
     if _lib_initialized:
         return _lib
-    
+
     _lib_initialized = True
-    
-    try:
-        if C_EXTENSIONS_AVAILABLE and c_extensions:
-            # Check if we need to initialize (for deferred mode)
-            import os
-            if os.environ.get("MERCURY_DEFER_INIT", "0") == "1":
-                # In deferred mode, check if extensions are available
-                from .c_bindings import are_c_extensions_available
-                if not are_c_extensions_available():
-                    # Extensions not yet initialized, will use fallback
-                    logger.debug("C extensions not yet initialized (MERCURY_DEFER_INIT=1)")
-                    return None
-            
-            # Use the unified metrics_engine library
-            if c_extensions.metrics_engine:
-                _lib = c_extensions.metrics_engine
-                logger.debug("Using metrics engine C library for performance monitoring")
-            else:
-                logger.debug("Metrics engine not available, using fallback")
-        else:
-            logger.debug("C extensions not available, using fallback mode")
-    except Exception as e:
-        logger.error(f"Failed to initialize C performance library: {e}")
-        logger.warning("Performance monitoring will run in degraded mode without C optimizations")
-    
+
+    # Pure Python mode - C extensions permanently removed
+    logger.debug("Running in pure Python mode")
+
     return _lib
+
 
 # For backwards compatibility
 lib = None  # Will be set on first use
+
 
 class MockLib:
     """Mock C library for fallback when C extensions are not available."""
@@ -137,22 +115,28 @@ class EnhancedPerformanceMetrics(ctypes.Structure):
 
 _lib_configured = False
 
+
 def _configure_lib_signatures(lib_handle):
     """Configure C library function signatures."""
     global _lib_configured
-    
+
     if _lib_configured or lib_handle is None or isinstance(lib_handle, MockLib):
         return
-    
+
     _lib_configured = True
-    
+
     try:
         # C function signatures - only configure for real C libraries
-        lib_handle.start_performance_monitoring_enhanced.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib_handle.start_performance_monitoring_enhanced.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+        ]
         lib_handle.start_performance_monitoring_enhanced.restype = ctypes.c_int64
 
         lib_handle.stop_performance_monitoring_enhanced.argtypes = [ctypes.c_int64]
-        lib_handle.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(EnhancedPerformanceMetrics)
+        lib_handle.stop_performance_monitoring_enhanced.restype = ctypes.POINTER(
+            EnhancedPerformanceMetrics
+        )
 
         lib_handle.get_elapsed_time_ms.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
         lib_handle.get_elapsed_time_ms.restype = ctypes.c_double
@@ -181,25 +165,35 @@ def _configure_lib_signatures(lib_handle):
         lib_handle.detect_n_plus_one_severe.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
         lib_handle.detect_n_plus_one_severe.restype = ctypes.c_int
 
-        lib_handle.detect_n_plus_one_moderate.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.detect_n_plus_one_moderate.argtypes = [
+            ctypes.POINTER(EnhancedPerformanceMetrics)
+        ]
         lib_handle.detect_n_plus_one_moderate.restype = ctypes.c_int
 
-        lib_handle.detect_n_plus_one_pattern_by_count.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.detect_n_plus_one_pattern_by_count.argtypes = [
+            ctypes.POINTER(EnhancedPerformanceMetrics)
+        ]
         lib_handle.detect_n_plus_one_pattern_by_count.restype = ctypes.c_int
 
-        lib_handle.calculate_n_plus_one_severity.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.calculate_n_plus_one_severity.argtypes = [
+            ctypes.POINTER(EnhancedPerformanceMetrics)
+        ]
         lib_handle.calculate_n_plus_one_severity.restype = ctypes.c_int
 
         lib_handle.estimate_n_plus_one_cause.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
         lib_handle.estimate_n_plus_one_cause.restype = ctypes.c_int
 
-        lib_handle.get_n_plus_one_fix_suggestion.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.get_n_plus_one_fix_suggestion.argtypes = [
+            ctypes.POINTER(EnhancedPerformanceMetrics)
+        ]
         lib_handle.get_n_plus_one_fix_suggestion.restype = ctypes.c_char_p
 
         lib_handle.is_memory_intensive.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
         lib_handle.is_memory_intensive.restype = ctypes.c_int
 
-        lib_handle.has_poor_cache_performance.argtypes = [ctypes.POINTER(EnhancedPerformanceMetrics)]
+        lib_handle.has_poor_cache_performance.argtypes = [
+            ctypes.POINTER(EnhancedPerformanceMetrics)
+        ]
         lib_handle.has_poor_cache_performance.restype = ctypes.c_int
 
         # Django hook functions
@@ -363,16 +357,18 @@ class EnhancedPerformanceMetrics_Python:
             # For MockLib or no lib, use defaults or calculate from C struct
             # Check if lib is a test Mock that might return MagicMock objects
             from unittest.mock import Mock, MagicMock
-            
+
             if isinstance(lib, (Mock, MagicMock)):
                 # Test mock - try to use the mock return values but handle MagicMock returns
                 try:
                     response = lib.get_elapsed_time_ms(c_metrics) if lib else 0.0
-                    self.response_time = float(response) if not isinstance(response, MagicMock) else 0.0
-                    
+                    self.response_time = (
+                        float(response) if not isinstance(response, MagicMock) else 0.0
+                    )
+
                     mem = lib.get_memory_usage_mb(c_metrics) if lib else 0.0
                     self.memory_usage = float(mem) if not isinstance(mem, MagicMock) else 0.0
-                    
+
                     delta = lib.get_memory_delta_mb(c_metrics) if lib else 0.0
                     self.memory_delta = float(delta) if not isinstance(delta, MagicMock) else 0.0
                 except (TypeError, ValueError):
@@ -385,19 +381,34 @@ class EnhancedPerformanceMetrics_Python:
                 self.response_time = 0.0
                 self.memory_usage = 0.0
                 self.memory_delta = 0.0
-            
+
             # Try to get values from C struct if available
             if c_metrics and self.response_time == 0.0:
                 try:
                     # Calculate from C struct directly if possible
-                    if hasattr(c_metrics, 'contents'):
+                    if hasattr(c_metrics, "contents"):
                         contents = c_metrics.contents
-                        if hasattr(contents, 'end_time_ns') and contents.end_time_ns > 0 and contents.start_time_ns > 0:
-                            self.response_time = (contents.end_time_ns - contents.start_time_ns) / 1e6
-                        if hasattr(contents, 'memory_peak_bytes') and contents.memory_peak_bytes > 0:
+                        if (
+                            hasattr(contents, "end_time_ns")
+                            and contents.end_time_ns > 0
+                            and contents.start_time_ns > 0
+                        ):
+                            self.response_time = (
+                                contents.end_time_ns - contents.start_time_ns
+                            ) / 1e6
+                        if (
+                            hasattr(contents, "memory_peak_bytes")
+                            and contents.memory_peak_bytes > 0
+                        ):
                             self.memory_usage = contents.memory_peak_bytes / (1024.0 * 1024.0)
-                        if hasattr(contents, 'memory_end_bytes') and contents.memory_end_bytes > 0 and contents.memory_start_bytes > 0:
-                            self.memory_delta = (contents.memory_end_bytes - contents.memory_start_bytes) / (1024.0 * 1024.0)
+                        if (
+                            hasattr(contents, "memory_end_bytes")
+                            and contents.memory_end_bytes > 0
+                            and contents.memory_start_bytes > 0
+                        ):
+                            self.memory_delta = (
+                                contents.memory_end_bytes - contents.memory_start_bytes
+                            ) / (1024.0 * 1024.0)
                 except (AttributeError, TypeError):
                     pass  # Keep defaults
 
@@ -405,6 +416,7 @@ class EnhancedPerformanceMetrics_Python:
         self.baseline_memory_mb = 80.0  # Typical Django baseline
         # Ensure all metrics are numeric to avoid MagicMock comparison errors
         from unittest.mock import MagicMock
+
         if isinstance(self.response_time, MagicMock):
             self.response_time = 0.0
         if isinstance(self.memory_usage, MagicMock):
@@ -423,21 +435,33 @@ class EnhancedPerformanceMetrics_Python:
 
         # Other metrics from thread-safe metrics engine
         from unittest.mock import Mock, MagicMock
-        
+
         if lib and not isinstance(lib, MockLib):
             if isinstance(lib, (Mock, MagicMock)):
                 # Test mock - handle MagicMock returns
                 try:
                     q = lib.get_query_count(c_metrics) if hasattr(lib, "get_query_count") else 0
                     self.query_count = int(q) if not isinstance(q, MagicMock) else 0
-                    
-                    h = lib.get_cache_hit_count(c_metrics) if hasattr(lib, "get_cache_hit_count") else 0
+
+                    h = (
+                        lib.get_cache_hit_count(c_metrics)
+                        if hasattr(lib, "get_cache_hit_count")
+                        else 0
+                    )
                     self.cache_hits = int(h) if not isinstance(h, MagicMock) else 0
-                    
-                    m = lib.get_cache_miss_count(c_metrics) if hasattr(lib, "get_cache_miss_count") else 0
+
+                    m = (
+                        lib.get_cache_miss_count(c_metrics)
+                        if hasattr(lib, "get_cache_miss_count")
+                        else 0
+                    )
                     self.cache_misses = int(m) if not isinstance(m, MagicMock) else 0
-                    
-                    r = lib.get_cache_hit_ratio(c_metrics) if hasattr(lib, "get_cache_hit_ratio") else 0.0
+
+                    r = (
+                        lib.get_cache_hit_ratio(c_metrics)
+                        if hasattr(lib, "get_cache_hit_ratio")
+                        else 0.0
+                    )
                     self.cache_hit_ratio = float(r) if not isinstance(r, MagicMock) else 0.0
                 except (TypeError, ValueError):
                     self.query_count = 0
@@ -453,10 +477,14 @@ class EnhancedPerformanceMetrics_Python:
                     lib.get_cache_hit_count(c_metrics) if hasattr(lib, "get_cache_hit_count") else 0
                 )
                 self.cache_misses = (
-                    lib.get_cache_miss_count(c_metrics) if hasattr(lib, "get_cache_miss_count") else 0
+                    lib.get_cache_miss_count(c_metrics)
+                    if hasattr(lib, "get_cache_miss_count")
+                    else 0
                 )
                 self.cache_hit_ratio = (
-                    lib.get_cache_hit_ratio(c_metrics) if hasattr(lib, "get_cache_hit_ratio") else 0.0
+                    lib.get_cache_hit_ratio(c_metrics)
+                    if hasattr(lib, "get_cache_hit_ratio")
+                    else 0.0
                 )
 
             # Fallback to Python query tracker or Django's connection.queries
@@ -464,13 +492,14 @@ class EnhancedPerformanceMetrics_Python:
                 # First try Django's built-in query tracking
                 try:
                     from django.db import connection
-                    if hasattr(connection, 'queries'):
+
+                    if hasattr(connection, "queries"):
                         django_count = len(connection.queries)
                         if django_count > 0:
                             self.query_count = django_count
                 except Exception:
                     pass
-                
+
                 # Then try our custom query tracker
                 if (
                     self.query_count == 0
@@ -486,33 +515,34 @@ class EnhancedPerformanceMetrics_Python:
             self.cache_hits = 0
             self.cache_misses = 0
             self.cache_hit_ratio = 0.0
-            
+
             # Try to extract from C struct if available (for mock metrics)
             if c_metrics:
                 try:
-                    if hasattr(c_metrics, 'contents'):
+                    if hasattr(c_metrics, "contents"):
                         contents = c_metrics.contents
-                        if hasattr(contents, 'query_count_end'):
+                        if hasattr(contents, "query_count_end"):
                             self.query_count = contents.query_count_end - contents.query_count_start
-                        if hasattr(contents, 'cache_hits'):
+                        if hasattr(contents, "cache_hits"):
                             self.cache_hits = contents.cache_hits
-                        if hasattr(contents, 'cache_misses'):
+                        if hasattr(contents, "cache_misses"):
                             self.cache_misses = contents.cache_misses
                 except (AttributeError, TypeError):
                     pass  # Keep defaults
-            
+
             # Still apply Django/tracker fallback if query_count is 0
             if self.query_count == 0:
                 # First try Django's built-in query tracking
                 try:
                     from django.db import connection
-                    if hasattr(connection, 'queries'):
+
+                    if hasattr(connection, "queries"):
                         django_count = len(connection.queries)
                         if django_count > 0:
                             self.query_count = django_count
                 except Exception:
                     pass
-                
+
                 # Then try our custom query tracker
                 if (
                     self.query_count == 0
@@ -522,9 +552,10 @@ class EnhancedPerformanceMetrics_Python:
                     python_count = self._query_tracker_ref.query_count
                     if python_count > 0:
                         self.query_count = python_count
-        
+
         # Final safety check - ensure all metrics are numeric to avoid MagicMock issues
         from unittest.mock import MagicMock
+
         if isinstance(self.query_count, MagicMock):
             self.query_count = 0
         if isinstance(self.cache_hits, MagicMock):
@@ -1289,7 +1320,7 @@ class EnhancedPerformanceMonitor:
             lib = _get_lib()
             if lib:
                 _configure_lib_signatures(lib)
-        
+
         self.operation_name = operation_name
         self.operation_type = operation_type
         self.handle: Optional[int] = None
@@ -1492,22 +1523,27 @@ class EnhancedPerformanceMonitor:
         """Start enhanced performance monitoring."""
         # Start timing for fallback metrics
         import time
+
         self._start_time = time.perf_counter()
-        
+
+        # CRITICAL: Reset Django's query list to isolate monitoring to this context
+        # This ensures we only count queries that happen inside the with block
+        try:
+            from django.db import reset_queries
+
+            reset_queries()  # Clear ALL previous queries from test setup
+            logger.debug(f"Reset Django queries for isolated monitoring of {self.operation_name}")
+        except ImportError:
+            # Django not available or reset_queries not available
+            pass
+        except Exception as e:
+            logger.debug(f"Could not reset Django queries: {e}")
+
         # Reset C library global counters to prevent stale values
         if lib and hasattr(lib, "reset_global_counters"):
             lib.reset_global_counters()
 
-        # Also reset metrics engine counters if available
-        try:
-            from .c_bindings import c_extensions
-
-            if c_extensions.metrics_engine and hasattr(
-                c_extensions.metrics_engine, "reset_global_counters"
-            ):
-                c_extensions.metrics_engine.reset_global_counters()
-        except Exception:
-            pass  # Ignore if new extension not available
+        # Pure Python mode - no C extension counters to reset
 
         # Start Django hooks if enabled
         if self._django_hooks_active:
@@ -1583,16 +1619,16 @@ class EnhancedPerformanceMonitor:
         else:
             # C monitoring not available, use Python-only metrics
             logger.debug("No C handle, using Python-only metrics")
-            
+
             # Stop Django hooks BEFORE creating fallback metrics so query counts are synced
             if self._django_hooks_active:
                 if self._query_tracker:
                     self._query_tracker.stop()
                 if self._cache_tracker:
                     self._cache_tracker.stop()
-            
+
             self._create_fallback_metrics()
-            
+
             # Mark hooks as stopped so we don't stop them again
             self._django_hooks_active = False
 
@@ -1603,30 +1639,34 @@ class EnhancedPerformanceMonitor:
         # Calculate timing with resilience to test mocking
         try:
             import time
+
             end_time = time.perf_counter()
-            response_time_ms = (end_time - self._start_time) * 1000.0 if hasattr(self, '_start_time') else 0.0
+            response_time_ms = (
+                (end_time - self._start_time) * 1000.0 if hasattr(self, "_start_time") else 0.0
+            )
             # Ensure non-zero for tests that expect response_time > 0
             if response_time_ms == 0.0:
                 response_time_ms = 0.001  # Minimum measurable time
         except (StopIteration, AttributeError):
             # Handle mocked time.perf_counter() in tests
             response_time_ms = 100.0  # Default fallback value for tests
-        
+
         # Get basic memory usage
         memory_usage_mb = 80.0  # Default baseline
         try:
             import psutil
+
             process = psutil.Process()
             memory_info = process.memory_info()
             memory_usage_mb = memory_info.rss / (1024 * 1024)  # Convert to MB
         except (ImportError, Exception):
             memory_usage_mb = 80.0  # Fallback value
-            
+
         # Get query and cache data from trackers
         query_count = 0
         cache_hits = 0
         cache_misses = 0
-        
+
         # First try our custom tracker (it has the accurate count for this monitoring session)
         if self._query_tracker:
             try:
@@ -1635,59 +1675,60 @@ class EnhancedPerformanceMonitor:
                     query_count = len(self._query_tracker.queries)
             except Exception:
                 pass
-        
+
         # Only fall back to Django's total if we have no tracker data
         if query_count == 0:
             try:
                 from django.db import connection
-                if hasattr(connection, 'queries'):
+
+                if hasattr(connection, "queries"):
                     # This gives total queries, not ideal but better than 0
                     query_count = len(connection.queries)
             except Exception:
                 pass
-                
+
         if self._cache_tracker:
             try:
                 cache_hits = self._cache_tracker.hits
                 cache_misses = self._cache_tracker.misses
             except Exception:
                 pass
-        
+
         # Create mock C metrics structure for EnhancedPerformanceMetrics_Python
         mock_c_metrics = EnhancedPerformanceMetrics()
-        
+
         # Fill with computed values (convert to appropriate C types)
         try:
-            start_time_ns = int((self._start_time if hasattr(self, '_start_time') else 0) * 1e9)
+            start_time_ns = int((self._start_time if hasattr(self, "_start_time") else 0) * 1e9)
             end_time_ns = start_time_ns + int(response_time_ms * 1e6)  # ms to ns
         except (AttributeError, ValueError):
             start_time_ns = 0
             end_time_ns = int(response_time_ms * 1e6)
-            
+
         mock_c_metrics.start_time_ns = start_time_ns
         mock_c_metrics.end_time_ns = end_time_ns
-        mock_c_metrics.memory_start_bytes = int((memory_usage_mb - 10) * 1024 * 1024)  # Estimate start
+        mock_c_metrics.memory_start_bytes = int(
+            (memory_usage_mb - 10) * 1024 * 1024
+        )  # Estimate start
         mock_c_metrics.memory_peak_bytes = int(memory_usage_mb * 1024 * 1024)
         mock_c_metrics.memory_end_bytes = int(memory_usage_mb * 1024 * 1024)
         mock_c_metrics.query_count_start = 0
         mock_c_metrics.query_count_end = query_count
         mock_c_metrics.cache_hits = cache_hits
         mock_c_metrics.cache_misses = cache_misses
-        
+
         # Note: operation_name and operation_type are char arrays in the C struct
         # but EnhancedPerformanceMetrics_Python gets these from the constructor parameters
         # so we don't need to set them in the mock C structure
-        
+
         # Create pointer to the mock structure
         mock_c_metrics_ptr = ctypes.pointer(mock_c_metrics)
-        
+
         # Use the existing sophisticated EnhancedPerformanceMetrics_Python
         self._metrics = EnhancedPerformanceMetrics_Python(
-            mock_c_metrics_ptr, 
-            self.operation_name, 
-            self._query_tracker
+            mock_c_metrics_ptr, self.operation_name, self._query_tracker
         )
-        
+
         # Perform automatic assertions if enabled
         if self._auto_assert:
             self._assert_thresholds()
