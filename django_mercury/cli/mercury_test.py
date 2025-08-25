@@ -208,7 +208,7 @@ def _show_profile_help_rich(config_manager, console):
         "• Learning suggestions after every test run\n"
         "• Performance guidance and educational content\n"
         "• Slower but teaches Django best practices\n"
-        "• Plugins: discovery, wizard, learn, hints, visual_progress[/green]",
+        "• Plugins: discovery, wizard, learn, hints[/green]",
     )
 
     # Expert profile
@@ -218,7 +218,7 @@ def _show_profile_help_rich(config_manager, console):
         "• Minimal educational content\n"
         "• Quick fixes for trivial issues\n"
         "• Optimized for experienced developers\n"
-        "• Plugins: discovery, wizard, visual_progress[/blue]",
+        "• Plugins: discovery, wizard[/blue]",
     )
 
     # Agent profile
@@ -286,14 +286,14 @@ def _show_profile_help_basic(config_manager):
     print(f"    {GREEN}• Learning suggestions after every test run{RESET}")
     print(f"    {GREEN}• Performance guidance and educational content{RESET}")
     print(f"    {GREEN}• Slower but teaches Django best practices{RESET}")
-    print(f"    {GREEN}• Plugins: discovery, wizard, learn, hints, visual_progress{RESET}")
+    print(f"    {GREEN}• Plugins: discovery, wizard, learn, hints{RESET}")
 
     print(f"\n  {BLUE}{BOLD}⚡ expert{RESET} - {DIM}Professional & Efficient Mode{RESET}")
     print(f"    {BLUE}• Fast, concise output focused on results{RESET}")
     print(f"    {BLUE}• Minimal educational content{RESET}")
     print(f"    {BLUE}• Quick fixes for trivial issues{RESET}")
     print(f"    {BLUE}• Optimized for experienced developers{RESET}")
-    print(f"    {BLUE}• Plugins: discovery, wizard, visual_progress{RESET}")
+    print(f"    {BLUE}• Plugins: discovery, wizard{RESET}")
 
     print(f"\n  {PURPLE}{BOLD}🤖 agent{RESET} - {DIM}AI/Automation Mode{RESET}")
     print(f"    {PURPLE}• Structured JSON output for automation{RESET}")
@@ -495,7 +495,8 @@ def main():
         # Use the first handler plugin (they're sorted by priority)
         plugin = handler_plugins[0]
         logging.debug(f"Plugin {plugin.name} handling request")
-        return plugin.execute(args)
+        # Execute the plugin
+        return plugin.execute(args, plugin_manager)
 
     # 12. Default Django test execution with plugin enhancements
     return run_enhanced_django_tests(args, plugin_manager)
@@ -557,7 +558,6 @@ def run_enhanced_django_tests(args, plugin_manager):
     start_time = time.time()
 
     # Note: Visual mode is now handled entirely by the plugin system
-    # The plugin will intercept --visual requests and handle them directly
     # This keeps the core small and delegates features to plugins
 
     # Use standard Django test execution
@@ -751,7 +751,6 @@ def show_database_tips_if_needed():
 
 
 # Note: Visual test execution functions have been removed
-# Visual mode is now handled entirely by the visual_progress plugin
 # This follows the "small core, large plugin ecosystem" architecture
 
 

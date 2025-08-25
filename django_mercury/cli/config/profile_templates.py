@@ -22,18 +22,6 @@ PLUGIN_CONFIGS = {
             "default_verbosity": 1,
         },
     },
-    "visual_progress": {  # Correct plugin name
-        "audiences": ["student", "expert"],
-        "priority": 50,
-        "complexity": 2,
-        "description": "Rich visual feedback during test execution",
-        "settings": {
-            "theme": "default",  # Options: default, minimal, detailed
-            "refresh_rate_ms": 100,
-            "show_memory_usage": True,
-            "show_query_details": True,
-        },
-    },
     "discovery": {
         "audiences": ["student", "expert"],
         "priority": 10,
@@ -79,7 +67,7 @@ AUDIENCE_PROFILES = {
             "Optimized for learning Django testing and performance optimization. "
             "Includes educational explanations, interactive tutorials, and helpful tips."
         ),
-        "enabled_plugins": ["discovery", "wizard", "learn", "hints", "visual_progress"],
+        "enabled_plugins": ["discovery", "wizard", "learn", "hints"],
         "disabled_plugins": [],  # All useful plugins enabled for students
         "settings": {
             "educational_mode": True,
@@ -103,7 +91,7 @@ AUDIENCE_PROFILES = {
             "Optimized for professional development with fast execution and detailed metrics. "
             "Minimal interruptions, maximum information density."
         ),
-        "enabled_plugins": ["discovery", "visual_progress", "wizard"],
+        "enabled_plugins": ["discovery", "wizard"],
         "disabled_plugins": ["learn", "hints"],  # Educational plugins disabled for experts
         "settings": {
             "educational_mode": False,
@@ -128,7 +116,7 @@ AUDIENCE_PROFILES = {
             "Provides structured JSON output with no interactive elements."
         ),
         "enabled_plugins": [],
-        "disabled_plugins": ["wizard", "visual_progress", "discovery", "learn", "hints"],
+        "disabled_plugins": ["wizard", "discovery", "learn", "hints"],
         "settings": {
             "output_format": "json",
             "batch_mode": True,

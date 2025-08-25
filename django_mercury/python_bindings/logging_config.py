@@ -145,5 +145,7 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-# Initialize logging on import
-setup_logging()
+# Initialize logging on import (unless disabled for testing)
+import os
+if not os.environ.get('MERCURY_DISABLE_LOGGING'):
+    setup_logging()

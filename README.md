@@ -94,9 +94,6 @@ Available Mercury-Test Plugins:
 ✅ wizard (priority: 20)
    Interactive test selection wizard
 
-✅ visual_progress (priority: 50)
-   Rich visual feedback during test execution
-
 ✅ learn (priority: 60)
    Interactive learning with explanations and quizzes
 

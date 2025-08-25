@@ -915,10 +915,7 @@ def main():
             "--list-modules", action="store_true", help="List all available test modules"
         )
         parser.add_argument(
-            "--c-tests", action="store_true", help="Run C library integration tests"
-        )
-        parser.add_argument(
-            "--all", action="store_true", help="Run all tests including C integration tests"
+            "--all", action="store_true", help="Run all tests"
         )
         parser.add_argument(
             "--no-timing", action="store_true", help="Disable test timing (use standard runner)"
@@ -930,48 +927,13 @@ def main():
             help="CI-friendly output mode (minimal output, only show failures)",
         )
         parser.add_argument(
-            "--skip-c-build",
-            action="store_true",
-            help="Skip automatic C library building if libraries are missing",
-        )
-        parser.add_argument(
             "--quiet",
             "-q",
             action="store_true",
             help="Quiet mode - reduce output verbosity for cleaner results",
         )
-        parser.add_argument(
-            "--learn",
-            action="store_true",
-            help="Run learn plugin tests using pytest (tests/cli/plugins/)",
-        )
 
         args = parser.parse_args()
-
-        # Handle learn plugin shortcut
-        if args.learn:
-            # Special handling for learn plugin tests using pytest
-            print("🎓 Running Learn Plugin Tests")
-            if not args.verbose:
-                args.quiet = True
-
-            # Run learn plugin tests directly with pytest
-            import subprocess
-
-            env = os.environ.copy()
-            env["DJANGO_SETTINGS_MODULE"] = "tests.config.test_settings"
-            cmd = [
-                sys.executable,
-                "-m",
-                "pytest",
-                "tests/cli/plugins/",
-                "-v" if args.verbose else "-q",
-            ]
-            if args.coverage:
-                cmd.extend(["--cov=django_mercury.cli.plugins", "--cov-report=term-missing"])
-
-            result = subprocess.run(cmd, env=env)
-            sys.exit(result.returncode)
 
         # Auto-detect CI environment
         ci_mode = args.ci or os.environ.get("CI", "").lower() in ["true", "1", "yes"]
@@ -993,7 +955,7 @@ def main():
 
         # Check and build C libraries if needed
         c_libs_available = check_and_build_c_libraries(
-            skip_build=args.skip_c_build, ci_mode=ci_mode
+            skip_build=False, ci_mode=ci_mode
         )
 
         if not (args.quiet and not args.verbose):
@@ -1002,8 +964,6 @@ def main():
             else:
                 print("[INFO] Running with pure Python implementation")
             print("=" * 50)
-        elif args.learn:
-            print("🎓 Running Learn Plugin Tests")
 
         if args.list_modules:
             print("📁 Available test modules:")
@@ -1025,8 +985,8 @@ def main():
         # Run tests
         success = True
 
-        if args.c_tests or args.all:
-            # Run C integration tests
+        if args.all:
+            # Run C integration tests when --all is specified
             c_success = run_c_integration_tests(args.verbose)
             success = success and c_success
 
@@ -1037,7 +997,7 @@ def main():
                 args.module, verbose_for_tests, args.coverage, args.no_timing, ci_mode
             )
             success = success and module_success
-        elif not args.c_tests or args.all:  # Run Python tests if not just C tests
+        else:  # Run Python tests if no specific module
             if not ci_mode and not (args.quiet and not args.verbose):
                 print(f"[TEST] Running all tests ({len(test_modules)} modules)")
             if args.coverage:
